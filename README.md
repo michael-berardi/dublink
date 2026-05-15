@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dublink by DubHaven
 
-## Getting Started
+QR-based digital menu display system for cannabis dispensaries. Open a TV to a URL, scan the QR code with your phone, and configure the menu in real-time.
 
-First, run the development server:
+## How It Works
+
+1. **Open TV Display**: Navigate to `https://your-domain.com/tv/{session-id}` on any smart TV or display
+2. **Scan QR Code**: Point your phone camera at the QR code shown on screen
+3. **Configure Menu**: Use the mobile interface to add/edit products, categories, prices, and styling
+4. **Real-Time Updates**: Changes appear instantly on the TV display via WebSocket
+
+## Features
+
+- **Zero-Install TV Setup**: Any device with a browser becomes a menu board
+- **Phone-Based Configuration**: No keyboard or mouse needed for the TV
+- **Real-Time Sync**: WebSocket-powered instant updates
+- **Multiple Layouts**: Grid, list, or card views
+- **Stock Management**: Toggle items in/out of stock with one tap
+- **Custom Branding**: Colors, fonts, dispensary name
+- **THC/CBD Display**: Optional potency indicators
+- **Strain Types**: Indica/Sativa/Hybrid badges
+- **Auto Fullscreen**: TV enters kiosk mode automatically
+- **Dark/Light Themes**: Choose your aesthetic
+
+## Tech Stack
+
+- Next.js 16 + React 19 + TypeScript
+- Tailwind CSS v4
+- Socket.io for real-time communication
+- QRCode.js for QR generation
+- Custom Node.js server (Socket.io + Next.js)
+
+## Quick Start
 
 ```bash
+# Install dependencies
+npm install
+
+# Development (starts custom server with Socket.io)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Production build
+npm run build
+npm start
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The app runs on port 3000 by default (or set `PORT` env var).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### TV Display
+Open `http://localhost:3000/tv/demo` on your TV. Click "Show Demo Menu" to see the sample menu, or scan the QR code to configure.
 
-## Learn More
+### Mobile Config
+Scan the QR code on the TV, or navigate directly to `http://localhost:3000/config/demo`.
 
-To learn more about Next.js, take a look at the following resources:
+### Custom Session IDs
+Replace `demo` with any unique identifier:
+- TV: `http://localhost:3000/tv/my-dispensary-123`
+- Config: `http://localhost:3000/config/my-dispensary-123`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Menu Management
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Categories
+- Flower
+- Edibles
+- Concentrates
+- Vapes
+- (Add your own)
 
-## Deploy on Vercel
+### Product Fields
+- Name
+- Price
+- THC/CBD percentages
+- Strain type (Indica/Sativa/Hybrid)
+- In-stock status
+- Description (optional)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Railway (Recommended)
+```bash
+railway up
+```
+
+### Self-Hosted
+```bash
+npm run build
+PORT=3000 node server.js
+```
+
+### Environment Variables
+- `PORT`: Server port (default: 3000)
+- `NODE_ENV`: Set to `production` for production mode
+
+## Architecture
+
+```
+src/
+  app/
+    tv/[sessionId]/      # TV display page (kiosk mode)
+    config/[sessionId]/  # Mobile config interface
+    api/socket/          # Socket.io initialization endpoint
+    layout.tsx           # Root layout
+    page.tsx             # Redirects to /tv/demo
+  lib/
+    types.ts             # TypeScript interfaces
+    session-store.ts     # Session management
+server.js                # Custom Next.js + Socket.io server
+```
+
+## License
+
+Proprietary - DubHaven
+
+## Support
+
+For support, contact DubHaven.
