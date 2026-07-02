@@ -1,0 +1,51 @@
+name = "dubmenu"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+routes = [
+  { pattern = "dubmenu.com", custom_domain = true },
+  { pattern = "tv.dubmenu.com", custom_domain = true },
+]
+
+[vars]
+STRIPE_PRICE_ID = "price_1ToXsZIS4hxpOM6xRO0sMxTw"
+APP_URL = "https://dubmenu.com"
+TV_URL = "https://dubmenu.com"
+ADMIN_EMAILS = "mike.r.berardi@gmail.com"
+
+[[r2_buckets]]
+bucket_name = "dubmenu-uploads"
+binding = "UPLOADS"
+
+[[durable_objects.bindings]]
+name = "SESSION"
+class_name = "SessionDurableObject"
+
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "AccountDurableObject"
+
+[[durable_objects.bindings]]
+name = "STATS"
+class_name = "StatsDurableObject"
+
+[[durable_objects.bindings]]
+name = "DOMAINS"
+class_name = "DomainDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SessionDurableObject"]
+
+[[migrations]]
+tag = "v2"
+new_classes = ["AccountDurableObject"]
+
+[[migrations]]
+tag = "v3"
+new_classes = ["StatsDurableObject"]
+
+[[migrations]]
+tag = "v4"
+new_classes = ["DomainDurableObject"]
