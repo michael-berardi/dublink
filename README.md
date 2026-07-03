@@ -1,4 +1,4 @@
-# Dublink by DubHaven
+# DubMenu
 
 QR-based digital menu display system for cannabis dispensaries. Open a TV to a URL, scan the QR code with your phone, and configure the menu in real-time.
 
@@ -111,8 +111,8 @@ server.js                # Custom Next.js + Socket.io server
 
 ## License
 
-Proprietary - DubHaven
+Proprietary - DubMenu
 
 ## Support
 
-For support, contact DubHaven.
+For support, contact DubMenu.

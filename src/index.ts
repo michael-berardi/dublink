@@ -19,7 +19,7 @@ import { widgetPage, widgetJs } from './html-widget';
 import { getStatus } from './status';
 import { scrapeDutchie, scrapeDutchieFallback } from './dutchie-scraper';
 import { importMenuFromCSV } from './csv-import';
-import { handleImageUpload, serveImage, deleteAccountUploads } from './upload';
+import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
 
 export { SessionDurableObject, AccountDurableObject, StatsDurableObject, DomainDurableObject };
@@ -109,7 +109,16 @@ async function requireAuth(request: Request, env: Env): Promise<{ accountId: str
 }
 
 function appUrl(env: Env, request: Request): string {
-  return env.APP_URL || `https://${new URL(request.url).host}`;
+  // On localhost the hardcoded APP_URL from wrangler.toml points at the
+  // production domain, which breaks cookie-scoped fetches and redirects
+  // (e.g. /api/sessions in the account page). Prefer the actual request
+  // origin for localhost/127.0.0.1 so links and fetches stay local.
+  const requestUrl = new URL(request.url);
+  const host = requestUrl.hostname;
+  if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') {
+    return requestUrl.origin;
+  }
+  return env.APP_URL || requestUrl.origin;
 }
 
 function tvUrl(env: Env): string {
@@ -289,6 +298,7 @@ export default {
 
     // Custom domain detection: if the host is not dubmenu.com or tv.dubmenu.com, check for a mapping
     const host = url.hostname;
+    const isTvHost = host === 'tv.dubmenu.com';
     const isDubMenuHost = host === 'dubmenu.com' || host === 'tv.dubmenu.com' || host.endsWith('.workers.dev') || host === 'localhost';
     if (!isDubMenuHost && env.DOMAINS && path === '/') {
       const domainId = env.DOMAINS.idFromName('global');
@@ -297,6 +307,23 @@ export default {
       const lookup = (await lookupRes.json()) as { mapping: { sessionId: string; verified: boolean } | null };
       if (lookup.mapping?.sessionId) {
         return htmlResponse(tvPage(lookup.mapping.sessionId, url.origin));
+      }
+    }
+
+    // TV subdomain (tv.dubmenu.com) is loaded on a dispensary TV and must go
+    // straight into the TV pairing experience (QR code / access code). It must
+    // never show marketing or the full site. Functional paths (/tv/*, /ws/*,
+    // /status/*, /api/*, /print/*, /config/*) still pass through so a paired
+    // phone or a specific TV URL keeps working.
+    if (isTvHost) {
+      const TV_ALLOWED_PREFIXES = ['/tv/', '/ws/', '/status/', '/api/', '/print/', '/config/', '/login', '/signup', '/robots.txt', '/sitemap.xml'];
+      const isTvFunctional = path === '/' || TV_ALLOWED_PREFIXES.some((p) => path === p || path.startsWith(p));
+      if (!isTvFunctional) {
+        // Any marketing/non-TV route on the TV host → straight to TV pairing.
+        return redirectResponse(`${url.origin}/tv/demo`);
+      }
+      if (path === '/') {
+        return htmlResponse(tvPage('demo', url.origin));
       }
     }
 
@@ -353,7 +380,7 @@ export default {
     }
 
 
-    if (path === '/api/test/activate-trial' && request.method === 'POST' && env.APP_URL === 'http://localhost:8792') {
+    if (path === '/api/test/activate-trial' && request.method === 'POST' && env.APP_URL && (env.APP_URL.startsWith('http://localhost:') || env.APP_URL.startsWith('http://127.0.0.1:'))) {
       const auth = await requireAuth(request, env);
       if (!auth) return redirectResponse(`${origin}/login`);
       const { updateAccountStripe } = await import('./auth');
@@ -866,10 +893,84 @@ export default {
       return handleImageUpload(request, env, auth.accountId);
     }
 
-    if (path.startsWith('/api/uploads/') && request.method === 'GET') {
+    // Image library: list this account's uploads for the frontend gallery.
+    // Authenticated only. Supports optional ?limit and ?cursor pagination; in
+    // the common case the full list (capped at 1000 by listAccountUploads)
+    // is returned with nextCursor: null.
+    if (path === '/api/uploads' && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const uploads = await listAccountUploads(env, auth.accountId);
+
+      let limit = 50;
+      const limitParam = url.searchParams.get('limit');
+      if (limitParam !== null) {
+        const parsed = parseInt(limitParam, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          limit = Math.min(parsed, 200);
+        }
+      }
+      const cursorParam = url.searchParams.get('cursor');
+      let startIndex = 0;
+      if (cursorParam !== null) {
+        const parsed = parseInt(cursorParam, 10);
+        if (!isNaN(parsed) && parsed > 0) startIndex = parsed;
+      }
+
+      const slice = uploads.slice(startIndex, startIndex + limit);
+      const nextCursor =
+        startIndex + slice.length < uploads.length
+          ? String(startIndex + slice.length)
+          : null;
+      return jsonResponse({ uploads: slice, nextCursor });
+    }
+
+    // Per-upload routes under /api/uploads/[...]. GET is the public image
+    // serve endpoint (no auth — TVs/widgets load images unauthenticated) and
+    // DELETE is the authenticated library delete. The CSRF gate already ran
+    // for DELETE at the top of the handler.
+    if (path.startsWith('/api/uploads/')) {
       const key = path.slice('/api/uploads/'.length);
       if (!key) return jsonResponse({ error: 'Missing key' }, 400);
-      return serveImage(request, env, key);
+
+      if (request.method === 'DELETE') {
+        const auth = await requireAuth(request, env);
+        if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+        // `key` is `<accountId>/<filename>` on the serve path. For delete we
+        // require the caller to target a bare filename scoped to their own
+        // account, so we reject anything that still contains a separator
+        // (the frontend calls DELETE /api/uploads/<filename>, not the full
+        // <accountId>/<filename> key). deleteUpload reconstructs the
+        // authenticated account prefix internally.
+        let filename = key;
+        if (filename.startsWith(`${auth.accountId}/`)) {
+          filename = filename.slice(auth.accountId.length + 1);
+        }
+        if (!filename) return jsonResponse({ error: 'Missing filename' }, 400);
+        // Decode percent-escapes before validation so encoded traversal
+        // attempts (..%2F, %5C) are caught by validateFilename. decodeURIComponent
+        // can throw on malformed input — treat that as a bad request.
+        try {
+          filename = decodeURIComponent(filename);
+        } catch (_decodeErr) {
+          return jsonResponse({ error: 'Invalid filename' }, 400);
+        }
+        let deleted: boolean;
+        try {
+          deleted = await deleteUpload(env, auth.accountId, filename);
+        } catch (_err) {
+          // Path-traversal / invalid filename.
+          return jsonResponse({ error: 'Invalid filename' }, 400);
+        }
+        if (!deleted) return jsonResponse({ error: 'Not found' }, 404);
+        return jsonResponse({ deleted: true });
+      }
+
+      if (request.method === 'GET') {
+        return serveImage(request, env, key);
+      }
+
+      return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
     if (path.startsWith('/ws/')) {

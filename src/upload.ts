@@ -129,6 +129,12 @@ export async function handleImageUpload(
     },
     customMetadata: {
       originalName: sanitizeFilename(file.name),
+      // Mirror the validated contentType into customMetadata so R2 list()
+      // results are self-sufficient. The list API does not reliably surface
+      // httpMetadata across runtimes, and the gallery needs the type without
+      // an extra head() per object.
+      contentType: fileContentType,
+      size: String(buffer.byteLength),
     },
   });
   const url = `${env.APP_URL || ''}/api/uploads/${key}`;
@@ -158,6 +164,141 @@ export async function deleteAccountUploads(
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
   return deleted;
+}
+
+export interface AccountUpload {
+  key: string;
+  size: number;
+  uploaded: Date;
+  contentType: string;
+  originalName?: string;
+}
+
+// List every R2 object under `<accountId>/` and return a normalized array
+// suitable for the image-library gallery. Pagination follows `cursor` until
+// the listing is exhausted, capped at 10 pages (10,000 objects) as a runaway
+// guard.
+//
+// Field resolution prioritizes the native R2 listed-object fields (size,
+// uploaded) and falls back to customMetadata/httpMetadata so the function
+// stays correct even if a future caller stores redundant copies there. The
+// returned `key` has the `<accountId>/` prefix stripped so the frontend gets a
+// clean filename it can reassemble into a serve URL.
+export async function listAccountUploads(
+  env: { UPLOADS?: R2Bucket },
+  accountId: string
+): Promise<AccountUpload[]> {
+  if (!env.UPLOADS) return [];
+  const prefix = `${accountId}/`;
+  const out: AccountUpload[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    const listed = await env.UPLOADS.list({ prefix, cursor, limit: 1000 });
+    for (const obj of listed.objects) {
+      const httpMeta = (obj as any).httpMetadata || {};
+      const customMeta = (obj as any).customMetadata || {};
+      // Prefer metadata embedded in the list result. On real Cloudflare R2
+      // both httpMetadata and customMetadata are populated; some local
+      // emulators surface them empty, so fall back to a head() lookup when
+      // neither has a contentType.
+      let contentType =
+        customMeta.contentType ||
+        httpMeta.contentType ||
+        '';
+      let originalName = customMeta.originalName || undefined;
+      if (!contentType) {
+        try {
+          const head = await env.UPLOADS.head(obj.key);
+          if (head) {
+            const headHttp = (head as any).httpMetadata || {};
+            const headCustom = (head as any).customMetadata || {};
+            contentType =
+              headCustom.contentType ||
+              headHttp.contentType ||
+              'application/octet-stream';
+            originalName = originalName || headCustom.originalName || undefined;
+          }
+        } catch (_err) {
+          // best-effort enrichment; fall through with default below
+        }
+        if (!contentType) contentType = 'application/octet-stream';
+      }
+      // R2 listed objects expose `size` and `uploaded` (a Date) natively.
+      // customMetadata.size/uploaded are accepted as fallbacks for parity with
+      // the spec but are not written by the current upload path.
+      const size =
+        typeof obj.size === 'number'
+          ? obj.size
+          : Number(customMeta.size) || 0;
+      let uploaded: Date;
+      if (obj.uploaded instanceof Date) {
+        uploaded = obj.uploaded;
+      } else if (customMeta.uploaded) {
+        const parsed = new Date(customMeta.uploaded);
+        uploaded = isNaN(parsed.getTime()) ? new Date(0) : parsed;
+      } else {
+        uploaded = new Date(0);
+      }
+      out.push({
+        key: obj.key.startsWith(prefix) ? obj.key.slice(prefix.length) : obj.key,
+        size,
+        uploaded,
+        contentType,
+        ...(originalName ? { originalName } : {}),
+      });
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+    pages++;
+  } while (cursor && pages < 10);
+  // Newest first.
+  out.sort((a, b) => b.uploaded.getTime() - a.uploaded.getTime());
+  return out;
+}
+
+// Reject filenames that could escape the `<accountId>/` key prefix. R2 keys
+// are flat strings, but a `/` or `\` in `filename` would let a caller target a
+// different prefix, and `..` segments are rejected as a defense-in-depth
+// measure against any future layer that treats the key as a path. Returns the
+// validated filename or null when invalid.
+function validateFilename(filename: string): string | null {
+  if (!filename || filename.length > 512) return null;
+  if (filename.includes('/') || filename.includes('\\')) return null;
+  // Reject any `..` segment, whether path-like or embedded.
+  if (filename.includes('..')) return null;
+  // Reject NUL and control bytes outright (checked by code point to avoid a
+  // control-character regex that trips lint's no-control-regex rule).
+  for (let i = 0; i < filename.length; i++) {
+    const code = filename.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return null;
+  }
+  return filename;
+}
+
+// Delete a single upload owned by `accountId`. The key is reconstructed as
+// `<accountId>/<filename>` after path-traversal validation. Returns true when
+// an object existed and was deleted, false when the key was not found. Throws
+// when `filename` fails validation so the caller can map it to a 400.
+export async function deleteUpload(
+  env: { UPLOADS?: R2Bucket },
+  accountId: string,
+  filename: string
+): Promise<boolean> {
+  // Validate first so path-traversal is rejected even when storage is
+  // unavailable — the security check must not depend on binding state.
+  const safe = validateFilename(filename);
+  if (safe === null) {
+    throw new Error('Invalid filename');
+  }
+  if (!env.UPLOADS) return false;
+  const fullKey = `${accountId}/${safe}`;
+  // Check existence first so we can distinguish 404 from 200. R2's delete is
+  // idempotent (no error on missing key), so without the head it would always
+  // look successful.
+  const existing = await env.UPLOADS.head(fullKey);
+  if (!existing) return false;
+  await env.UPLOADS.delete(fullKey);
+  return true;
 }
 
 export async function serveImage(

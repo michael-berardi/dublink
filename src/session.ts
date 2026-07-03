@@ -634,6 +634,37 @@ export class SessionDurableObject implements DurableObject {
         this.broadcast({ type: 'config', payload: this.config });
         break;
       }
+
+      case 'reorder': {
+        if (!(await this.canModifyConfig(conn))) return;
+        const payload = msg.payload;
+        if (!this.isValidReorder(payload)) return;
+
+        if (payload.type === 'categories') {
+          // Reassign order field based on new array index, then sort.
+          payload.ids.forEach((id: string, index: number) => {
+            const cat = this.config.categories.find(c => c.id === id);
+            if (cat) cat.order = index;
+          });
+          this.config.categories.sort((a, b) => a.order - b.order);
+        } else {
+          // payload.type === 'products'
+          const cat = this.config.categories.find(c => c.id === payload.categoryId);
+          if (!cat) return;
+          // Product has no `order` field (see src/types.ts), so array index is
+          // the single source of truth for product ordering. Rebuild the
+          // products array in the requested id order.
+          const byId = new Map(cat.products.map(p => [p.id, p]));
+          const reordered = payload.ids
+            .map((id: string) => byId.get(id))
+            .filter((p: any): p is NonNullable<typeof p> => Boolean(p));
+          cat.products = reordered;
+        }
+
+        await this.persistConfig();
+        this.broadcast({ type: 'config', payload: this.config });
+        break;
+      }
     }
   }
 
@@ -702,6 +733,41 @@ export class SessionDurableObject implements DurableObject {
            typeof payload.categoryId === 'string' &&
            typeof payload.productId === 'string' &&
            payload.updates && typeof payload.updates === 'object';
+  }
+
+  // Validate a batch reorder payload.
+  //   { type: 'categories', ids: string[] }
+  //   { type: 'products', categoryId: string, ids: string[] }
+  // `ids` must be a non-empty array of unique strings whose set exactly
+  // matches the existing items of the target scope. This rejects unknown
+  // ids, partial lists, and duplicate ids atomically.
+  private isValidReorder(payload: any): boolean {
+    if (!payload || typeof payload !== 'object') return false;
+    if (payload.type !== 'categories' && payload.type !== 'products') return false;
+    if (payload.type === 'products' && typeof payload.categoryId !== 'string') return false;
+    if (!Array.isArray(payload.ids)) return false;
+    // Every id must be a string.
+    if (!payload.ids.every((id: any) => typeof id === 'string' && id.length > 0 && id.length <= 120)) return false;
+    // No duplicate ids allowed.
+    const seen = new Set<string>();
+    for (const id of payload.ids as string[]) {
+      if (seen.has(id)) return false;
+      seen.add(id);
+    }
+
+    if (payload.type === 'categories') {
+      const existing = new Set(this.config.categories.map(c => c.id));
+      if (payload.ids.length !== existing.size) return false;
+      if (!(payload.ids as string[]).every((id: string) => existing.has(id))) return false;
+      return true;
+    }
+
+    const cat = this.config.categories.find(c => c.id === payload.categoryId);
+    if (!cat) return false;
+    const existingProducts = new Set(cat.products.map(p => p.id));
+    if (payload.ids.length !== existingProducts.size) return false;
+    if (!(payload.ids as string[]).every((id: string) => existingProducts.has(id))) return false;
+    return true;
   }
 
   private isValidImportedCategories(categories: any): boolean {

@@ -21,9 +21,7 @@ export interface MenuConfig {
   logo?: string;
   primaryColor: string;
   secondaryColor: string;
-  showThcCbd: boolean;
   showStrain: boolean;
-  showPrices: boolean;
   currency: string;
   categories: Category[];
   layout: 'grid' | 'list' | 'cards';
@@ -64,9 +62,7 @@ export const DEFAULT_CONFIG: MenuConfig = {
   dispensaryName: 'DubHaven Dispensary',
   primaryColor: '#10b981',
   secondaryColor: '#065f46',
-  showThcCbd: true,
   showStrain: true,
-  showPrices: true,
   currency: '$',
   layout: 'grid',
   fontSize: 'medium',

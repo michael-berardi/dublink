@@ -1,31 +1,28 @@
 {
-  "name": "dublink",
+  "name": "dubmenu",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
-    "build": "next build",
-    "start": "NODE_ENV=production node server.js",
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "wrangler deploy --dry-run",
     "lint": "eslint",
-    "next-dev": "next dev"
+    "test": "vitest run",
+    "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "next": "16.2.6",
-    "qrcode": "^1.5.4",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "uuid": "^14.0.0"
+    "ws": "^8.21.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@cloudflare/vitest-pool-workers": "^0.6.16",
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "@eslint/js": "^9.39.4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "globals": "^17.7.0",
+    "typescript": "^5",
+    "typescript-eslint": "^7.18.0",
+    "vitest": "^2.1.8",
+    "wrangler": "^3.100.0"
   }
 }

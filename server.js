@@ -251,6 +251,6 @@ app.prepare().then(() => {
   });
 
   httpServer.listen(port, () => {
-    console.log(`> Dublink ready on http://${hostname}:${port}`);
+    console.log(`> DubMenu ready on http://${hostname}:${port}`);
   });
 });

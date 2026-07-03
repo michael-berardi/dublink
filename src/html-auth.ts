@@ -96,11 +96,15 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
   ${isAccount ? `<script>
     async function loadSessions(){
       try{
-        const res=await fetch('${safeOrigin}/api/sessions');
+        const res=await fetch('/api/sessions',{credentials:'same-origin'});
+        if(!res.ok){
+          const err=await res.text().catch(()=>'Unknown error');
+          throw new Error('HTTP '+res.status+': '+err);
+        }
         const data=await res.json();
         const container=document.getElementById('sessions');
         if(!data.sessions||!data.sessions.length){container.innerHTML='<p style="color:var(--muted);">No displays yet. Create one to get started.</p>';return;}
-        container.innerHTML=data.sessions.map(s=>\`<div class="session-item"><a href="${safeOrigin}/config/\${s}" target="_blank">\${s}</a></div>\`).join('');
+        container.innerHTML=data.sessions.map(s=>'<div class="session-item"><a href="' + safeOrigin + '/config/' + s + '" target="_blank">' + s + '</a></div>').join('');
       }catch(e){document.getElementById('sessions').innerHTML='<p style="color:#ef4444;">Failed to load sessions.</p>';}
     }
     loadSessions();

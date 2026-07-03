@@ -11,7 +11,7 @@ routes = [
 [vars]
 STRIPE_PRICE_ID = "price_1ToXsZIS4hxpOM6xRO0sMxTw"
 APP_URL = "https://dubmenu.com"
-TV_URL = "https://dubmenu.com"
+TV_URL = "https://tv.dubmenu.com"
 ADMIN_EMAILS = "mike.r.berardi@gmail.com"
 
 [[r2_buckets]]

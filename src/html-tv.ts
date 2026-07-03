@@ -201,7 +201,7 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));}
   .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));}
-  .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill, 320px);gap:0.75rem;}
+  .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;}
   .layout-grid .product-card{background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--card-shadow);transition:border-color 0.3s,transform 0.2s;position:relative;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
   .layout-grid .card-image{width:100%;height:140px;object-fit:cover;background:var(--bg-elev);}
@@ -264,6 +264,9 @@ export function tvPage(sessionId: string, _origin: string): string {
   .conn-dot{width:9px;height:9px;border-radius:50%;background:#ef4444;animation:blink 1.5s ease-in-out infinite;}
   .conn-dot.connected{background:var(--accent);}
 
+  .tv-info{position:fixed;bottom:1rem;left:1rem;display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.9rem;border-radius:1.5rem;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);border:1px solid var(--border);font-size:0.7rem;font-weight:700;letter-spacing:0.04em;z-index:200;opacity:0;transition:opacity 1s ease;pointer-events:none;text-transform:uppercase;}
+  .tv-info.visible{opacity:0.85;}
+
   .price-tiers{display:flex;flex-wrap:wrap;gap:0.5rem 0.75rem;margin-top:auto;align-items:baseline;}
   .price-tiers .tier{display:inline-flex;align-items:baseline;gap:0.3rem;}
   .price-tiers .tier-label{font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-muted);}
@@ -275,6 +278,95 @@ export function tvPage(sessionId: string, _origin: string): string {
   .layout-showcase .price-tiers{justify-content:center;gap:1rem 1.5rem;}
   .layout-showcase .price-tiers .tier-price{font-size:2.4rem;}
   .layout-editorial .price-tiers .tier-price{font-size:1.3rem;}
+
+  /* Branded placeholder for product cards without an image */
+  .card-image-placeholder{
+    display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
+    background:var(--bg-elev) radial-gradient(circle at 50% 50%,var(--accent-dim) 0%,transparent 70%);
+    border:1px dashed var(--border-hover);
+  }
+  .card-image-placeholder::before{
+    content:'';position:absolute;inset:0;
+    background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);
+    background-size:12px 12px;opacity:0.4;
+  }
+  .placeholder-initial{
+    position:relative;z-index:1;
+    font-size:clamp(2rem,5vw,4rem);font-weight:900;color:var(--accent);
+    text-transform:uppercase;line-height:1;opacity:0.85;
+    text-shadow:0 0 20px var(--accent-dim);
+  }
+
+  /* ----------------------------------------------------------------
+     Mobile-aware layout.
+     The TV view is designed for 1920×1080 and scaled down via JS
+     (fitToScreen). On phone-width screens that produces tiny text and
+     large blank margins. Instead we let the #menu render at its natural
+     width and provide responsive overrides so content is readable and
+     free of horizontal overflow at 390×844.
+  ----------------------------------------------------------------- */
+  @media (max-width:768px){
+    body{font-size:16px;}
+    html,body{overflow:auto;height:auto;min-height:100vh;}
+    .phase{position:relative;inset:auto;height:auto;min-height:100vh;}
+    #menu{width:100% !important;height:auto !important;transform:none !important;margin:0 !important;}
+    .menu-header{padding:0.75rem 1rem;position:sticky;top:0;}
+    .header-logo{max-height:36px;max-width:120px;}
+    .dispensary-name{font-size:1.4rem;}
+    .menu-content{padding:1rem;overflow-y:auto;max-height:none;}
+    .menu-footer{padding:0.5rem 1rem;font-size:0.7rem;}
+    .promo-bar{font-size:0.85rem;padding:0.4rem 1rem;}
+    .category-header{margin-bottom:0.6rem;padding-bottom:0.35rem;}
+    .category-title{font-size:1.2rem;}
+
+    .layout-grid .grid-products{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.6rem;}
+    .layout-grid .card-image{height:100px;}
+    .layout-grid .card-name{font-size:1rem;}
+    .layout-grid .card-meta{font-size:0.8rem;}
+    .layout-grid .card-price{font-size:1.15rem;}
+    .layout-grid .card-body{padding:0.5rem;gap:0.25rem;}
+
+    .layout-list .list-products{grid-template-columns:1fr;gap:0;}
+    .layout-list .row-name{font-size:1rem;}
+    .layout-list .row-meta{font-size:0.8rem;}
+    .layout-list .row-price{font-size:1.15rem;}
+
+    .layout-poster .product-row{flex-direction:column;align-items:stretch;gap:0.6rem;padding:0.75rem;}
+    .layout-poster .card-image{width:100%;height:auto;aspect-ratio:1/1;max-width:240px;margin:0 auto;}
+    .layout-poster .card-name{font-size:1.3rem;}
+    .layout-poster .card-meta{font-size:1rem;}
+    .layout-poster .card-price{font-size:1.5rem;}
+
+    .layout-cinematic .cinematic-products{grid-template-columns:1fr;}
+    .layout-cinematic .product-card{height:auto;min-height:200px;}
+    .layout-cinematic .card-image{height:180px;}
+    .layout-cinematic .card-name{font-size:1.3rem;}
+    .layout-cinematic .card-meta{font-size:0.95rem;}
+    .layout-cinematic .card-price{font-size:1.4rem;}
+
+    .layout-showcase .showcase-products{height:auto;padding:1rem 0;}
+    .layout-showcase .card-image{width:100%;height:auto;aspect-ratio:4/3;max-width:320px;}
+    .layout-showcase .card-name{font-size:1.5rem;}
+    .layout-showcase .card-meta{font-size:1.1rem;}
+    .layout-showcase .card-price{font-size:1.8rem;}
+
+    .layout-editorial .editorial-products{grid-template-columns:1fr;}
+    .layout-editorial .card-image{height:130px;}
+    .layout-editorial .card-name{font-size:1.1rem;}
+    .layout-editorial .card-meta{font-size:0.85rem;}
+    .layout-editorial .card-price{font-size:1.2rem;}
+
+    .placeholder-initial{font-size:clamp(1.5rem,8vw,2.5rem);}
+    .price-tiers .tier-label{font-size:0.7rem;}
+    .price-tiers .tier-price{font-size:0.95rem;}
+
+    .conn-indicator{top:0.5rem;right:0.5rem;font-size:0.65rem;padding:0.35rem 0.7rem;}
+    .tv-info{bottom:0.5rem;left:0.5rem;font-size:0.6rem;padding:0.35rem 0.7rem;}
+
+    .age-gate h2{font-size:2rem;}
+    .age-gate p{font-size:1rem;}
+    .age-gate .btn{font-size:1rem;padding:0.75rem 1.5rem;}
+  }
 </style>
 </head>
 <body class="template-default">
@@ -323,11 +415,28 @@ export function tvPage(sessionId: string, _origin: string): string {
   <span id="conn-text">Connecting</span>
 </div>
 
+<div class="tv-info" id="tv-info"></div>
+
 <script>
 (function(){
   var WS_URL = location.origin.replace(/^http/, 'ws') + '/ws/${safeSessionId}?role=tv';
   var DISPLAY_NUM = parseInt(new URLSearchParams(location.search).get('display') || '1');
   var DISPLAY_TOTAL = parseInt(new URLSearchParams(location.search).get('displays') || '1');
+
+  // --- Per-TV URL overrides (do NOT persist to config) ---
+  var ALLOWED_LAYOUTS = ['grid','list','poster','cinematic','showcase','editorial'];
+  var ALLOWED_TEMPLATES = ['default','light','neon','minimal','sunset','forest','royal','gold','ocean','crimson','bone','vapor'];
+  var URL_LAYOUT = (function(){
+    var v = new URLSearchParams(location.search).get('layout');
+    if(v){ v = String(v).toLowerCase().trim(); if(ALLOWED_LAYOUTS.indexOf(v) !== -1) return v; else console.warn('[DubMenu TV] Invalid ?layout= "' + v + '" — falling back to config layout. Allowed: ' + ALLOWED_LAYOUTS.join(', ')); }
+    return null;
+  })();
+  var URL_THEME = (function(){
+    var v = new URLSearchParams(location.search).get('theme');
+    if(v){ v = String(v).toLowerCase().trim(); if(ALLOWED_TEMPLATES.indexOf(v) !== -1) return v; else console.warn('[DubMenu TV] Invalid ?theme= "' + v + '" — falling back to config template. Allowed: ' + ALLOWED_TEMPLATES.join(', ')); }
+    return null;
+  })();
+
   var ws = null;
   var config = null;
   var paired = false;
@@ -376,7 +485,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     var safeUrl = safeImgUrl(p.image);
     var alt = escapeHtml(p.name || '');
     if(!safeUrl){
-      return '<div class="card-image" style="background:var(--bg-elev);display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:0.9rem;">No Image</div>';
+      var initial = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
+      return '<div class="card-image card-image-placeholder">' +
+        '<span class="placeholder-initial">' + escapeHtml(initial) + '</span>' +
+        '</div>';
     }
     return '<img class="card-image" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + '>';
   }
@@ -388,6 +500,25 @@ export function tvPage(sessionId: string, _origin: string): string {
     'sunset':'poster', 'forest':'cinematic', 'royal':'showcase',
     'gold':'grid', 'ocean':'grid', 'crimson':'grid', 'bone':'editorial', 'vapor':'grid'
   };
+
+  // Resolve the active layout for THIS TV:
+  //   1. ?layout= URL override (validated)
+  //   2. template-derived layout from config.template
+  //   3. 'grid' fallback
+  function getActiveLayout(cfg){
+    if(URL_LAYOUT) return URL_LAYOUT;
+    if(cfg && cfg.template && templateLayouts[cfg.template]) return templateLayouts[cfg.template];
+    return 'grid';
+  }
+  // Resolve the active template (theme) for THIS TV:
+  //   1. ?theme= URL override (validated)
+  //   2. config.template
+  //   3. 'default'
+  function getActiveTemplate(cfg){
+    if(URL_THEME) return URL_THEME;
+    if(cfg && cfg.template) return cfg.template;
+    return 'default';
+  }
 
   function setPhase(phase){
     var pairing=document.getElementById('pairing');
@@ -404,6 +535,28 @@ export function tvPage(sessionId: string, _origin: string): string {
     else if(status==='paired'){dot.className='conn-dot connected';ind.classList.remove('visible');return;}
     else{dot.className='conn-dot';txt.textContent='Reconnecting';}
     ind.classList.add('visible');
+  }
+
+  var tvInfoTimer = null;
+  function showTvInfo(layout){
+    var el = document.getElementById('tv-info');
+    if(!el) return;
+    var parts = [];
+    if(DISPLAY_TOTAL > 1){
+      parts.push('Display ' + DISPLAY_NUM + ' of ' + DISPLAY_TOTAL);
+    }
+    if(layout){
+      parts.push(layout.charAt(0).toUpperCase() + layout.slice(1));
+    }
+    if(getActiveTemplate(config) !== 'default' || URL_THEME){
+      var tmpl = getActiveTemplate(config);
+      parts.push(tmpl.charAt(0).toUpperCase() + tmpl.slice(1));
+    }
+    el.textContent = parts.join(' \u00B7 ');
+    if(parts.length === 0){ el.classList.remove('visible'); return; }
+    el.classList.add('visible');
+    if(tvInfoTimer) clearTimeout(tvInfoTimer);
+    tvInfoTimer = setTimeout(function(){ el.classList.remove('visible'); }, 5000);
   }
 
   function getCategoriesForDisplay(allCats){
@@ -469,7 +622,7 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   function renderCurrentPage(){
     if(!config) return;
-    var layout = templateLayouts[config.template] || 'grid';
+    var layout = getActiveLayout(config);
     var cats = getCategoriesForDisplay(config.categories||[]);
     var urlCat = new URLSearchParams(location.search).get('category');
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
@@ -531,7 +684,7 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   function renderMenu(){
     if(!config) return;
-    document.body.className = 'template-' + (config.template || 'default');
+    document.body.className = 'template-' + getActiveTemplate(config);
     
     var headerName = document.getElementById('dispensary-name');
     if(config.dispensaryName) headerName.textContent = config.dispensaryName;
@@ -564,7 +717,7 @@ export function tvPage(sessionId: string, _origin: string): string {
     // Hide connection indicator when menu is showing
     document.getElementById('conn-indicator').classList.remove('visible');
     
-    var layout = templateLayouts[config.template] || 'grid';
+    var layout = getActiveLayout(config);
     var perPage = getProductsPerPage(layout);
     var maxProducts = cats.reduce(function(a,c){return a+c.products.length;},0);
     cycleState.totalPages = Math.max(1, Math.ceil(maxProducts / perPage));
@@ -574,6 +727,8 @@ export function tvPage(sessionId: string, _origin: string): string {
     
     if(config.autoScroll) startCycling();
     else stopCycling();
+
+    showTvInfo(layout);
   }
 
   var CAT_ACCENT = ['#10b981','#06b6d4','#f59e0b','#8b5cf6','#ec4899','#22c55e','#f97316','#3b82f6'];
@@ -728,7 +883,11 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   var SCALE_BASELINE_W = 1920;
   var SCALE_BASELINE_H = 1080;
+  var MOBILE_BREAKPOINT = 768;
   var fitScale = 1;
+  function isMobileViewport(){
+    return window.matchMedia('(max-width:' + MOBILE_BREAKPOINT + 'px)').matches;
+  }
   function fitToScreen(){
     var menu = document.getElementById('menu');
     if(!menu) return;
@@ -742,7 +901,21 @@ export function tvPage(sessionId: string, _origin: string): string {
         menu.style.transformOrigin = '';
         menu.style.width = '';
         menu.style.height = '';
+        menu.style.marginLeft = '';
+        menu.style.marginTop = '';
       }
+      return;
+    }
+    // On phone-width screens do NOT scale the 1920×1080 canvas down —
+    // the media-query overrides render #menu responsively at 100% width.
+    if(isMobileViewport()){
+      fitScale = 1;
+      menu.style.transform = '';
+      menu.style.transformOrigin = '';
+      menu.style.width = '100%';
+      menu.style.height = 'auto';
+      menu.style.marginLeft = '';
+      menu.style.marginTop = '';
       return;
     }
     var scaleX = vw / SCALE_BASELINE_W;
@@ -773,7 +946,7 @@ export function tvPage(sessionId: string, _origin: string): string {
     ws.onmessage=function(ev){
       try{
         var msg=JSON.parse(ev.data);
-        if(msg.type==='config'){config=msg.payload;if(paired) renderMenu();else{setPhase('menu');renderMenu();}}
+        if(msg.type==='config'){config=msg.payload;if(paired){setPhase('menu');renderMenu();}}
         if(msg.type==='paired'){paired=true;setConn('paired');setPhase('menu');if(config) renderMenu();}
         if(msg.type==='unpaired'){paired=false;stopCycling();setPhase('pairing');}
         if(msg.type==='ping'){if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'pong'}));}
