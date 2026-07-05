@@ -1,3 +1,5 @@
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS } from './category-icons';
+
 // State-specific compliance disclaimer templates. These are generic
 // templates — operators must verify exact wording with their counsel and
 // state regulator before relying on them. [Year] and [Dispensary] are
@@ -13,7 +15,7 @@ const COMPLIANCE_TEMPLATES: Record<string, string> = {
   MI: 'Cannabis is for adults 21 and over only. Do not drive or operate machinery under the influence. Keep out of reach of children and pets.',
 };
 
-export function tvPage(sessionId: string, _origin: string): string {
+export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any }): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -22,6 +24,11 @@ export function tvPage(sessionId: string, _origin: string): string {
     .replace(/'/g, '&#39;');
 
   const safeSessionId = escapeHtml(sessionId);
+  const initialConfig = options?.initialConfig;
+  const hasInitialMenu = initialConfig &&
+    Array.isArray(initialConfig.categories) &&
+    initialConfig.categories.some((cat: any) => Array.isArray(cat.products) && cat.products.length > 0);
+  const initialTemplate = initialConfig?.template || 'default';
   const configOrigin = 'https://dubmenu.com';
   const landingUrl = configOrigin + '/?code=' + safeSessionId;
   const qrSrc =
@@ -180,7 +187,7 @@ export function tvPage(sessionId: string, _origin: string): string {
   .pairing-instruction{font-size:clamp(1rem,1.6vw,1.5rem);font-weight:600;color:var(--text);text-align:center;max-width:600px;}
 
   #menu{flex-direction:column;background:var(--bg);}
-  .promo-bar{width:100%;padding:0.6rem 2rem;text-align:center;font-weight:800;font-size:clamp(1rem,1.4vw,1.3rem);letter-spacing:0.06em;flex-shrink:0;z-index:10;display:none;text-transform:uppercase;}
+  .promo-bar{width:100%;padding:0.6rem 2rem;text-align:center;font-weight:800;font-size:clamp(1rem,1.4vw,1.3rem);letter-spacing:0.06em;flex-shrink:0;z-index:10;display:none;text-transform:uppercase;overflow-wrap:break-word;word-wrap:break-word;min-width:0;}
   .promo-bar.active{display:block;}
   .menu-header{display:flex;justify-content:space-between;align-items:center;padding:0.6rem 2rem;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg);z-index:9;box-shadow:0 2px 12px rgba(0,0,0,0.15);}
   .header-left{display:flex;align-items:center;gap:1rem;min-width:0;}
@@ -200,7 +207,9 @@ export function tvPage(sessionId: string, _origin: string): string {
   .age-gate .btn-secondary{font-size:1rem;background:var(--surface2);color:var(--text);text-decoration:none;}
 
   .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));}
-  .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));}
+  .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:flex;align-items:center;gap:0.5rem;}
+  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
+  .cat-icon svg{width:100%;height:100%;fill:currentColor;}
   .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;}
   .layout-grid .product-card{background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--card-shadow);transition:border-color 0.3s,transform 0.2s;position:relative;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
@@ -279,6 +288,45 @@ export function tvPage(sessionId: string, _origin: string): string {
   .layout-showcase .price-tiers .tier-price{font-size:2.4rem;}
   .layout-editorial .price-tiers .tier-price{font-size:1.3rem;}
 
+  /* Sparse layout for 1-of-4 (or more) multi-display setups: hero + stacked cards fill the screen */
+  .layout-sparse{display:flex;flex-direction:column;min-height:0;}
+  .layout-sparse .category-block{display:flex;flex-direction:column;flex:1;min-height:0;}
+  .layout-sparse .category-header{flex-shrink:0;}
+  .layout-sparse .sparse-products{display:flex;flex-direction:column;gap:1rem;flex:1;min-height:0;}
+  .layout-sparse .hero-card{display:grid;grid-template-columns:1.2fr 1fr;grid-template-rows:1fr;gap:1.5rem;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.8rem;overflow:hidden;flex:1.2;min-height:0;padding:1.5rem;}
+  .layout-sparse .hero-card .card-image{width:100%;height:100%;object-fit:cover;border-radius:0.6rem;min-height:0;}
+  .layout-sparse .hero-card .card-image-placeholder{width:100%;height:100%;border-radius:0.6rem;}
+  .layout-sparse .hero-info{display:flex;flex-direction:column;justify-content:center;gap:0.75rem;min-width:0;}
+  .layout-sparse .hero-name{font-size:clamp(2.4rem,3.5vw,3.8rem);font-weight:900;line-height:1.1;color:var(--text);overflow-wrap:break-word;}
+  .layout-sparse .hero-meta{font-size:1.2rem;color:var(--text-muted);}
+  .layout-sparse .hero-price{font-size:clamp(2.6rem,4.5vw,5rem);font-weight:900;color:var(--accent);margin-top:auto;}
+  .layout-sparse .stack{display:flex;flex-direction:column;gap:0.75rem;flex:1;min-height:0;}
+  .layout-sparse .stack-card{display:grid;grid-template-columns:110px 1fr auto;gap:1rem;align-items:center;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;padding:0.75rem;flex:1;min-height:0;}
+  .layout-sparse .stack-card .card-image{width:110px;height:85px;object-fit:cover;border-radius:0.4rem;}
+  .layout-sparse .stack-card .card-image-placeholder{width:110px;height:85px;border-radius:0.4rem;}
+  .layout-sparse .stack-card .card-name{font-size:clamp(1.2rem,2vw,1.6rem);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .layout-sparse .stack-card .card-meta{font-size:1rem;color:var(--text-muted);}
+  .layout-sparse .stack-card .card-price{font-size:clamp(1.5rem,2.2vw,2.2rem);font-weight:900;color:var(--accent);}
+  .layout-sparse .stack-info{min-width:0;}
+
+  /* Single-product sparse category: vertical hero card fills remaining viewport */
+  .menu-content.layout-sparse{display:flex;flex-direction:column;min-height:0;}
+  .layout-sparse .category-block.single-product{flex:1;min-height:0;}
+  .layout-sparse .single-product .sparse-products{flex:1;min-height:0;gap:0;}
+  .layout-sparse.single-product .hero-card,.layout-sparse .single-product .hero-card{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;min-height:0;padding:2rem;gap:2rem;}
+  .layout-sparse.single-product .hero-card .card-image,.layout-sparse.single-product .hero-card .card-image-placeholder,.layout-sparse .single-product .hero-card .card-image,.layout-sparse .single-product .hero-card .card-image-placeholder{width:100%;height:55%;max-height:55%;object-fit:cover;border-radius:0.8rem;}
+  .layout-sparse.single-product .hero-info,.layout-sparse .single-product .hero-info{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;min-width:0;width:100%;}
+  .layout-sparse.single-product .hero-name,.layout-sparse .single-product .hero-name{font-size:clamp(3rem,5vw,5.5rem);}
+  .layout-sparse.single-product .hero-meta,.layout-sparse .single-product .hero-meta{font-size:clamp(1.2rem,2vw,1.8rem);}
+  .layout-sparse.single-product .hero-price,.layout-sparse .single-product .hero-price{font-size:clamp(3rem,6vw,6.5rem);margin-top:1rem;}
+
+  /* Full strain labels with color-coded badges */
+  .strain-badge-tv{display:inline-flex;align-items:center;gap:0.35rem;padding:0.2rem 0.55rem;border-radius:0.3rem;font-size:0.85rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;vertical-align:middle;}
+  .strain-dot-tv{width:7px;height:7px;border-radius:50%;}
+  .card-meta .strain-badge-tv,.row-meta .strain-badge-tv,.hero-meta .strain-badge-tv{margin-right:0.4rem;}
+  .hero-meta .strain-badge-tv{font-size:1rem;padding:0.35rem 0.75rem;}
+  .hero-meta .strain-dot-tv{width:9px;height:9px;}
+
   /* Branded placeholder for product cards without an image */
   .card-image-placeholder{
     display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
@@ -290,11 +338,15 @@ export function tvPage(sessionId: string, _origin: string): string {
     background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);
     background-size:12px 12px;opacity:0.4;
   }
-  .placeholder-initial{
+  .card-image-placeholder .placeholder-icon{
     position:relative;z-index:1;
-    font-size:clamp(2rem,5vw,4rem);font-weight:900;color:var(--accent);
-    text-transform:uppercase;line-height:1;opacity:0.85;
-    text-shadow:0 0 20px var(--accent-dim);
+    width:clamp(32px,45%,120px);height:auto;
+    color:var(--accent);opacity:0.85;
+    filter:drop-shadow(0 0 20px var(--accent-dim));
+  }
+
+  @media (max-width:768px){
+    .card-image-placeholder .placeholder-icon{width:clamp(28px,35%,80px);}
   }
 
   /* ----------------------------------------------------------------
@@ -356,7 +408,23 @@ export function tvPage(sessionId: string, _origin: string): string {
     .layout-editorial .card-meta{font-size:0.85rem;}
     .layout-editorial .card-price{font-size:1.2rem;}
 
-    .placeholder-initial{font-size:clamp(1.5rem,8vw,2.5rem);}
+    .layout-sparse .hero-card{grid-template-columns:1fr;padding:1rem;gap:1rem;}
+    .layout-sparse .hero-card .card-image{height:180px;}
+    .layout-sparse .hero-name{font-size:1.8rem;}
+    .layout-sparse .hero-meta{font-size:1rem;}
+    .layout-sparse .hero-price{font-size:2rem;}
+    .layout-sparse .stack-card{grid-template-columns:80px 1fr auto;padding:0.5rem;gap:0.5rem;}
+    .layout-sparse .stack-card .card-image{width:80px;height:60px;}
+    .layout-sparse .stack-card .card-name{font-size:1rem;}
+    .layout-sparse .stack-card .card-meta{font-size:0.85rem;}
+    .layout-sparse .stack-card .card-price{font-size:1.2rem;}
+
+    .layout-sparse.single-product .hero-card,.layout-sparse .single-product .hero-card{padding:1rem;gap:1rem;}
+    .layout-sparse.single-product .hero-card .card-image,.layout-sparse.single-product .hero-card .card-image-placeholder,.layout-sparse .single-product .hero-card .card-image,.layout-sparse .single-product .hero-card .card-image-placeholder{height:45%;max-height:45%;}
+    .layout-sparse.single-product .hero-name,.layout-sparse .single-product .hero-name{font-size:2rem;}
+    .layout-sparse.single-product .hero-meta,.layout-sparse .single-product .hero-meta{font-size:1rem;}
+    .layout-sparse.single-product .hero-price,.layout-sparse .single-product .hero-price{font-size:2.4rem;margin-top:0.5rem;}
+
     .price-tiers .tier-label{font-size:0.7rem;}
     .price-tiers .tier-price{font-size:0.95rem;}
 
@@ -369,9 +437,9 @@ export function tvPage(sessionId: string, _origin: string): string {
   }
 </style>
 </head>
-<body class="template-default">
+<body class="template-${initialTemplate}">
 
-<div id="pairing" class="phase">
+<div id="pairing" class="phase"${hasInitialMenu ? ' hidden' : ''}>
   <div class="pairing-glow"></div>
   <div class="brand">
     <div class="brand-logo">DUBMENU</div>
@@ -389,7 +457,7 @@ export function tvPage(sessionId: string, _origin: string): string {
   <div class="pairing-instruction">Scan with your phone to configure your menu</div>
 </div>
 
-<div id="menu" class="phase" hidden>
+<div id="menu" class="phase"${hasInitialMenu ? '' : ' hidden'}>
   <div class="promo-bar" id="promo-bar"></div>
   <header class="menu-header">
     <div class="header-left">
@@ -403,7 +471,7 @@ export function tvPage(sessionId: string, _origin: string): string {
   </footer>
 </div>
 
-<div id="age-gate" class="age-gate">
+<div id="age-gate" class="age-gate${options?.noAgeGate ? ' hidden' : ''}">
   <h2>Age Verification</h2>
   <p>This menu is intended for adults 21 years of age or older. Please confirm your age to continue.</p>
   <button class="btn btn-primary" onclick="verifyAge()">I am 21+</button>
@@ -424,7 +492,7 @@ export function tvPage(sessionId: string, _origin: string): string {
   var DISPLAY_TOTAL = parseInt(new URLSearchParams(location.search).get('displays') || '1');
 
   // --- Per-TV URL overrides (do NOT persist to config) ---
-  var ALLOWED_LAYOUTS = ['grid','list','poster','cinematic','showcase','editorial'];
+  var ALLOWED_LAYOUTS = ['grid','list','poster','cinematic','showcase','editorial','sparse'];
   var ALLOWED_TEMPLATES = ['default','light','neon','minimal','sunset','forest','royal','gold','ocean','crimson','bone','vapor'];
   var URL_LAYOUT = (function(){
     var v = new URLSearchParams(location.search).get('layout');
@@ -437,8 +505,13 @@ export function tvPage(sessionId: string, _origin: string): string {
     return null;
   })();
 
+  var CATEGORY_ICON_SVGS = ${JSON.stringify(CATEGORY_ICON_SVGS)};
+  var PLACEHOLDER_ICON_SVGS = ${JSON.stringify(PLACEHOLDER_ICON_SVGS)};
+  var CATEGORY_LABELS = ${JSON.stringify(CATEGORY_LABELS)};
+
   var ws = null;
   var config = null;
+  var initialConfig = ${options?.initialConfig ? JSON.stringify(options.initialConfig) : 'null'};
   var paired = false;
   var reconnectAttempts = 0;
   var reconnectTimer = null;
@@ -455,6 +528,10 @@ export function tvPage(sessionId: string, _origin: string): string {
       .replace(/"/g,'&quot;')
       .replace(/'/g,'&#39;');
   }
+  function hasProducts(cfg){
+    return cfg && Array.isArray(cfg.categories) && cfg.categories.some(function(c){ return c && Array.isArray(c.products) && c.products.length > 0; });
+  }
+
   var COMPLIANCE_TEMPLATES = ${JSON.stringify(COMPLIANCE_TEMPLATES)};
   function getDisclaimer(cfg){
     if(cfg && typeof cfg.disclaimer === 'string' && cfg.disclaimer.trim()){
@@ -485,12 +562,31 @@ export function tvPage(sessionId: string, _origin: string): string {
     var safeUrl = safeImgUrl(p.image);
     var alt = escapeHtml(p.name || '');
     if(!safeUrl){
-      var initial = (p.name || '?').trim().charAt(0).toUpperCase() || '?';
-      return '<div class="card-image card-image-placeholder">' +
-        '<span class="placeholder-initial">' + escapeHtml(initial) + '</span>' +
-        '</div>';
+      var type = getCategoryType(p.categoryName || p.name || '');
+      var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+      return '<div class="card-image card-image-placeholder">' + svg + '</div>';
     }
     return '<img class="card-image" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + '>';
+  }
+
+  function getCategoryType(name){
+    var n = (name || '').toLowerCase();
+    if(n.indexOf('flower') !== -1 || n.indexOf('bud') !== -1 || n.indexOf('strain') !== -1) return 'flower';
+    if(n.indexOf('edible') !== -1 || n.indexOf('gummy') !== -1 || n.indexOf('candy') !== -1 || n.indexOf('chocolate') !== -1 || n.indexOf('baked') !== -1 || n.indexOf('munchie') !== -1) return 'edibles';
+    if(n.indexOf('concentrate') !== -1 || n.indexOf('extract') !== -1 || n.indexOf('wax') !== -1 || n.indexOf('shatter') !== -1 || n.indexOf('resin') !== -1 || n.indexOf('rosin') !== -1 || n.indexOf('oil') !== -1 || n.indexOf('dab') !== -1 || n.indexOf('sauce') !== -1 || n.indexOf('badder') !== -1 || n.indexOf('crumble') !== -1) return 'concentrates';
+    if(n.indexOf('pre-roll') !== -1 || n.indexOf('preroll') !== -1 || n.indexOf('joint') !== -1 || n.indexOf('cone') !== -1 || n.indexOf('blunt') !== -1) return 'prerolls';
+    if(n.indexOf('vape') !== -1 || n.indexOf('vaporizer') !== -1 || n.indexOf('cartridge') !== -1 || n.indexOf('disposable') !== -1 || n.indexOf('pen') !== -1) return 'vapes';
+    if(n.indexOf('topical') !== -1 || n.indexOf('cream') !== -1 || n.indexOf('balm') !== -1 || n.indexOf('lotion') !== -1 || n.indexOf('salve') !== -1) return 'topicals';
+    if(n.indexOf('tincture') !== -1 || n.indexOf('sublingual') !== -1 || n.indexOf('drop') !== -1) return 'tinctures';
+    if(n.indexOf('cbd') !== -1) return 'cbd';
+    if(n.indexOf('accessor') !== -1 || n.indexOf('battery') !== -1 || n.indexOf('paper') !== -1 || n.indexOf('grinder') !== -1 || n.indexOf('pipe') !== -1 || n.indexOf('bong') !== -1) return 'accessories';
+    return 'other';
+  }
+  function categoryIconSvg(type){
+    return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
+  }
+  function categoryIcon(type){
+    return '<span class="cat-icon" aria-hidden="true">' + categoryIconSvg(type) + '</span>';
   }
 
   var cycleState = {currentPage:0, totalPages:1, interval:null, isTransitioning:false};
@@ -503,10 +599,24 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   // Resolve the active layout for THIS TV:
   //   1. ?layout= URL override (validated)
-  //   2. template-derived layout from config.template
-  //   3. 'grid' fallback
+  //   2. Explicit config.layout override (e.g. manual layout control)
+  //   3. Legacy config.layoutMode mapping (auto/columns/grid -> grid; pricelist/compact -> list)
+  //   4. For 1-of-4+ multi-display setups, prefer sparse hero-fill layout
+  //   5. template-derived layout from config.template
+  //   6. 'grid' fallback
   function getActiveLayout(cfg){
     if(URL_LAYOUT) return URL_LAYOUT;
+    if(cfg && cfg.layout && cfg.layout !== 'auto'){
+      var explicit = cfg.layout;
+      if(explicit === 'compact' || explicit === 'cards') explicit = 'list';
+      if(ALLOWED_LAYOUTS.indexOf(explicit) !== -1) return explicit;
+    }
+    if(cfg && cfg.layoutMode && cfg.layoutMode !== 'auto'){
+      var mode = cfg.layoutMode;
+      if(mode === 'grid' || mode === 'columns') return 'grid';
+      if(mode === 'pricelist' || mode === 'compact') return 'list';
+    }
+    if(DISPLAY_TOTAL >= 4) return 'sparse';
     if(cfg && cfg.template && templateLayouts[cfg.template]) return templateLayouts[cfg.template];
     return 'grid';
   }
@@ -569,25 +679,50 @@ export function tvPage(sessionId: string, _origin: string): string {
     return cats;
   }
 
-  function getProductsPerPage(layout){
+  function getProductsPerPage(layout, bannerActive){
+    // Default page sizes tuned for a 1080px viewport. Reduce when a promo
+    // banner is active so the bottom row/category is not clipped by the
+    // banner's reserved space.
+    var base;
     switch(layout){
-      case 'grid': return 12;
-      case 'list': return 16;
-      case 'poster': return 3;
-      case 'cinematic': return 4;
-      case 'showcase': return 1;
-      case 'editorial': return 6;
-      default: return 12;
+      case 'grid': base = 6; break;
+      case 'list': base = 12; break;
+      case 'poster': base = 2; break;
+      case 'cinematic': base = 2; break;
+      case 'showcase': base = 1; break;
+      case 'editorial': base = 4; break;
+      case 'sparse': base = 3; break;
+      default: base = 10;
     }
+    return bannerActive ? Math.max(1, base - (layout === 'showcase' ? 0 : 2)) : base;
   }
 
-  function getProductsForPage(cats, pageNum, perPage){
+  function getMaxCategoriesPerPage(layout, bannerActive){
+    // Limit categories per page so headers + products fit in the viewport.
+    var base;
+    switch(layout){
+      case 'grid': base = 2; break;
+      case 'list': base = 3; break;
+      case 'poster': base = 2; break;
+      case 'cinematic': base = 2; break;
+      case 'showcase': base = 1; break;
+      case 'editorial': base = 3; break;
+      case 'sparse': base = 1; break;
+      default: base = 3;
+    }
+    return bannerActive ? Math.max(1, base - 1) : base;
+  }
+
+  function paginateCategories(cats, pageNum, perPage, maxCategories){
     var catsWithProducts = cats.filter(function(c){return c.products.length>0;});
     if(catsWithProducts.length===0) return [];
-    var perCategory = Math.max(1, Math.floor(perPage / catsWithProducts.length));
-    return catsWithProducts.map(function(cat){
+    // Show only a sliding window of categories per page.
+    var pageCats = catsWithProducts.slice(pageNum * maxCategories, (pageNum + 1) * maxCategories);
+    if(pageCats.length===0) return [];
+    var perCategory = Math.max(1, Math.floor(perPage / pageCats.length));
+    return pageCats.map(function(cat){
       var total = cat.products.length;
-      var count = Math.min(perCategory, total); // don't duplicate on same page
+      var count = Math.min(perCategory, total);
       var start = (pageNum * count) % total;
       var products = [];
       for(var i=0;i<count;i++){
@@ -629,8 +764,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
     if(!cats.length) return;
     
-    var perPage = getProductsPerPage(layout);
-    var pageCats = getProductsForPage(cats, cycleState.currentPage, perPage);
+    var bannerActive = !!getActiveBanner();
+    var perPage = getProductsPerPage(layout, bannerActive);
+    var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
+    var pageCats = paginateCategories(cats, cycleState.currentPage, perPage, maxCategories);
     if(!pageCats.length) return;
     
     var content = document.getElementById('menu-content');
@@ -643,6 +780,7 @@ export function tvPage(sessionId: string, _origin: string): string {
     else if(layout==='cinematic') renderCinematic(pageCats, content);
     else if(layout==='showcase') renderShowcase(cats, content);
     else if(layout==='editorial') renderEditorial(pageCats, content);
+    else if(layout==='sparse') renderSparse(pageCats, content);
     else renderGrid(pageCats, content);
     
     requestAnimationFrame(fitToScreen);
@@ -718,9 +856,9 @@ export function tvPage(sessionId: string, _origin: string): string {
     document.getElementById('conn-indicator').classList.remove('visible');
     
     var layout = getActiveLayout(config);
-    var perPage = getProductsPerPage(layout);
-    var maxProducts = cats.reduce(function(a,c){return a+c.products.length;},0);
-    cycleState.totalPages = Math.max(1, Math.ceil(maxProducts / perPage));
+    var bannerActive = !!getActiveBanner();
+    var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
+    cycleState.totalPages = Math.max(1, Math.ceil(cats.length / maxCategories));
     cycleState.currentPage = 0;
     
     renderCurrentPage();
@@ -733,8 +871,22 @@ export function tvPage(sessionId: string, _origin: string): string {
 
   var CAT_ACCENT = ['#10b981','#06b6d4','#f59e0b','#8b5cf6','#ec4899','#22c55e','#f97316','#3b82f6'];
 
+  function strainBadge(p){
+    if(!p || !p.strain) return '';
+    var raw = String(p.strain).toLowerCase().trim();
+    var map = {h:'hybrid',s:'sativa',i:'indica',hybrid:'hybrid',sativa:'sativa',indica:'indica'};
+    var strain = map[raw];
+    if(!strain) return '';
+    var colors = {indica: '#8b5cf6', sativa: '#f97316', hybrid: '#22c55e'};
+    var color = colors[strain];
+    var label = strain.charAt(0).toUpperCase() + strain.slice(1);
+    return '<span class="strain-badge-tv" style="background:' + color + '22;color:' + color + '"><span class="strain-dot-tv" style="background:' + color + '"></span>' + escapeHtml(label) + '</span>';
+  }
+
   function makeSub(p){
     var parts = [];
+    if(p.strain) parts.push(strainBadge(p));
+    if(p.sku) parts.push('SKU ' + escapeHtml(p.sku));
     if(p.weight) parts.push(escapeHtml(p.weight));
     if(p.thc || p.cbd){
       var cannabinoids = [];
@@ -742,7 +894,6 @@ export function tvPage(sessionId: string, _origin: string): string {
       if(p.cbd) cannabinoids.push('CBD ' + escapeHtml(p.cbd));
       if(cannabinoids.length) parts.push(cannabinoids.join(' / '));
     }
-    if(p.strain) parts.push(escapeHtml(p.strain));
     if(p.brand) parts.push(escapeHtml(p.brand));
     return parts.join(' \u00B7 ');
   }
@@ -770,10 +921,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
       catEl.className = 'category-block';
-      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + escapeHtml(cat.name) + '</div></div>';
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'grid-products';
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
         var img = imgMarkup(p, true);
@@ -789,10 +940,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
       catEl.className = 'category-block';
-      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + escapeHtml(cat.name) + '</div></div>';
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var list = document.createElement('div');
       list.className = 'list-products';
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         var row = document.createElement('div');
         row.className = 'product-row' + (p.inStock === false ? ' out-of-stock' : '');
         row.innerHTML = '<div class="row-name">' + escapeHtml(p.name) + '</div><div class="row-meta">' + makeSub(p) + '</div><div class="leader"></div><div class="row-price">' + makePrice(p) + '</div>';
@@ -807,10 +958,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
       catEl.className = 'category-block';
-      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + escapeHtml(cat.name) + '</div></div>';
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var poster = document.createElement('div');
       poster.className = 'poster-products';
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         var row = document.createElement('div');
         row.className = 'product-row' + (p.inStock === false ? ' out-of-stock' : '');
         var img = imgMarkup(p, false);
@@ -826,10 +977,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
       catEl.className = 'category-block';
-      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + escapeHtml(cat.name) + '</div></div>';
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'cinematic-products';
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
         var img = imgMarkup(p, true);
@@ -844,7 +995,7 @@ export function tvPage(sessionId: string, _origin: string): string {
   function renderShowcase(cats, container){
     var allProducts = [];
     cats.forEach(function(cat){
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         allProducts.push({product: p, catName: cat.name});
       });
     });
@@ -855,7 +1006,7 @@ export function tvPage(sessionId: string, _origin: string): string {
     var showcase = document.createElement('div');
     showcase.className = 'showcase-products';
     var card = document.createElement('div');
-    card.className = 'product-card' + (p.outOfStock ? ' out-of-stock' : '');
+    card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
     var img = imgMarkup(p, false);
     card.innerHTML = img + '<div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + escapeHtml(current.catName) + ' \u00B7 ' + makeSub(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
     showcase.appendChild(card);
@@ -866,10 +1017,10 @@ export function tvPage(sessionId: string, _origin: string): string {
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
       catEl.className = 'category-block';
-      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + escapeHtml(cat.name) + '</div></div>';
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'editorial-products';
-      cat.products.forEach(function(p){
+      cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
         var img = imgMarkup(p, true);
@@ -877,6 +1028,37 @@ export function tvPage(sessionId: string, _origin: string): string {
         grid.appendChild(card);
       });
       catEl.appendChild(grid);
+      container.appendChild(catEl);
+    });
+  }
+
+  function renderSparse(cats, container){
+    cats.forEach(function(cat, catIndex){
+      var products = (cat.products || []).slice(0, 4);
+      if(!products.length) return;
+      var catEl = document.createElement('div');
+      catEl.className = 'category-block' + (products.length === 1 ? ' single-product' : '');
+      catEl.innerHTML = '<div class="category-header" style="--cat-accent:' + CAT_ACCENT[catIndex % CAT_ACCENT.length] + '"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var wrap = document.createElement('div');
+      wrap.className = 'sparse-products' + (products.length === 1 ? ' single-product' : '');
+      var hero = products[0];
+      var rest = products.slice(1);
+      var heroCard = document.createElement('div');
+      heroCard.className = 'hero-card' + (hero.inStock === false ? ' out-of-stock' : '');
+      heroCard.innerHTML = imgMarkup(hero, false) + '<div class="hero-info"><div class="hero-name">' + escapeHtml(hero.name) + '</div><div class="hero-meta">' + makeSub(hero) + '</div><div class="hero-price">' + makePrice(hero) + '</div></div>';
+      wrap.appendChild(heroCard);
+      if(rest.length){
+        var stack = document.createElement('div');
+        stack.className = 'stack';
+        rest.forEach(function(p){
+          var row = document.createElement('div');
+          row.className = 'stack-card' + (p.inStock === false ? ' out-of-stock' : '');
+          row.innerHTML = imgMarkup(p, true) + '<div class="stack-info"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div></div><div class="card-price">' + makePrice(p) + '</div>';
+          stack.appendChild(row);
+        });
+        wrap.appendChild(stack);
+      }
+      catEl.appendChild(wrap);
       container.appendChild(catEl);
     });
   }
@@ -946,9 +1128,9 @@ export function tvPage(sessionId: string, _origin: string): string {
     ws.onmessage=function(ev){
       try{
         var msg=JSON.parse(ev.data);
-        if(msg.type==='config'){config=msg.payload;if(paired){setPhase('menu');renderMenu();}}
+        if(msg.type==='config'){config=msg.payload; if(paired || hasProducts(config)){setPhase('menu');renderMenu();}}
         if(msg.type==='paired'){paired=true;setConn('paired');setPhase('menu');if(config) renderMenu();}
-        if(msg.type==='unpaired'){paired=false;stopCycling();setPhase('pairing');}
+        if(msg.type==='unpaired'){paired=false;stopCycling();if(!hasProducts(config)){setPhase('pairing');}}
         if(msg.type==='ping'){if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'pong'}));}
       }catch(e){}
     };
@@ -1019,6 +1201,13 @@ export function tvPage(sessionId: string, _origin: string): string {
       }
     }).catch(function(){});
   },3000);
+
+  if(initialConfig && hasProducts(initialConfig)){
+    config = initialConfig;
+    paired = true;
+    setPhase('menu');
+    renderMenu();
+  }
 
   connect();
 

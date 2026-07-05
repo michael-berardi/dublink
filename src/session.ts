@@ -114,7 +114,7 @@ export class SessionDurableObject implements DurableObject {
       typeof config.showPromos === 'boolean' &&
       typeof config.currency === 'string' &&
       Array.isArray(config.categories) &&
-      ['grid', 'list', 'cards', 'compact'].includes(config.layout) &&
+      ['auto', 'grid', 'list', 'cards', 'compact', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'].includes(config.layout) &&
       ['auto', 'columns', 'pricelist', 'compact', 'grid'].includes(config.layoutMode) &&
       ['small', 'medium', 'large'].includes(config.fontSize) &&
       ['dark', 'light'].includes(config.theme) &&
@@ -182,13 +182,14 @@ export class SessionDurableObject implements DurableObject {
           return new Response(JSON.stringify({ ok: false, error: 'Not owner' }), { status: 403 });
         }
         const data = await request.json() as any;
-        if (!this.isValidImportedCategories(data?.categories)) {
+        if (!this.isValidImportedCategories(data?.categories) || data.categories.length < 1) {
           return new Response(JSON.stringify({ ok: false, error: 'Invalid imported categories' }), { status: 400 });
         }
 
         this.config = {
           ...this.config,
           dispensaryName: typeof data.dispensaryName === 'string' ? this.sanitizeString(data.dispensaryName) : this.config.dispensaryName,
+          logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
           categories: this.sanitizeCategories(data.categories),
           layoutMode: 'auto',
           showImages: true,
@@ -233,8 +234,46 @@ export class SessionDurableObject implements DurableObject {
       return jsonResponse({ config: this.config });
     }
 
-    // Public endpoint for embeddable widget (no auth required, read-only menu data)
+    // Public endpoint for TV initial render (no auth required, full config
+    // for owned sessions; unowned sessions get the default config with empty
+    // categories so the TV stays in pairing mode).
+    if (url.pathname === '/tv-config' && request.method === 'GET') {
+      if (!this.ownerAccountId) {
+        return jsonResponse({
+          ...DEFAULT_CONFIG,
+          categories: [],
+        });
+      }
+      return jsonResponse(this.config);
+    }
+
+    // Public endpoint for embeddable widget (no auth required, read-only menu data).
+    // Unowned sessions must not expose a fake/sample menu as a usable menu.
     if (url.pathname === '/widget' && request.method === 'GET') {
+      if (!this.ownerAccountId) {
+      return jsonResponse({
+        dispensaryName: DEFAULT_CONFIG.dispensaryName,
+        categories: [],
+        layout: this.config.layout,
+        layoutMode: this.config.layoutMode,
+        fontSize: this.config.fontSize,
+        theme: this.config.theme,
+        template: this.config.template,
+        primaryColor: this.config.primaryColor,
+        secondaryColor: this.config.secondaryColor,
+        promoBanner: this.config.promoBanner,
+        scheduledBanners: this.config.scheduledBanners,
+        logo: this.config.logo,
+        showCategory: this.config.showCategory,
+        disclaimer: this.config.disclaimer,
+        complianceState: this.config.complianceState,
+        currency: this.config.currency,
+        autoScroll: this.config.autoScroll,
+        autoScrollSpeed: this.config.autoScrollSpeed,
+        displayCount: this.config.displayCount,
+        updatedAt: this.config.updatedAt,
+      });
+      }
       return jsonResponse({
         dispensaryName: this.config.dispensaryName,
         categories: this.config.categories.map((cat) => ({
@@ -250,16 +289,31 @@ export class SessionDurableObject implements DurableObject {
             cbd: p.cbd,
             weight: p.weight,
             brand: p.brand,
+            sku: p.sku,
             strain: p.strain,
             inStock: p.inStock,
             isPromo: p.isPromo,
+            image: p.image,
+            priceTiers: p.priceTiers,
           })),
         })),
         layout: this.config.layout,
+        layoutMode: this.config.layoutMode,
+        fontSize: this.config.fontSize,
         theme: this.config.theme,
+        template: this.config.template,
         primaryColor: this.config.primaryColor,
         secondaryColor: this.config.secondaryColor,
         promoBanner: this.config.promoBanner,
+        scheduledBanners: this.config.scheduledBanners,
+        logo: this.config.logo,
+        showCategory: this.config.showCategory,
+        disclaimer: this.config.disclaimer,
+        complianceState: this.config.complianceState,
+        currency: this.config.currency,
+        autoScroll: this.config.autoScroll,
+        autoScrollSpeed: this.config.autoScrollSpeed,
+        displayCount: this.config.displayCount,
         updatedAt: this.config.updatedAt,
       });
     }
@@ -437,7 +491,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'config_update': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!this.isValidConfigUpdate(payload)) return;
         const sanitizedPayload = { ...payload };
@@ -454,7 +508,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'config_replace': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || !this.isValidImportedCategories(payload.categories)) return;
         this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories) };
@@ -464,7 +518,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_add': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!this.isValidCategoryAdd(payload)) return;
         const newCategory = {
@@ -481,7 +535,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_update': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!this.isValidCategoryUpdate(payload)) return;
 
@@ -502,7 +556,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_remove': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || typeof payload.categoryId !== 'string') return;
 
@@ -515,7 +569,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_add': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!this.isValidProductAdd(payload)) return;
 
@@ -527,18 +581,20 @@ export class SessionDurableObject implements DurableObject {
           name: this.sanitizeString(payload.product.name),
           price: this.sanitizePrice(payload.product.price),
           originalPrice: payload.product.originalPrice ? this.sanitizePrice(payload.product.originalPrice) : undefined,
-          thc: payload.product.thc ? this.sanitizeString(payload.product.thc) : undefined,
-          cbd: payload.product.cbd ? this.sanitizeString(payload.product.cbd) : undefined,
-          description: payload.product.description ? this.sanitizeString(payload.product.description) : undefined,
-          image: payload.product.image ? this.sanitizeString(payload.product.image) : undefined,
-          weight: payload.product.weight ? this.sanitizeString(payload.product.weight) : undefined,
-          brand: payload.product.brand ? this.sanitizeString(payload.product.brand) : undefined,
-          inStock: payload.product.inStock !== false,
-          strain: ['indica', 'sativa', 'hybrid'].includes(payload.product.strain) 
-            ? payload.product.strain 
-            : undefined,
-          isPromo: Boolean(payload.product.isPromo)
-        };
+        thc: payload.product.thc ? this.sanitizeString(payload.product.thc) : undefined,
+        cbd: payload.product.cbd ? this.sanitizeString(payload.product.cbd) : undefined,
+        description: payload.product.description ? this.sanitizeString(payload.product.description) : undefined,
+        image: payload.product.image ? this.sanitizeString(payload.product.image) : undefined,
+        weight: payload.product.weight ? this.sanitizeString(payload.product.weight) : undefined,
+        brand: payload.product.brand ? this.sanitizeString(payload.product.brand) : undefined,
+        sku: payload.product.sku ? this.sanitizeString(payload.product.sku) : undefined,
+        inStock: payload.product.inStock !== false,
+        strain: ['indica', 'sativa', 'hybrid'].includes(payload.product.strain) 
+          ? payload.product.strain 
+          : undefined,
+        isPromo: Boolean(payload.product.isPromo),
+        priceTiers: payload.product.priceTiers ? this.sanitizePriceTiers(payload.product.priceTiers) : undefined
+      };
 
         targetCat.products.push(product);
         await this.persistConfig();
@@ -547,7 +603,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_update': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!this.isValidProductUpdate(payload)) return;
 
@@ -585,6 +641,9 @@ export class SessionDurableObject implements DurableObject {
         if (updates.brand !== undefined) {
           prod.brand = updates.brand ? this.sanitizeString(updates.brand) : undefined;
         }
+        if (updates.sku !== undefined) {
+          prod.sku = updates.sku ? this.sanitizeString(updates.sku) : undefined;
+        }
         if (updates.inStock !== undefined) {
           prod.inStock = Boolean(updates.inStock);
         }
@@ -596,6 +655,9 @@ export class SessionDurableObject implements DurableObject {
         if (updates.isPromo !== undefined) {
           prod.isPromo = Boolean(updates.isPromo);
         }
+        if (updates.priceTiers !== undefined) {
+          prod.priceTiers = this.sanitizePriceTiers(updates.priceTiers);
+        }
 
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
@@ -603,7 +665,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_remove': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || 
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
@@ -618,7 +680,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_toggle_stock': {
-        if (!this.canModifyConfig(conn)) return;
+        if (!(await this.canModifyConfig(conn))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || 
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
@@ -630,6 +692,28 @@ export class SessionDurableObject implements DurableObject {
         if (!tp) return;
 
         tp.inStock = !tp.inStock;
+        await this.persistConfig();
+        this.broadcast({ type: 'config', payload: this.config });
+        break;
+      }
+
+      case 'product_move': {
+        if (!(await this.canModifyConfig(conn))) return;
+        const payload = msg.payload;
+        if (!payload || typeof payload !== 'object' ||
+            typeof payload.fromCategoryId !== 'string' ||
+            typeof payload.toCategoryId !== 'string' ||
+            typeof payload.productId !== 'string') return;
+
+        const fromCat = this.config.categories.find(c => c.id === payload.fromCategoryId);
+        const toCat = this.config.categories.find(c => c.id === payload.toCategoryId);
+        if (!fromCat || !toCat || fromCat.id === toCat.id) return;
+
+        const idx = fromCat.products.findIndex(p => p.id === payload.productId);
+        if (idx === -1) return;
+
+        const [movedProduct] = fromCat.products.splice(idx, 1);
+        toCat.products.push(movedProduct);
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -688,7 +772,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.secondaryColor !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(payload.secondaryColor)) return false;
     if (payload.currency !== undefined && typeof payload.currency !== 'string') return false;
     if (payload.customFont !== undefined && typeof payload.customFont !== 'string') return false;
-    if (payload.layout !== undefined && !['grid', 'list', 'cards', 'compact'].includes(payload.layout)) return false;
+    if (payload.layout !== undefined && !['auto', 'grid', 'list', 'cards', 'compact', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'].includes(payload.layout)) return false;
     if (payload.fontSize !== undefined && !['small', 'medium', 'large'].includes(payload.fontSize)) return false;
     if (payload.theme !== undefined && !['dark', 'light'].includes(payload.theme)) return false;
     if (payload.template !== undefined && !['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(payload.template)) return false;
@@ -771,7 +855,7 @@ export class SessionDurableObject implements DurableObject {
   }
 
   private isValidImportedCategories(categories: any): boolean {
-    if (!Array.isArray(categories) || categories.length < 1 || categories.length > 20) return false;
+    if (!Array.isArray(categories) || categories.length > 20) return false;
     return categories.every((cat) => (
       cat && typeof cat === 'object' &&
       typeof cat.name === 'string' && cat.name.trim().length > 0 &&
@@ -796,6 +880,7 @@ export class SessionDurableObject implements DurableObject {
         image: typeof p.image === 'string' ? this.sanitizeString(p.image) : undefined,
         weight: typeof p.weight === 'string' ? this.sanitizeString(p.weight) : undefined,
         brand: typeof p.brand === 'string' ? this.sanitizeString(p.brand) : undefined,
+        sku: typeof p.sku === 'string' ? this.sanitizeString(p.sku) : undefined,
         inStock: p.inStock !== false,
         strain: ['indica', 'sativa', 'hybrid'].includes(p.strain) ? p.strain : undefined,
         isPromo: Boolean(p.isPromo),

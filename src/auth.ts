@@ -9,8 +9,8 @@ export interface CustomDomainMapping {
 export interface Account {
   id: string;
   email: string;
-  passwordHash: string;
-  passwordSalt: string;
+  passwordHash?: string;
+  passwordSalt?: string;
   createdAt: number;
   updatedAt: number;
   stripeCustomerId?: string;
@@ -19,6 +19,14 @@ export interface Account {
   trialEndsAt?: number;
   sessions: string[];
   customDomains?: string[];
+  // Shared DubHaven identity linkage. When present the account was created
+  // or linked via DubHaven SSO; googleSubject/googleEmail store the upstream
+  // Google claims from the shared identity token.
+  dubhavenAccountId?: string;
+  googleSubject?: string;
+  googleEmail?: string;
+  name?: string;
+  picture?: string;
 }
 
 export interface AuthToken {
@@ -198,7 +206,8 @@ export class AccountDurableObject implements DurableObject {
         passwordSalt: body.passwordSalt,
         createdAt: now,
         updatedAt: now,
-        subscriptionStatus: 'inactive',
+        subscriptionStatus: 'trialing',
+        trialEndsAt: now + 14 * 24 * 60 * 60 * 1000,
         sessions: [],
       };
       await this.state.storage.put('account', this.account);
@@ -207,9 +216,53 @@ export class AccountDurableObject implements DurableObject {
 
     if (url.pathname === '/verify' && request.method === 'POST') {
       const body = (await request.json()) as { password: string };
-      if (!this.account || !body.password) return jsonResponse({ valid: false }, 401);
+      if (!this.account || !this.account.passwordHash || !this.account.passwordSalt || !body.password) return jsonResponse({ valid: false }, 401);
       const valid = await verifyPassword(body.password, this.account.passwordSalt, this.account.passwordHash);
       return jsonResponse({ valid, account: valid ? this.account : null });
+    }
+
+    if (url.pathname === '/upsert-dubhaven' && request.method === 'POST') {
+      const body = (await request.json()) as {
+        id: string;
+        email: string;
+        dubhavenAccountId: string;
+        googleSubject?: string;
+        googleEmail?: string;
+        name?: string;
+        picture?: string;
+        demoTrialDays?: number;
+      };
+      if (!body.email || !body.dubhavenAccountId || !body.id) {
+        return jsonResponse({ error: 'Missing fields' }, 400);
+      }
+      const now = Date.now();
+      if (this.account) {
+        this.account.dubhavenAccountId = body.dubhavenAccountId;
+        if (body.googleSubject) this.account.googleSubject = body.googleSubject;
+        if (body.googleEmail) this.account.googleEmail = body.googleEmail;
+        if (body.name) this.account.name = body.name;
+        if (body.picture) this.account.picture = body.picture;
+        this.account.updatedAt = now;
+        await this.state.storage.put('account', this.account);
+        return jsonResponse({ account: this.account, isNew: false });
+      }
+      const trialDays = typeof body.demoTrialDays === 'number' && body.demoTrialDays > 0 ? body.demoTrialDays : 30;
+      this.account = {
+        id: body.id,
+        email: body.email,
+        createdAt: now,
+        updatedAt: now,
+        subscriptionStatus: 'trialing',
+        trialEndsAt: now + trialDays * 24 * 60 * 60 * 1000,
+        sessions: [],
+        dubhavenAccountId: body.dubhavenAccountId,
+        googleSubject: body.googleSubject,
+        googleEmail: body.googleEmail,
+        name: body.name,
+        picture: body.picture,
+      };
+      await this.state.storage.put('account', this.account);
+      return jsonResponse({ account: this.account, isNew: true });
     }
 
     if (url.pathname === '/stripe' && request.method === 'POST') {
@@ -312,6 +365,27 @@ export async function authenticate(env: Env, email: string, password: string): P
   );
   const data = (await res.json()) as { valid: boolean; account: Account | null };
   return data.valid ? data.account : null;
+}
+
+export async function upsertDubHavenAccount(
+  env: Env,
+  input: { id: string; email: string; dubhavenAccountId: string; googleSubject?: string; googleEmail?: string; name?: string; picture?: string }
+): Promise<{ account: Account; isNew: boolean }> {
+  const id = env.ACCOUNTS.idFromName(input.id);
+  const stub = env.ACCOUNTS.get(id);
+  const res = await stub.fetch(
+    new Request('https://internal/upsert-dubhaven', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    })
+  );
+  if (!res.ok) {
+    const err = (await res.json()) as { error: string };
+    throw new Error(err.error || 'DubHaven account upsert failed');
+  }
+  const data = (await res.json()) as { account: Account; isNew: boolean };
+  return { account: data.account, isNew: data.isNew };
 }
 
 export async function updateAccountStripe(env: Env, accountId: string, updates: Parameters<AccountDurableObject['fetch']> extends never ? never : any): Promise<Account | null> {

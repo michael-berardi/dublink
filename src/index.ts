@@ -2,7 +2,9 @@ import { Env as SessionEnv, SessionDurableObject, SESSION_ID_REGEX } from './ses
 import { AccountDurableObject, createAccount, authenticate, signToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, addSessionToAccount, generateSessionId } from './auth';
 import { StatsDurableObject } from './stats';
 import { DomainDurableObject } from './domains';
+import { buildDubHavenAuthUrl, handleDubHavenCallback, isDubHavenStartConfigured } from './dubhaven-auth';
 import { tvPage } from './html-tv';
+import { menuPage } from './html-menu';
 import { configPage } from './html-config';
 import { landingPage } from './html-landing';
 import { pseoPage, getAllPSEOSlugs } from './html-pseo';
@@ -17,8 +19,10 @@ import { statusPage } from './html-status';
 import { adminPage } from './html-admin';
 import { widgetPage, widgetJs } from './html-widget';
 import { getStatus } from './status';
-import { scrapeDutchie, scrapeDutchieFallback } from './dutchie-scraper';
+import { resolveMenuSource } from './menu-source';
+import { formatMenu } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
+import { createStarterConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
 
@@ -31,10 +35,15 @@ export interface Env extends SessionEnv {
   AUTH_SECRET?: string;
   APP_URL?: string;
   TV_URL?: string;
+  ADMIN_EMAILS?: string;
   STATS?: DurableObjectNamespace;
   DOMAINS?: DurableObjectNamespace;
-  ADMIN_EMAILS?: string;
   UPLOADS?: R2Bucket;
+  DUBHAVEN_AUTH_URL?: string;
+  DUBHAVEN_ACCOUNT_SECRET?: string;
+  DUBHAVEN_ISSUER?: string;
+  DUTCHIE_API_KEY?: string;
+  BROWSERLESS_TOKEN?: string;
 }
 
 async function recordEvent(env: Env, event: { type: string; accountId?: string; email?: string; payload?: any }): Promise<void> {
@@ -68,6 +77,24 @@ function htmlResponse(body: string, status: number = 200): Response {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': HTML_CSP,
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      ...SECURITY_HEADERS,
+    },
+  });
+}
+
+// Same as htmlResponse but allows the page to be embedded in an iframe on the
+// same origin (used by the desktop config simulator so the preview reuses the
+// real TV renderer without weakening the default frame-ancestors policy).
+function tvEmbedResponse(body: string, status: number = 200): Response {
+  const embedCsp = HTML_CSP.replace("frame-ancestors 'none';", "frame-ancestors 'self';");
+  return new Response(body, {
+    status,
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': embedCsp,
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
@@ -123,6 +150,23 @@ function appUrl(env: Env, request: Request): string {
 
 function tvUrl(env: Env): string {
   return env.TV_URL || 'https://tv.dubmenu.com';
+}
+
+// Auto-create a starter display for an account with zero sessions. Seeds the
+// new Session Durable Object with the starter template, claims ownership for
+// the account, and registers the session on the account. Returns the new sessionId.
+async function createStarterDisplay(env: Env, accountId: string): Promise<string> {
+  const sessionId = generateSessionId();
+  const starter = createStarterConfig();
+  const id = env.SESSION.idFromName(sessionId);
+  const session = env.SESSION.get(id);
+  await session.fetch(new Request('https://internal/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Account-Id': accountId },
+    body: JSON.stringify(starter),
+  }));
+  await addSessionToAccount(env, accountId, sessionId);
+  return sessionId;
 }
 
 // Allowlist of origins permitted to issue credentialed (cookie-bearing)
@@ -197,16 +241,38 @@ function printPage(sessionId: string, config: any, _origin: string): string {
         .filter((p: any) => p && p.inStock !== false)
         .map((p: any) => {
           const name = escapeHtml(p.name || '');
-          const price = typeof p.price === 'number'
-            ? currency + p.price.toFixed(2).replace(/\.00$/, '')
-            : escapeHtml(p.price);
+          // Strain type indicator after product name
+          let strainHtml = '';
+          if (p.strain) {
+            const strainColors: Record<string, string> = { indica: '#8b5cf6', sativa: '#f97316', hybrid: '#22c55e' };
+            const color = strainColors[p.strain] || '#555';
+            const label = p.strain.charAt(0).toUpperCase() + p.strain.slice(1);
+            strainHtml = ' <span style="color:' + color + ';font-weight:700;font-size:0.85em;">[' + label + ']</span>';
+          }
+          // Price tiers override flat price when available
+          let priceHtml: string;
+          if (p.priceTiers && Array.isArray(p.priceTiers) && p.priceTiers.length > 0) {
+            const tiers = p.priceTiers.map((t: any) => {
+              const tLabel = escapeHtml(t?.label || '');
+              const tPrice = escapeHtml(t?.price || '');
+              if (!tLabel || !tPrice) return '';
+              return '<span style="display:inline-block;padding:0.05rem 0.35rem;border:0.5px solid #999;border-radius:0.2rem;margin-right:0.25rem;font-size:0.8rem;"><span style="font-size:0.7rem;color:#777;text-transform:uppercase;">' + tLabel + '</span> ' + tPrice + '</span>';
+            }).join('');
+            priceHtml = '<span class="price" style="font-size:0.85rem;">' + tiers + '</span>';
+          } else {
+            const price = typeof p.price === 'number'
+              ? currency + p.price.toFixed(2).replace(/\.00$/, '')
+              : escapeHtml(p.price);
+            priceHtml = '<span class="price">' + price + '</span>';
+          }
           const meta: string[] = [];
+          if (p.sku) meta.push(escapeHtml(p.sku));
           if (p.thc) meta.push('THC ' + escapeHtml(p.thc));
           if (p.cbd) meta.push('CBD ' + escapeHtml(p.cbd));
           if (p.weight) meta.push(escapeHtml(p.weight));
           if (p.brand) meta.push(escapeHtml(p.brand));
           const metaHtml = meta.length ? `<span class="meta">${meta.join(' &middot; ')}</span>` : '';
-          return `<li class="product"><span class="name">${name}</span><span class="dots"></span><span class="price">${price}</span>${metaHtml ? `<div class="meta-line">${metaHtml}</div>` : ''}</li>`;
+          return `<li class="product"><span class="name">${name}${strainHtml}</span><span class="dots"></span>${priceHtml}${metaHtml ? `<div class="meta-line">${metaHtml}</div>` : ''}</li>`;
         })
         .join('\n');
       return `<section class="category"><h2>${catName}</h2><ul class="products">${items}</ul></section>`;
@@ -238,6 +304,7 @@ function printPage(sessionId: string, config: any, _origin: string): string {
   .product .name { font-weight: 600; }
   .product .dots { flex: 1 1 auto; border-bottom: 1px dotted #bbb; margin: 0 0.4rem; transform: translateY(-3px); min-width: 1rem; }
   .product .price { font-weight: 700; white-space: nowrap; }
+  .product .price .tier { white-space: nowrap; }
   .meta-line { width: 100%; }
   .meta { font-size: 0.8rem; color: #555; }
   footer { margin-top: 2rem; padding-top: 0.75rem; border-top: 1px solid #ccc; text-align: center; font-size: 0.8rem; color: #666; }
@@ -306,7 +373,7 @@ export default {
       const lookupRes = await domainStub.fetch(new Request(`https://internal/lookup?domain=${encodeURIComponent(host)}`, { method: 'GET' }));
       const lookup = (await lookupRes.json()) as { mapping: { sessionId: string; verified: boolean } | null };
       if (lookup.mapping?.sessionId) {
-        return htmlResponse(tvPage(lookup.mapping.sessionId, url.origin));
+        return htmlResponse(tvPage(lookup.mapping.sessionId, url.origin, { noAgeGate: true }));
       }
     }
 
@@ -316,14 +383,14 @@ export default {
     // /status/*, /api/*, /print/*, /config/*) still pass through so a paired
     // phone or a specific TV URL keeps working.
     if (isTvHost) {
-      const TV_ALLOWED_PREFIXES = ['/tv/', '/ws/', '/status/', '/api/', '/print/', '/config/', '/login', '/signup', '/robots.txt', '/sitemap.xml'];
+      const TV_ALLOWED_PREFIXES = ['/tv/', '/ws/', '/status/', '/api/', '/print/', '/config/', '/menu/', '/login', '/signup', '/robots.txt', '/sitemap.xml'];
       const isTvFunctional = path === '/' || TV_ALLOWED_PREFIXES.some((p) => path === p || path.startsWith(p));
       if (!isTvFunctional) {
         // Any marketing/non-TV route on the TV host → straight to TV pairing.
         return redirectResponse(`${url.origin}/tv/demo`);
       }
       if (path === '/') {
-        return htmlResponse(tvPage('demo', url.origin));
+        return htmlResponse(tvPage('demo', url.origin, { noAgeGate: true }));
       }
     }
 
@@ -452,17 +519,44 @@ export default {
     }
 
     if (path === '/login' && request.method === 'GET') {
-      return htmlResponse(authPage(origin, 'login'));
+      const dubHavenEnabled = isDubHavenStartConfigured(env);
+      return htmlResponse(authPage(origin, 'login', undefined, undefined, dubHavenEnabled));
     }
     if (path === '/signup' && request.method === 'GET') {
-      return htmlResponse(authPage(origin, 'signup'));
+      const dubHavenEnabled = isDubHavenStartConfigured(env);
+      return htmlResponse(authPage(origin, 'signup', undefined, undefined, dubHavenEnabled));
     }
     if (path === '/account' && request.method === 'GET') {
       const auth = await requireAuth(request, env);
       if (!auth) return redirectResponse(`${origin}/login`);
       const account = await getAccount(env, auth.accountId);
       if (!account) return redirectResponse(`${origin}/login`);
+      // Frictionless onboarding: active/trial accounts with no displays get an
+      // auto-created starter display and land directly in the editor.
+      if (isSubscriptionActive(account) && (!account.sessions || account.sessions.length === 0)) {
+        const newId = await createStarterDisplay(env, auth.accountId);
+        await recordEvent(env, { type: 'session.created', accountId: auth.accountId, payload: { sessionId: newId, starter: true } });
+        return redirectResponse(`${origin}/config/${newId}`);
+      }
       return htmlResponse(authPage(origin, 'account', account));
+    }
+
+    if (path === '/auth/dubhaven' && request.method === 'GET') {
+      if (!isDubHavenStartConfigured(env)) {
+        return htmlResponse(authPage(origin, 'login', undefined, 'DubHaven sign-in is not configured yet.', false));
+      }
+      const redirectAfter = url.searchParams.get('next') || `${origin}/account`;
+      const authUrl = buildDubHavenAuthUrl(env, origin, redirectAfter);
+      return redirectResponse(authUrl);
+    }
+
+    if (path === '/auth/dubhaven/callback' && request.method === 'GET') {
+      const result = await handleDubHavenCallback(request, env, origin, secure);
+      if (result.account) {
+        const eventType = result.isNew ? 'dubmenu.first_login' : 'dubmenu.login';
+        await recordEvent(env, { type: eventType, accountId: result.account.id, email: result.account.email });
+      }
+      return result.response;
     }
 
     if (path === '/api/signup' && request.method === 'POST') {
@@ -817,37 +911,55 @@ export default {
       }
       try {
         const body = await request.json() as { url?: string; session?: string };
-        let slug = '';
-        if (body.url) {
-          const urlStr = body.url.toLowerCase();
-          if (urlStr.includes('dutchie.com/embedded-menu/')) {
-            slug = body.url.split('embedded-menu/')[1]?.split('/')[0]?.split('?')[0] || '';
-          } else if (urlStr.includes('dutchie.com/')) {
-            slug = body.url.split('dutchie.com/')[1]?.split('/')[0]?.split('?')[0] || '';
-          } else {
-            slug = body.url.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-          }
+        const urlStr = (body.url || '').trim();
+        if (!urlStr) {
+          return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
         }
-        if (!slug) return jsonResponse({ error: 'Invalid Dutchie URL' }, 400);
-        let result;
-        if (!env.BROWSERLESS_TOKEN) {
-          result = await scrapeDutchieFallback(slug);
-        } else {
-          result = await scrapeDutchie(slug, env.BROWSERLESS_TOKEN);
-        }
+
+        const raw = await resolveMenuSource(urlStr, {
+          DUTCHIE_API_KEY: env.DUTCHIE_API_KEY,
+          BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN,
+        });
+
+        const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo);
+        const importPayload = {
+          dispensaryName: formatted.dispensaryName,
+          logo: formatted.logo,
+          categories: formatted.categories,
+          productCount: formatted.productCount,
+          displayCount: formatted.layout.displayCount,
+          layoutMode: formatted.layout.layoutMode,
+          fontSize: formatted.layout.fontSize,
+          showImages: formatted.layout.showImages,
+          showBrand: formatted.layout.showBrand,
+          showStrain: formatted.layout.showStrain,
+          theme: formatted.layout.theme,
+        };
+
         if (body.session && SESSION_ID_REGEX.test(body.session)) {
           const id = env.SESSION.idFromName(body.session);
           const session = env.SESSION.get(id);
           await session.fetch(new Request('https://internal/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
-            body: JSON.stringify(result),
+            body: JSON.stringify(importPayload),
           }));
           await addSessionToAccount(env, auth.accountId, body.session);
         }
-        return jsonResponse({ success: true, ...result });
+
+        return jsonResponse({
+          success: true,
+          ...importPayload,
+          source: raw.source,
+          apiUsed: raw.apiUsed,
+          apiError: raw.apiError,
+          demo: raw.demo,
+          warnings: [...(raw.warnings || []), ...formatted.warnings],
+        });
       } catch (err) {
-        return jsonResponse({ error: err instanceof Error ? err.message : 'Scrape failed' }, 500);
+        const message = err instanceof Error ? err.message : 'Import failed';
+        console.error('Menu import failed:', message);
+        return jsonResponse({ error: message }, 500);
       }
     }
 
@@ -922,7 +1034,11 @@ export default {
         startIndex + slice.length < uploads.length
           ? String(startIndex + slice.length)
           : null;
-      return jsonResponse({ uploads: slice, nextCursor });
+      // Expose accountId so the image-library client can resolve upload URLs
+      // even on fresh accounts that have no product/logo already using an
+      // upload URL (resolveAccountId() in html-config.ts would otherwise have
+      // nothing to derive from).
+      return jsonResponse({ uploads: slice, nextCursor, accountId: auth.accountId });
     }
 
     // Per-upload routes under /api/uploads/[...]. GET is the public image
@@ -996,13 +1112,55 @@ export default {
       if (!SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
       if (sessionId === 'new') {
         const auth = await requireAuth(request, env);
-        if (!auth) return redirectResponse(`${origin}/login?next=${encodeURIComponent('/tv/new')}`);
+        if (!auth) {
+          const next = encodeURIComponent('/tv/new');
+          const signInUrl = isDubHavenStartConfigured(env) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
+          return redirectResponse(signInUrl);
+        }
         const newId = generateSessionId();
         await addSessionToAccount(env, auth.accountId, newId);
         await recordEvent(env, { type: 'session.created', accountId: auth.accountId, payload: { sessionId: newId } });
         return redirectResponse(`${tvUrl(env)}/tv/${newId}`);
       }
-      return htmlResponse(tvPage(sessionId, url.origin));
+
+      // For an existing saved session, preload the persisted public config so the TV
+      // can render products immediately instead of waiting for a phone to pair.
+      let initialConfig: any = undefined;
+      if (sessionId !== 'demo') {
+        try {
+          const id = env.SESSION.idFromName(sessionId);
+          const session = env.SESSION.get(id);
+          const cfgRes = await session.fetch(new Request('https://internal/tv-config', { method: 'GET' }));
+          if (cfgRes.ok) {
+            const data = (await cfgRes.json()) as any;
+            if (data && Array.isArray(data.categories) && data.categories.some((c: any) => c && Array.isArray(c.products) && c.products.length > 0)) {
+              initialConfig = data;
+            }
+          }
+        } catch (err) {
+          console.error('Failed to preload TV config:', err);
+        }
+      }
+
+      // Desktop simulator requests the TV page inside an iframe on the same
+      // origin. Relax frame-ancestors for that specific embed mode only, and
+      // bypass the age gate when the request is authenticated for the account
+      // that owns this session. Unauthenticated or foreign-session embeds still
+      // render the normal TV page (with age gate) so public TV behavior is
+      // preserved.
+      if (url.searchParams.get('embed') === '1') {
+        let noAgeGate = false;
+        const auth = await requireAuth(request, env);
+        if (auth) {
+          const account = await getAccount(env, auth.accountId);
+          if (account && account.sessions.includes(sessionId)) {
+            noAgeGate = true;
+          }
+        }
+        const pageOptions = noAgeGate ? { noAgeGate: true, preview: true, initialConfig } : { initialConfig };
+        return tvEmbedResponse(tvPage(sessionId, url.origin, pageOptions));
+      }
+      return htmlResponse(tvPage(sessionId, url.origin, { noAgeGate: true, initialConfig }));
     }
 
     if (path.startsWith('/print/')) {
@@ -1021,11 +1179,27 @@ export default {
       return htmlResponse(printPage(sessionId, config, origin));
     }
 
+    // Customer-facing mobile/tablet menu (QR code landing). Public, read-only.
+    if (path.startsWith('/menu/')) {
+      const sessionId = path.slice('/menu/'.length).split('/')[0].split('?')[0];
+      if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
+      const id = env.SESSION.idFromName(sessionId);
+      const session = env.SESSION.get(id);
+      const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
+      if (!res.ok) return errorResponse('Failed to load menu', 500);
+      const config = await res.json();
+      return htmlResponse(menuPage(sessionId, config, origin));
+    }
+
     if (path.startsWith('/config/')) {
       const sessionId = path.split('/')[2] || 'default';
       if (!SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
       const auth = await requireAuth(request, env);
-      if (!auth) return redirectResponse(`${origin}/login?next=${encodeURIComponent(path)}`);
+      if (!auth) {
+        const next = encodeURIComponent(path);
+        const signInUrl = isDubHavenStartConfigured(env) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
+        return redirectResponse(signInUrl);
+      }
       const account = await getAccount(env, auth.accountId);
       if (!account || !isSubscriptionActive(account)) {
         return redirectResponse(`${origin}/account?error=subscription`);
@@ -1040,6 +1214,7 @@ export default {
         return htmlResponse(authPage(origin, 'account', account, 'This display is managed by another account.'));
       }
       await addSessionToAccount(env, auth.accountId, sessionId);
+      await recordEvent(env, { type: 'pairing.start', accountId: auth.accountId, payload: { sessionId } });
       return htmlResponse(configPage(sessionId, url.origin));
     }
     if (path === '/pricing') return htmlResponse(pricingPage(origin));

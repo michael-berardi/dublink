@@ -1,4 +1,4 @@
-export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: any, error?: string): string {
+export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: any, error?: string, dubHavenEnabled: boolean = false): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -40,6 +40,12 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
     <div class="card">
       <div class="card-title">${isLogin ? 'Log In' : 'Create Account'}</div>
       ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
+      ${dubHavenEnabled ? `
+      <a href="${safeOrigin}/auth/dubhaven" class="btn btn-google" style="width:100%;margin-bottom:1rem;">
+        Sign in with DubHaven
+      </a>
+      <div style="text-align:center;color:var(--muted);font-size:0.875rem;margin-bottom:1rem;">or use email</div>
+      ` : ''}
       <form method="POST" action="${safeOrigin}/api/${isLogin ? 'login' : 'signup'}">
         <div class="field"><label>Email</label><input type="email" name="email" required placeholder="you@example.com"></div>
         <div class="field"><label>Password</label><input type="password" name="password" required minlength="8" placeholder="••••••••"></div>
@@ -76,6 +82,8 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
     .btn-primary{background:var(--primary);color:#000;}
     .btn-secondary{background:var(--surface2);}
     .btn-danger{background:var(--danger);}
+    .btn-google{background:#fff;color:#3c4043;}
+    .btn-google:hover{background:#f2f2f2;}
     .error{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:#ef4444;padding:0.75rem;border-radius:0.5rem;margin-bottom:1rem;font-size:0.875rem;}
     .switch-link{text-align:center;margin-top:1rem;color:var(--muted);font-size:0.875rem;}
     .switch-link a{color:var(--primary);font-weight:600;}
@@ -104,7 +112,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
         const data=await res.json();
         const container=document.getElementById('sessions');
         if(!data.sessions||!data.sessions.length){container.innerHTML='<p style="color:var(--muted);">No displays yet. Create one to get started.</p>';return;}
-        container.innerHTML=data.sessions.map(s=>'<div class="session-item"><a href="' + safeOrigin + '/config/' + s + '" target="_blank">' + s + '</a></div>').join('');
+        container.innerHTML=data.sessions.map(s=>'<div class="session-item"><a href="${safeOrigin}/config/' + s + '" target="_blank">' + s + '</a></div>').join('');
       }catch(e){document.getElementById('sessions').innerHTML='<p style="color:#ef4444;">Failed to load sessions.</p>';}
     }
     loadSessions();

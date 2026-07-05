@@ -1,4 +1,6 @@
+import { createStarterConfig } from './starter-template';
 export function configPage(sessionId: string, origin: string): string {
+  const STARTER_CONFIG = JSON.stringify(createStarterConfig());
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,7 +11,8 @@ export function configPage(sessionId: string, origin: string): string {
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     :root{--bg:#000;--surface:#1c1c1e;--surface2:#2c2c2e;--border:#38383a;--text:#fff;--muted:#a1a1a6;--primary:#10b981;--danger:#ef4444;}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;max-width:520px;margin:0 auto;padding:1rem;-webkit-font-smoothing:antialiased;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
+    .config-column{max-width:520px;margin:0 auto;padding:1rem;}
     .status-bar{display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;background:var(--surface);border-radius:0.75rem;margin-bottom:1.25rem;position:sticky;top:0.5rem;z-index:100;}
     .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.5rem;}
     .status-connected{background:var(--primary);}
@@ -27,7 +30,10 @@ export function configPage(sessionId: string, origin: string): string {
     .field label{display:block;font-size:0.75rem;font-weight:600;color:var(--muted);margin-bottom:0.375rem;text-transform:uppercase;letter-spacing:0.04em;}
     .field input[type="text"],.field input[type="url"],.field input[type="number"],.field textarea,.field select{
       width:100%;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;font-family:inherit;
+      -webkit-user-select:text;user-select:text;-webkit-tap-highlight-color:transparent;
     }
+    #dutchieUrl{min-width:0;width:100%;box-sizing:border-box;}
+    #dutchieForm{width:100%;}
     .field input:focus,.field textarea:focus,.field select:focus{box-shadow:0 0 0 2px var(--primary);}
     .field input[type="color"]{width:100%;height:2.5rem;background:var(--surface2);border:none;border-radius:0.5rem;cursor:pointer;padding:0.25rem;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;}
@@ -145,11 +151,56 @@ export function configPage(sessionId: string, origin: string): string {
       .prod-edit .grid-2{grid-template-columns:1fr;}
       .prod-edit input,.prod-edit select{min-width:0;}
     }
+
+    /* ----------------------------------------------------------------
+       Desktop simulator layout.
+       On wide screens the config editor becomes a scrolling left pane
+       and the right pane hosts a live TV preview iframe.
+       The preview iframe is rendered at a 1920x1080 viewport and scaled
+       via CSS transform so the real TV renderer is reused exactly.
+    ----------------------------------------------------------------- */
+    @media(min-width:1100px){
+      body{max-width:none;margin:0;height:100vh;overflow:hidden;}
+      .desktop-layout{display:flex;flex-direction:row;height:100vh;width:100vw;}
+      .config-column{flex:0 0 520px;max-width:560px;height:100vh;overflow-y:auto;padding:1rem;}
+      .status-bar{position:sticky;top:0.5rem;margin-top:0;}
+      #simulatorPanel{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
+      .sim-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-shrink:0;}
+      .sim-header h2{font-size:1.25rem;font-weight:700;}
+      .sim-header-actions{display:flex;gap:0.5rem;}
+      .sim-controls{display:flex;align-items:flex-end;gap:0.75rem;margin-bottom:0.75rem;flex-shrink:0;flex-wrap:wrap;}
+      .sim-field{display:flex;flex-direction:column;gap:0.35rem;}
+      .sim-field label{font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);}
+      .sim-field select,.sim-field input{background:var(--surface2);border:none;border-radius:0.375rem;padding:0.4rem 0.5rem;color:var(--text);font-size:0.85rem;outline:none;}
+      .sim-field-grow{flex:1;min-width:0;}
+      .sim-segmented{display:flex;gap:0.25rem;background:var(--surface2);border-radius:0.5rem;padding:0.25rem;}
+      .sim-segmented button{background:transparent;border:none;color:var(--text);font-size:0.85rem;font-weight:600;padding:0.35rem 0.75rem;border-radius:0.375rem;cursor:pointer;font-family:inherit;}
+      .sim-segmented button.active{background:var(--primary);color:#000;}
+      .sim-tabs{display:flex;gap:0.25rem;flex-wrap:wrap;}
+      .sim-tab{background:var(--surface2);border:none;color:var(--text);font-size:0.85rem;font-weight:600;padding:0.4rem 0.75rem;border-radius:0.375rem;cursor:pointer;font-family:inherit;border:1px solid transparent;}
+      .sim-tab.active{background:var(--surface);border-color:var(--primary);}
+      .sim-preview{flex:1;position:relative;overflow:hidden;background:var(--surface);border-radius:0.75rem;border:1px solid var(--border);min-height:0;display:flex;align-items:center;justify-content:center;}
+      .sim-frame-wrapper{position:relative;overflow:hidden;}
+      .sim-frame{position:absolute;top:0;left:0;width:1920px;height:1080px;border:none;display:block;transform-origin:top left;pointer-events:none;}
+      .sim-grid{position:absolute;inset:0;display:grid;gap:0.75rem;padding:0.75rem;}
+      .sim-grid-2{grid-template-columns:repeat(2,1fr);grid-template-rows:1fr;}
+      .sim-grid-4{grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);}
+      .sim-grid-cell{position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#000;border-radius:0.5rem;border:1px solid var(--border);}
+      .sim-grid-cell .sim-frame-wrapper{position:relative;overflow:hidden;}
+      .sim-header,.sim-controls,.sim-footer{position:relative;z-index:10;}
+      .sim-footer{display:flex;align-items:center;justify-content:space-between;margin-top:0.75rem;flex-shrink:0;font-size:0.8rem;color:var(--muted);}
+    }
+    @media(max-width:1099px){
+      #simulatorPanel{display:none;}
+    }
   </style>
 </head>
 <body>
 
 <a class="skip-link" href="#mainContent">Skip to main content</a>
+
+<div class="desktop-layout">
+<div class="config-column">
 
 <div class="status-bar" role="status" aria-live="polite" aria-atomic="true">
   <div><span class="status-dot status-disconnected" id="statusDot" aria-hidden="true"></span><span class="status-text" id="statusText">Connecting...</span></div>
@@ -160,7 +211,7 @@ export function configPage(sessionId: string, origin: string): string {
 
 <div class="header">
   <h1>DubMenu</h1>
-  <div class="sub"><a href="https://tv.dubmenu.com/tv/${sessionId}" target="_blank">Open TV Display &rarr;</a></div>
+  <div class="sub"><a id="tvDisplayLink" href="https://tv.dubmenu.com/tv/${sessionId}" target="_blank">Open TV Display &rarr;</a></div>
 </div>
 
 <div class="screenset-info" id="screensetInfo">
@@ -180,16 +231,18 @@ export function configPage(sessionId: string, origin: string): string {
   </div>
 </div>
 
-<div class="card">
-  <h2 class="card-title">Import From Dutchie</h2>
-  <div class="field">
-    <label for="dutchieUrl">Dutchie Menu URL</label>
-    <input type="url" id="dutchieUrl" placeholder="https://dutchie.com/embedded-menu/simply-green">
-    <div class="helper">Paste a Dutchie embedded menu link. DubMenu will scrape products, prices, THC, strain type, brand, weight, and images into an optimized TV menu.</div>
-  </div>
-  <button class="btn btn-primary" id="dutchieImportBtn" onclick="importDutchie()" style="width:100%;">Import Menu</button>
-  <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
-</div>
+    <div class="card">
+      <h2 class="card-title">Import Menu</h2>
+      <form id="dutchieForm" onsubmit="event.preventDefault();importDutchie();">
+        <div class="field">
+          <label for="dutchieUrl">Menu URL, Dutchie Link, or Store Slug</label>
+          <input type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" spellcheck="false" id="dutchieUrl" name="dutchieUrl" placeholder="https://dutchie.com/embedded-menu/your-store or your-store.com" style="-webkit-user-select:text;user-select:text;">
+          <div class="helper">Paste any Dutchie link (embedded, store, or subdomain), your store slug, or a dispensary website URL. DubMenu finds Dutchie menus, extracts menu products from the page, and imports prices, THC, strain, brand, weight, images, and store name/logo.</div>
+        </div>
+        <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Import Menu</button>
+      </form>
+      <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
+    </div>
 
 <div class="card">
   <h2 class="card-title">Theme</h2>
@@ -260,13 +313,15 @@ export function configPage(sessionId: string, origin: string): string {
 <div class="card">
   <h2 class="card-title">Layout</h2>
   <div class="field">
-    <label for="layoutMode">Menu Style</label>
-    <select id="layoutMode" onchange="debounceConfig('layoutMode',this.value)">
-      <option value="auto">Auto (recommended)</option>
-      <option value="columns">Columns</option>
-      <option value="pricelist">Price List</option>
-      <option value="grid">Grid (with images)</option>
-      <option value="compact">Compact Tiles</option>
+    <label for="layout">Menu Style</label>
+    <select id="layout" onchange="debounceConfig('layout',this.value)">
+      <option value="auto">Auto (match theme)</option>
+      <option value="grid">Grid</option>
+      <option value="list">Price List</option>
+      <option value="poster">Poster</option>
+      <option value="cinematic">Cinematic</option>
+      <option value="showcase">Showcase</option>
+      <option value="editorial">Editorial</option>
     </select>
   </div>
   <div class="grid-2">
@@ -306,12 +361,87 @@ export function configPage(sessionId: string, origin: string): string {
 
 <div class="card">
   <h2 class="card-title">Products</h2>
+  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+    <button class="btn btn-sm btn-danger" type="button" onclick="clearMenu()">Clear menu</button>
+    <button class="btn btn-sm btn-secondary" type="button" onclick="resetToStarter()">Reset to starter template</button>
+  </div>
   <div class="search-bar"><label for="searchInput" class="sr-only">Search products</label><input type="text" id="searchInput" placeholder="Search products..." oninput="filterProducts()"></div>
   <div class="field"><div style="display:flex;gap:0.5rem;"><label for="newCategoryName" class="sr-only">New category name</label><input type="text" id="newCategoryName" placeholder="New category name" style="flex:1;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;" onkeydown="if(event.key==='Enter')addCategory()"><button class="btn btn-primary btn-sm" type="button" onclick="addCategory()">+ Add</button></div></div>
   <div id="categoryList"></div>
 </div>
 
 </main>
+
+</div><!-- /config-column -->
+
+<aside id="simulatorPanel" aria-label="TV simulator">
+  <div class="sim-header">
+    <h2>TV Simulator</h2>
+    <div class="sim-header-actions">
+      <button class="btn btn-sm btn-secondary" type="button" onclick="copyAllTvUrls()">Copy TV URLs</button>
+      <button class="btn btn-sm btn-primary" type="button" onclick="openSelectedDisplay()">Open Display</button>
+    </div>
+  </div>
+  <div class="sim-controls">
+    <div class="sim-field">
+      <label for="simDisplayCount">Displays</label>
+      <div class="sim-segmented" id="simDisplayCount" role="radiogroup" aria-label="Number of displays"></div>
+    </div>
+    <div class="sim-field sim-field-grow">
+      <label>Preview Display</label>
+      <div class="sim-tabs" id="simDisplayTabs" role="tablist" aria-label="Select display to preview"></div>
+    </div>
+  </div>
+  <div class="sim-controls">
+    <div class="sim-field">
+      <label for="simThemeOverride">Theme Override</label>
+      <select id="simThemeOverride" onchange="updateSimulator()">
+        <option value="">Match config</option>
+        <option value="default">Classic Dark</option>
+        <option value="light">Clean Light</option>
+        <option value="neon">Bold Neon</option>
+        <option value="minimal">Minimal</option>
+        <option value="sunset">Sunset</option>
+        <option value="forest">Forest</option>
+        <option value="royal">Royal</option>
+        <option value="gold">Gold Rush</option>
+        <option value="ocean">Ocean</option>
+        <option value="crimson">Crimson</option>
+        <option value="bone">Bone</option>
+        <option value="vapor">Vapor</option>
+      </select>
+    </div>
+    <div class="sim-field">
+      <label for="simLayoutOverride">Layout Override</label>
+      <select id="simLayoutOverride" onchange="updateSimulator()">
+        <option value="">Match config</option>
+        <option value="grid">Grid</option>
+        <option value="list">Price List</option>
+        <option value="poster">Poster</option>
+        <option value="cinematic">Cinematic</option>
+        <option value="showcase">Showcase</option>
+        <option value="editorial">Editorial</option>
+      </select>
+    </div>
+    <div class="sim-field">
+      <label for="simViewMode">View</label>
+      <div class="sim-segmented" id="simViewMode" role="radiogroup" aria-label="Simulator view mode">
+        <button type="button" data-mode="single" onclick="setSimViewMode('single')">Single</button>
+        <button type="button" data-mode="compact" onclick="setSimViewMode('compact')">All</button>
+      </div>
+    </div>
+  </div>
+  <div class="sim-preview" id="simPreview"></div>
+  <div class="sim-footer">
+    <span id="simStatus">Previewing display 1 of 1</span>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn btn-sm btn-secondary" type="button" onclick="rotateSimDisplay()">Next Display</button>
+      <button class="btn btn-sm btn-primary" type="button" onclick="sendToConnectedTv()">Send to Connected TV</button>
+    </div>
+  </div>
+</aside>
+
+</div><!-- /desktop-layout -->
 
 <div class="modal-overlay" id="imageLibraryModal" role="dialog" aria-modal="true" aria-labelledby="imageLibraryTitle">
   <div class="modal-panel" id="imageLibraryPanel">
@@ -334,6 +464,7 @@ export function configPage(sessionId: string, origin: string): string {
 <script>
 const SESSION_ID="${sessionId}";
 const ORIGIN="${origin}";
+const STARTER_CONFIG=${STARTER_CONFIG};
 let ws=null,config=null,reconnectTimer=null,reconnectAttempts=0,debounceTimer=null;
 
 function connect(){
@@ -456,24 +587,46 @@ async function importDutchie(){
   var input=document.getElementById('dutchieUrl');
   var btn=document.getElementById('dutchieImportBtn');
   var status=document.getElementById('dutchieStatus');
-  var url=input.value.trim();
-  if(!url){status.textContent='Paste a Dutchie menu URL first.';status.className='import-status err';return;}
+  // Read the value directly from the input element so iOS autofill/paste is captured.
+  var rawUrl=(input && input.value || '').trim();
+  if(!rawUrl){
+    status.textContent='Paste a menu URL or store slug first.';
+    status.className='import-status err';
+    if(input) input.focus();
+    return;
+  }
+  var isSlug=/^[a-zA-Z0-9_-]+$/.test(rawUrl);
+  var url=rawUrl;
+  if(!isSlug && !new RegExp('^https?:\\/\\/','i').test(url)){
+    url='https://'+url;
+  }
+  if(input) input.value=url;
+  var isValidUrl=false;
+  try{ isValidUrl=!!new URL(url); }catch(e){}
+  if(!isSlug && !isValidUrl){
+    status.textContent='Enter a valid URL, Dutchie link, or store slug.';
+    status.className='import-status err';
+    return;
+  }
   btn.disabled=true;
   btn.textContent='Importing...';
-  status.textContent='Scraping Dutchie. This can take up to a minute.';
+  status.textContent='Importing menu. This can take up to a minute.';
   status.className='import-status';
   try{
     var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,session:SESSION_ID})});
     var data=await res.json();
     if(!res.ok||!data.success)throw new Error(data.error||'Import failed');
     var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:0);},0));
-    status.textContent='Imported '+count+' products across '+(data.categories||[]).length+' categories.';
-    status.className='import-status ok';
-    showToast('Dutchie menu imported');
+    var nameNote=data.dispensaryName?' Store name/logo imported.':'';
+    var demoNote=data.demo?' Using sample data because the live Dutchie source is unavailable.':'';
+    var warningNote=(data.warnings&&data.warnings.length)?' '+data.warnings[0]:'';
+    status.textContent='Imported '+count+' products across '+(data.categories||[]).length+' categories.'+nameNote+demoNote+warningNote;
+    status.className='import-status ok'+(data.demo?' err':'');
+    showToast('Menu imported');
   }catch(err){
     status.textContent=err&&err.message?err.message:'Import failed';
     status.className='import-status err';
-    showToast('Dutchie import failed');
+    showToast('Menu import failed');
   }finally{
     btn.disabled=false;
     btn.textContent='Import Menu';
@@ -488,12 +641,13 @@ function updateBrandWeight(){
 
 function render(){
   if(!config)return;
+  syncSimulatorFromConfig();
   document.getElementById('dispensaryName').value=config.dispensaryName||'';
   document.getElementById('logoUrl').value=config.logo||'';
   document.getElementById('primaryColor').value=config.primaryColor||'#10b981';
   document.getElementById('currency').value=config.currency||'$';
   document.getElementById('fontSize').value=config.fontSize||'medium';
-  document.getElementById('layoutMode').value=config.layoutMode||'auto';
+  document.getElementById('layout').value=config.layout||'auto';
   document.getElementById('promoBannerText').value=config.promoBanner?(config.promoBanner.text||''):'';
   document.getElementById('promoBannerBg').value=config.promoBanner?(config.promoBanner.bgColor||'#10b981'):'#10b981';
   document.getElementById('promoBannerTextColor').value=config.promoBanner?(config.promoBanner.textColor||'#000000'):'#000000';
@@ -550,7 +704,9 @@ function uploadProductImage(input,cid,pid){
     .then(function(data){
       var url=data.url;
       if(url){urlField.value=url;var aid=extractAccountId(url);if(aid)ACCOUNT_ID=aid;}
-      showToast('Image uploaded');
+      // Auto-save the product so the uploaded image is persisted immediately.
+      saveProduct(cid,pid);
+      showToast('Image uploaded & saved');
     })
     .catch(function(err){showToast(err.message||'Upload failed');});
 }
@@ -590,18 +746,33 @@ function renderCategories(){
         html+='<div class="prod-meta">';
         if(p.strain)html+='<span class="badge badge-'+p.strain+'">'+p.strain+'</span>';
         if(p.thc)html+='<span>THC '+escapeHtml(p.thc)+'</span>';
+        if(p.cbd)html+='<span>CBD '+escapeHtml(p.cbd)+'</span>';
+        if(p.priceTiers&&p.priceTiers.length)html+='<span>'+p.priceTiers.length+' tiers</span>';
+        if(p.originalPrice)html+='<span class="sale-text">Sale</span>';
         if(p.inStock===false)html+='<span class="badge badge-out">Out</span>';else html+='<span class="badge badge-in">In Stock</span>';
         html+='</div>';
         html+='<button class="expand-btn" type="button" aria-expanded="false" onclick="toggleEdit(\\''+cat.id+'\\',\\''+p.id+'\\',this)">Edit</button>';
         html+='<div class="prod-edit" id="edit-'+cat.id+'-'+p.id+'">';
         html+='<div style="margin-bottom:0.5rem;min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-name" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Name</label><input type="text" value="'+escapeHtml(p.name||'')+'" id="ep-'+cat.id+'-'+p.id+'-name" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div>';
         html+='<div class="grid-2"><div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-price" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Price</label><input type="number" value="'+p.price+'" step="0.01" id="ep-'+cat.id+'-'+p.id+'-price" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div>';
-        html+='<div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-thc" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">THC</label><input type="text" value="'+escapeHtml(p.thc||'')+'" id="ep-'+cat.id+'-'+p.id+'-thc" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div></div>';
-        html+='<div class="grid-2"><div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-weight" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Weight</label><input type="text" value="'+escapeHtml(p.weight||'')+'" id="ep-'+cat.id+'-'+p.id+'-weight" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div>';
-        html+='<div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-brand" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Brand</label><input type="text" value="'+escapeHtml(p.brand||'')+'" id="ep-'+cat.id+'-'+p.id+'-brand" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div></div>';
-        html+='<div style="margin-bottom:0.5rem;"><label for="ep-'+cat.id+'-'+p.id+'-image" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Image URL</label><div style="display:flex;gap:0.5rem;"><input type="url" value="'+escapeHtml(p.image||'')+'" id="ep-'+cat.id+'-'+p.id+'-image" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-image-file" class="lib-btn">Upload</label><input type="file" accept="image/*" id="ep-'+cat.id+'-'+p.id+'-image-file" onchange="uploadProductImage(this,\\''+cat.id+'\\',\\''+p.id+'\\')" style="color:var(--text);font-size:0.875rem;max-width:120px;"><button class="lib-btn" type="button" aria-label="Browse image library" onclick="openImageLibrary(\\''+cat.id+'\\',\\''+p.id+'\\')">Library</button></div></div>';
-        html+='<label for="ep-'+cat.id+'-'+p.id+'-strain" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Strain Type</label><select id="ep-'+cat.id+'-'+p.id+'-strain" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;margin-bottom:0.5rem;"><option value="">None</option><option value="indica"'+(p.strain==='indica'?' selected':'')+'>Indica</option><option value="sativa"'+(p.strain==='sativa'?' selected':'')+'>Sativa</option><option value="hybrid"'+(p.strain==='hybrid'?' selected':'')+'>Hybrid</option></select>';
-        html+='<div class="actions"><button class="btn btn-sm btn-primary" type="button" onclick="saveProduct(\\''+cat.id+'\\',\\''+p.id+'\\')">Save</button><button class="btn btn-sm '+(p.inStock===false?'btn-primary':'btn-secondary')+'" type="button" onclick="toggleStock(\\''+cat.id+'\\',\\''+p.id+'\\')">'+(p.inStock===false?'Mark In Stock':'Mark Out of Stock')+'</button><button class="btn btn-sm btn-danger" type="button" onclick="removeProduct(\\''+cat.id+'\\',\\''+p.id+'\\')">Delete</button></div>';
+        html+='<div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-origprice" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Orig. Price (Sale)</label><input type="number" value="'+(p.originalPrice||'')+'" step="0.01" id="ep-'+cat.id+'-'+p.id+'-origprice" placeholder="e.g. 45" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div></div>';
+        html+='<div class="grid-2"><div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-thc" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">THC</label><input type="text" value="'+escapeHtml(p.thc||'')+'" id="ep-'+cat.id+'-'+p.id+'-thc" placeholder="24%" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div>';
+        html+='<div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-cbd" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">CBD</label><input type="text" value="'+escapeHtml(p.cbd||'')+'" id="ep-'+cat.id+'-'+p.id+'-cbd" placeholder="<1%" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div></div>';
+        html+='<div class="grid-2"><div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-strain" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Strain Type</label><select id="ep-'+cat.id+'-'+p.id+'-strain" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;"><option value="">None</option><option value="indica"'+(p.strain==='indica'?' selected':'')+'>Indica</option><option value="sativa"'+(p.strain==='sativa'?' selected':'')+'>Sativa</option><option value="hybrid"'+(p.strain==='hybrid'?' selected':'')+'>Hybrid</option></select></div>';
+        html+='<div style="min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-weight" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Weight/Size</label><input type="text" value="'+escapeHtml(p.weight||'')+'" id="ep-'+cat.id+'-'+p.id+'-weight" placeholder="3.5g" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div></div>';
+        html+='<div style="margin-bottom:0.5rem;min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-brand" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Brand</label><input type="text" value="'+escapeHtml(p.brand||'')+'" id="ep-'+cat.id+'-'+p.id+'-brand" placeholder="Brand name" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;"></div>';
+        /* Price Tiers — repeatable rows */
+        var tiersId='tiers-'+cat.id+'-'+p.id;
+        html+='<div style="margin-bottom:0.5rem;"><label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Price Tiers</label><div id="'+tiersId+'" class="tier-rows">';
+        var tiers=(p.priceTiers&&p.priceTiers.length)?p.priceTiers:[{label:'',price:''}];
+        tiers.forEach(function(t,tIdx){
+          html+='<div class="tier-row" style="display:flex;gap:0.5rem;margin-bottom:0.375rem;align-items:center;"><input type="text" class="tier-label" value="'+escapeHtml(t.label||'')+'" placeholder="1g" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);outline:none;min-width:0;font-size:0.875rem;"><input type="text" class="tier-price" value="'+escapeHtml(t.price||'')+'" placeholder="$12" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);outline:none;min-width:0;font-size:0.875rem;"><button type="button" class="lib-btn tier-remove" onclick="this.parentElement.remove()" style="padding:0.35rem 0.5rem;flex:0 0 auto;">&minus;</button></div>';
+        });
+        html+='</div><button type="button" class="lib-btn" onclick="addTierRow(\\''+tiersId+'\\')" style="margin-top:0.25rem;">+ Add Tier</button></div>';
+        html+='<div style="margin-bottom:0.5rem;"><label for="ep-'+cat.id+'-'+p.id+'-image" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Image URL</label><div style="display:flex;gap:0.5rem;"><input type="url" value="'+escapeHtml(p.image||'')+'" id="ep-'+cat.id+'-'+p.id+'-image" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-image-file" class="lib-btn">Upload</label><input type="file" accept="image/*" id="ep-'+cat.id+'-'+p.id+'-image-file" onchange="uploadProductImage(this,\\''+cat.id+'\\',\\''+p.id+'\\')" style="color:var(--text);font-size:0.875rem;max-width:120px;"><button class="lib-btn" type="button" aria-label="Browse image library" onclick="openImageLibrary(\\''+cat.id+'\\',\\''+p.id+'\\')">Library</button></div><div class="helper" style="margin-top:0.35rem;">Upload or pick an image to apply it automatically.</div></div>';
+        html+='<div style="margin-bottom:0.5rem;min-width:0;"><label for="ep-'+cat.id+'-'+p.id+'-desc" style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Description</label><textarea id="ep-'+cat.id+'-'+p.id+'-desc" rows="2" placeholder="Optional description" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;min-width:0;font-family:inherit;resize:vertical;">'+escapeHtml(p.description||'')+'</textarea></div>';
+        html+='<div style="margin-bottom:0.5rem;"><label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem;">Move to category</label><select onchange="if(this.value)moveProductToCategory(\\''+cat.id+'\\',\\''+p.id+'\\',this.value)" style="background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);outline:none;width:100%;"><option value="">Select a category…</option>'+config.categories.filter(function(c){return c.id!==cat.id;}).map(function(c){return '<option value="'+c.id+'">'+escapeHtml(c.name)+'</option>';}).join('')+'</select></div>';
+        html+='<div class="actions"><button class="btn btn-sm btn-primary" type="button" onclick="saveProduct(\\''+cat.id+'\\',\\''+p.id+'\\')">Save</button><button class="btn btn-sm btn-secondary" type="button" onclick="duplicateProduct(\\''+cat.id+'\\',\\''+p.id+'\\')">Duplicate</button><button class="btn btn-sm '+(p.inStock===false?'btn-primary':'btn-secondary')+'" type="button" onclick="toggleStock(\\''+cat.id+'\\',\\''+p.id+'\\')">'+(p.inStock===false?'Mark In Stock':'Mark Out of Stock')+'</button><button class="btn btn-sm btn-danger" type="button" onclick="removeProduct(\\''+cat.id+'\\',\\''+p.id+'\\')">Delete</button></div>';
         html+='</div></div>';
       });
     }
@@ -611,6 +782,15 @@ function renderCategories(){
   attachDnD(list);
 }
 function toggleEdit(cid,pid,btn){var el=document.getElementById('edit-'+cid+'-'+pid);if(el){el.classList.toggle('open');if(btn)btn.setAttribute('aria-expanded',el.classList.contains('open')?'true':'false');}}
+function addTierRow(containerId){
+  var c=document.getElementById(containerId);
+  if(!c)return;
+  var row=document.createElement('div');
+  row.className='tier-row';
+  row.style.cssText='display:flex;gap:0.5rem;margin-bottom:0.375rem;align-items:center;';
+  row.innerHTML='<input type="text" class="tier-label" placeholder="1g" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);outline:none;min-width:0;font-size:0.875rem;"><input type="text" class="tier-price" placeholder="$12" style="flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);outline:none;min-width:0;font-size:0.875rem;"><button type="button" class="lib-btn tier-remove" onclick="this.parentElement.remove()" style="padding:0.35rem 0.5rem;flex:0 0 auto;">&minus;</button>';
+  c.appendChild(row);
+}
 function addCategory(){var inp=document.getElementById('newCategoryName');var name=inp.value.trim();if(!name){inp.setAttribute('aria-invalid','true');showToast('Enter a category name');inp.focus();return;}inp.removeAttribute('aria-invalid');send('category_add',{name:name});inp.value='';}
 function updateCategoryName(cid,name){send('category_update',{categoryId:cid,updates:{name:name}});}
 function removeCategory(cid){send('category_remove',{categoryId:cid});}
@@ -619,11 +799,31 @@ function saveProduct(cid,pid){
   var updates={};
   updates.name=document.getElementById('ep-'+cid+'-'+pid+'-name').value;
   updates.price=parseFloat(document.getElementById('ep-'+cid+'-'+pid+'-price').value)||0;
+  var origEl=document.getElementById('ep-'+cid+'-'+pid+'-origprice');
+  var origVal=origEl?parseFloat(origEl.value):NaN;
+  updates.originalPrice=isNaN(origVal)||origVal<=0?undefined:origVal;
   updates.thc=document.getElementById('ep-'+cid+'-'+pid+'-thc').value;
+  updates.cbd=document.getElementById('ep-'+cid+'-'+pid+'-cbd').value;
   updates.weight=document.getElementById('ep-'+cid+'-'+pid+'-weight').value;
   updates.brand=document.getElementById('ep-'+cid+'-'+pid+'-brand').value;
   updates.image=document.getElementById('ep-'+cid+'-'+pid+'-image').value;
   updates.strain=document.getElementById('ep-'+cid+'-'+pid+'-strain').value;
+  var descEl=document.getElementById('ep-'+cid+'-'+pid+'-desc');
+  if(descEl)updates.description=descEl.value;
+  /* Collect price tiers */
+  var tiersContainer=document.getElementById('tiers-'+cid+'-'+pid);
+  if(tiersContainer){
+    var rows=tiersContainer.querySelectorAll('.tier-row');
+    var tiers=[];
+    rows.forEach(function(r){
+      var labelEl=r.querySelector('.tier-label');
+      var priceEl=r.querySelector('.tier-price');
+      var label=labelEl?labelEl.value.trim():'';
+      var price=priceEl?priceEl.value.trim():'';
+      if(label&&price)tiers.push({label:label,price:price});
+    });
+    updates.priceTiers=tiers.length?tiers:undefined;
+  }
   send('product_update',{categoryId:cid,productId:pid,updates:updates});
   toggleEdit(cid,pid);
   showToast('Saved');
@@ -633,6 +833,17 @@ function saveProduct(cid,pid){
 }
 function toggleStock(cid,pid){send('product_toggle_stock',{categoryId:cid,productId:pid});}
 function removeProduct(cid,pid){send('product_remove',{categoryId:cid,productId:pid});}
+function moveProductToCategory(fromCatId,prodId,toCatId){send('product_move',{fromCategoryId:fromCatId,toCategoryId:toCatId,productId:prodId});}
+function duplicateProduct(catId,prodId){
+  var cat=config.categories.find(function(c){return c.id===catId;});
+  if(!cat)return;
+  var p=cat.products.find(function(x){return x.id===prodId;});
+  if(!p)return;
+  var copy=JSON.parse(JSON.stringify(p));
+  copy.id='dup_'+Date.now();
+  copy.name=p.name+' (Copy)';
+  send('product_add',{categoryId:catId,product:copy});
+}
 
 // ---- Drag-and-drop reordering (native HTML5 DnD + keyboard + mobile buttons) ----
 // Module-level drag state. Holds the item kind ('cat'|'prod') and the id
@@ -815,14 +1026,19 @@ function applyReorderProducts(catId,ids){
 
 function exportData(){if(!config)return;var blob=new Blob([JSON.stringify(config,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dubmenu-config.json';a.click();showToast('Exported');}
 function importData(ev){var f=ev.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){try{var d=JSON.parse(e.target.result);if(!d.dispensaryName||!d.categories){showToast('Invalid file');return;}send('config_replace',d);showToast('Imported');}catch(err){showToast('Parse error');}};r.readAsText(f);ev.target.value='';}
+function clearMenu(){if(!config)return;if(!confirm('Clear your entire menu? This removes all categories and products and cannot be undone.'))return;send('config_replace',{categories:[]});showToast('Menu cleared');}
+function resetToStarter(){if(!config)return;if(!confirm('Reset your menu to the starter template? This replaces all categories and products with the demo menu.'))return;send('config_replace',STARTER_CONFIG);showToast('Starter template restored');}
+
 
 // ---- Image Library ----
-// accountId is not handed to the config page directly (configPage() only
-// receives sessionId + origin). We derive it from any existing upload URL in
-// the config (all uploads follow /api/uploads/<accountId>/<file>) and cache it
-// once resolved. handleImageUpload refreshes it from the POST /api/upload
-// response. DELETE targets /api/uploads/<filename> (the route accepts a bare
-// filename scoped to the authed account), so delete never needs accountId.
+// accountId is resolved in three ways (first wins): (1) from the
+// /api/uploads GET response field "accountId" (set by loadLibrary), (2) from
+// the POST /api/upload response URL (set by uploadProductImage /
+// handleLibraryUpload), or (3) derived from any existing upload URL in the
+// config via resolveAccountId(). All uploads follow
+// /api/uploads/<accountId>/<file>. DELETE targets /api/uploads/<filename>
+// (the route accepts a bare filename scoped to the authed account), so
+// delete never needs accountId.
 var ACCOUNT_ID=null;
 var libState={uploads:[],cursor:null,loading:false,pickerTarget:null,lastFocus:null,nextZ:500};
 
@@ -933,6 +1149,10 @@ async function loadLibrary(){
     var data=await res.json();
     libState.uploads=libState.uploads.concat(data.uploads||[]);
     libState.cursor=data.nextCursor||null;
+    // The server returns the authed accountId so we can resolve upload URLs
+    // even when the config has no existing upload-backed image to derive it
+    // from (fresh accounts). Prefer this over resolveAccountId() heuristics.
+    if(data.accountId)ACCOUNT_ID=data.accountId;
     renderLibrary();
   }catch(err){
     grid.innerHTML='<div class="lib-error">'+escapeHtml(err&&err.message?err.message:'Couldn\\'t load images.')+'<br><button class="btn btn-secondary btn-sm" type="button" style="margin-top:0.75rem;" onclick="loadLibrary()">Try again</button></div>';
@@ -1033,8 +1253,214 @@ function initImageLibrary(){
   document.getElementById('imageLibraryUploadInput').addEventListener('change',function(){handleLibraryUpload(this);});
 }
 
+// ---- Desktop TV Simulator ----
+// Reuses the real TV renderer (/tv/<session>) inside an iframe so the
+// preview always matches what a physical TV would show. Display count,
+// selected display, and per-display theme/layout overrides are passed as URL
+// params, the same way a real multi-display TV setup is configured.
+var simState={displayCount:1,selectedDisplay:1,themeOverride:'',layoutOverride:'',viewMode:'single'};
+var SIM_BASE_W=1920,SIM_BASE_H=1080;
+
+function initSimulator(){
+  // Default display count from config or existing screen-set cookie.
+  if(config && typeof config.displayCount==='number') simState.displayCount=Math.max(1,Math.min(4,config.displayCount));
+  var cookie=getCookie('dubmenu_screens');
+  if(cookie){
+    var ids=cookie.split(',').filter(function(s){return s;});
+    if(ids.length) simState.displayCount=Math.max(1,Math.min(4,ids.length));
+  }
+  simState.selectedDisplay=1;
+  renderSimulatorControls();
+  renderSimulatorPreview();
+  window.addEventListener('resize',debounceScaleFrames,200);
+}
+
+function setSimDisplayCount(n){
+  n=Math.max(1,Math.min(4,n));
+  simState.displayCount=n;
+  if(simState.selectedDisplay>n) simState.selectedDisplay=n;
+  renderSimulatorControls();
+  renderSimulatorPreview();
+  sendConfig('displayCount',n);
+  // Update the screen-set cookie so real TV URLs and the screen-set info use the same count.
+  var ids=[];
+  for(var i=0;i<n;i++) ids.push(SESSION_ID);
+  setCookie('dubmenu_screens',ids.join(','),7);
+  updateScreenSet();
+}
+
+function setSimSelectedDisplay(n){
+  simState.selectedDisplay=n;
+  renderSimulatorControls();
+  renderSimulatorPreview();
+}
+
+function setSimViewMode(mode){
+  simState.viewMode=mode;
+  renderSimulatorControls();
+  renderSimulatorPreview();
+}
+
+function renderSimulatorControls(){
+  // Display count segmented buttons.
+  var countEl=document.getElementById('simDisplayCount');
+  if(countEl){
+    var chtml='';
+    for(var i=1;i<=4;i++){
+      chtml+='<button type="button" role="radio" aria-checked="'+(i===simState.displayCount?'true':'false')+'" onclick="setSimDisplayCount('+i+')"'+(i===simState.displayCount?' class="active"':'')+'>'+i+'</button>';
+    }
+    countEl.innerHTML=chtml;
+  }
+  // Display tabs.
+  var tabsEl=document.getElementById('simDisplayTabs');
+  if(tabsEl){
+    var thtml='';
+    for(var i=1;i<=simState.displayCount;i++){
+      thtml+='<button type="button" class="sim-tab'+(i===simState.selectedDisplay?' active':'')+'" role="tab" aria-selected="'+(i===simState.selectedDisplay?'true':'false')+'" onclick="setSimSelectedDisplay('+i+')">Display '+i+'</button>';
+    }
+    tabsEl.innerHTML=thtml;
+  }
+  // View mode segmented buttons.
+  var viewEl=document.getElementById('simViewMode');
+  if(viewEl){
+    viewEl.querySelectorAll('button').forEach(function(btn){
+      var active=btn.dataset.mode===simState.viewMode;
+      btn.classList.toggle('active',active);
+      btn.setAttribute('aria-checked',active?'true':'false');
+    });
+  }
+  var statusEl=document.getElementById('simStatus');
+  if(statusEl) statusEl.textContent='Previewing display '+simState.selectedDisplay+' of '+simState.displayCount;
+  updateTvDisplayLink();
+}
+
+function updateTvDisplayLink(){
+  var link=document.getElementById('tvDisplayLink');
+  if(!link) return;
+  link.href=location.origin+getSimTvUrl(simState.selectedDisplay,false);
+}
+
+function renderSimulatorPreview(){
+  simState.themeOverride=document.getElementById('simThemeOverride').value;
+  simState.layoutOverride=document.getElementById('simLayoutOverride').value;
+  var preview=document.getElementById('simPreview');
+  if(!preview) return;
+  if(simState.viewMode==='compact'){
+    renderCompactPreview(preview);
+  }else{
+    renderSinglePreview(preview);
+  }
+  scaleFrames();
+}
+
+function renderSinglePreview(preview){
+  preview.innerHTML='<div class="sim-frame-wrapper" id="simWrapper"><iframe id="simFrame" class="sim-frame" title="TV preview display '+simState.selectedDisplay+'" allowfullscreen></iframe></div>';
+  updateSimFrame('simFrame',simState.selectedDisplay);
+}
+
+function renderCompactPreview(preview){
+  var gridClass='sim-grid';
+  if(simState.displayCount<=2) gridClass+=' sim-grid-2';
+  else gridClass+=' sim-grid-4';
+  var html='<div class="'+gridClass+'">';
+  for(var i=1;i<=simState.displayCount;i++){
+    html+='<div class="sim-grid-cell"><div class="sim-frame-wrapper" id="simWrapper-'+i+'"><iframe id="simFrame-'+i+'" class="sim-frame" title="TV preview display '+i+'" allowfullscreen></iframe></div></div>';
+  }
+  html+='</div>';
+  preview.innerHTML=html;
+  for(var i=1;i<=simState.displayCount;i++) updateSimFrame('simFrame-'+i,i);
+}
+
+function updateSimFrame(frameId,displayNum){
+  var frame=document.getElementById(frameId);
+  if(!frame) return;
+  var url='/tv/'+SESSION_ID+'?embed=1&display='+displayNum+'&displays='+simState.displayCount;
+  if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
+  if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
+  var full=location.origin+url;
+  if(frame.src!==full) frame.src=full;
+}
+
+function scaleFrames(){
+  var wrappers=document.querySelectorAll('.sim-frame-wrapper');
+  if(!wrappers.length) return;
+  wrappers.forEach(function(wrapper){
+    var cell=wrapper.parentElement;
+    var cellW=cell?cell.clientWidth:0;
+    var cellH=cell?cell.clientHeight:0;
+    var scale=Math.min(cellW/SIM_BASE_W,cellH/SIM_BASE_H,1);
+    if(!(scale>0)) scale=1;
+    var scaledW=SIM_BASE_W*scale;
+    var scaledH=SIM_BASE_H*scale;
+    wrapper.style.width=scaledW+'px';
+    wrapper.style.height=scaledH+'px';
+    var frame=wrapper.querySelector('.sim-frame');
+    if(frame){
+      frame.style.width=SIM_BASE_W+'px';
+      frame.style.height=SIM_BASE_H+'px';
+      frame.style.transform='scale('+scale+')';
+      frame.style.transformOrigin='top left';
+      frame.style.left='0px';
+      frame.style.top='0px';
+    }
+  });
+}
+var simScaleTimer=null;
+function debounceScaleFrames(){
+  if(simScaleTimer) clearTimeout(simScaleTimer);
+  simScaleTimer=setTimeout(scaleFrames,100);
+}
+
+function getSimTvUrl(displayNum,embed){
+  var url='/tv/'+SESSION_ID+'?display='+displayNum+'&displays='+simState.displayCount;
+  if(embed) url+='&embed=1';
+  if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
+  if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
+  return url;
+}
+
+function openSelectedDisplay(){
+  window.open(getSimTvUrl(simState.selectedDisplay,false),'_blank');
+}
+
+function copyAllTvUrls(){
+  var urls=[];
+  for(var i=1;i<=simState.displayCount;i++) urls.push(location.origin+getSimTvUrl(i,false));
+  try{navigator.clipboard.writeText(urls.join('\\n'));showToast('Copied '+urls.length+' TV URLs');}catch(e){showToast('Copy failed');}
+}
+
+function rotateSimDisplay(){
+  setSimSelectedDisplay((simState.selectedDisplay % simState.displayCount)+1);
+}
+
+function sendToConnectedTv(){
+  // The config is already streamed live to any connected TV via WebSocket.
+  // This opens the real TV display URL so the operator can load it on the
+  // physical screen with the same display index / count / overrides shown in
+  // the simulator.
+  showToast('Opening TV display - config is synced to connected TVs');
+  window.open(getSimTvUrl(simState.selectedDisplay,false),'_blank');
+}
+
+function updateSimulator(){
+  renderSimulatorPreview();
+}
+
+function syncSimulatorFromConfig(){
+  if(!config || typeof config.displayCount !== 'number') return;
+  var cfgCount=Math.max(1,Math.min(4,config.displayCount));
+  if(cfgCount!==simState.displayCount){
+    simState.displayCount=cfgCount;
+    simState.selectedDisplay=Math.min(simState.selectedDisplay,simState.displayCount);
+    renderSimulatorControls();
+    renderSimulatorPreview();
+  }
+}
+
+// End simulator
+
 connect();
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){initImageLibrary();initThemeRadios();});}else{initImageLibrary();initThemeRadios();}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){initImageLibrary();initThemeRadios();initSimulator();});}else{initImageLibrary();initThemeRadios();initSimulator();}
 </script>
 </body>
 </html>`;

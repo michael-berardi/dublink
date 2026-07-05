@@ -150,6 +150,7 @@ export function importMenuFromCSV(csvText: string): { categories: any[]; errors:
     if (row.cbd) product.cbd = row.cbd;
     if (row.weight) product.weight = row.weight;
     if (row.brand) product.brand = row.brand;
+    if (row.sku) product.sku = row.sku;
     if (row.strain) {
       const s = row.strain.toLowerCase();
       if (['indica', 'sativa', 'hybrid'].includes(s)) product.strain = s;

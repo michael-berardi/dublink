@@ -6,6 +6,8 @@ export interface ScrapedProduct {
   id: string;
   name: string;
   price: number;
+  sku?: string;
+  category?: string;
   thc?: string;
   cbd?: string;
   image?: string;
@@ -181,6 +183,8 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
       id: slug,
       name: name.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim(),
       price,
+      sku: slug,
+      category,
       thc,
       image: cleanImageUrl(p.img),
       weight,
@@ -262,6 +266,8 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
         id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
         name: name.replace(/\s+/g, ' ').trim(),
         price,
+        sku: p.sku || id,
+        category,
         thc,
         cbd,
         image,
@@ -323,10 +329,13 @@ async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: Sc
           const id = String(item.sku || item.name).replace(/[^a-zA-Z0-9_-]/g, '-');
           if (seen.has(id)) continue;
           seen.add(id);
+          const name = item.name;
           products.push({
             id,
-            name: item.name,
+            name,
             price: parseFloat(item.offers.price) || 0,
+            sku: item.sku || id,
+            category: guessCategory('', name),
             inStock: item.offers.availability !== 'https://schema.org/OutOfStock',
             strain: parseStrain(item.name + ' ' + (item.description || '')),
             brand: item.brand?.name,
@@ -346,7 +355,7 @@ async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: Sc
 
   const categoryMap = new Map<string, ScrapedProduct[]>();
   for (const p of products) {
-    const category = guessCategory('', p.name);
+    const category = p.category || guessCategory('', p.name);
     if (!categoryMap.has(category)) categoryMap.set(category, []);
     categoryMap.get(category)!.push(p);
   }
@@ -374,4 +383,121 @@ async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: Sc
 
 export async function scrapeDutchieFallback(dispensarySlug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
   return scrapeDutchieDirect(`https://dutchie.com/embedded-menu/${dispensarySlug}`);
+}
+
+// Last-resort demo fallback: when no API key, browserless token, or public
+// network path can reach Dutchie, we generate a representative sample menu so
+// the UI flow and formatter still work. The UI is responsible for surfacing the
+// warning that this is sample data.
+export async function scrapeDutchieDemo(slug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number; demo: true }> {
+  const dispensaryName = slug
+    .split(/[-_]/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+
+  const categoryDefs: { name: string; names: string[]; weights: string[]; thc: string[]; prices: number[]; strains: ('indica' | 'sativa' | 'hybrid')[] }[] = [
+    {
+      name: 'Flower',
+      names: ['Blue Dream', 'OG Kush', 'Gelato', 'Wedding Cake', 'Sour Diesel', 'Northern Lights'],
+      weights: ['3.5g', '7g', '14g', '1g', '3.5g', '7g'],
+      thc: ['22%', '24%', '20%', '19%', '25%', '21%'],
+      prices: [35, 40, 75, 12, 38, 72],
+      strains: ['hybrid', 'indica', 'hybrid', 'indica', 'sativa', 'indica'],
+    },
+    {
+      name: 'Pre-Rolls',
+      names: ['Classic Joint', 'Infused Pre-Roll', 'Sativa Blend', 'Indica Blend', 'Hybrid Roll', 'Mini Joints'],
+      weights: ['1g', '1.5g', '1g', '1g', '1g', '0.5g'],
+      thc: ['18%', '28%', '20%', '22%', '19%', '17%'],
+      prices: [8, 15, 9, 10, 9, 14],
+      strains: ['hybrid', 'hybrid', 'sativa', 'indica', 'hybrid', 'hybrid'],
+    },
+    {
+      name: 'Vapes',
+      names: ['Blueberry Cart', 'Tangie Disposable', 'Live Resin Pod', 'CBD Cartridge', 'Pineapple Express', 'Nighttime Indica'],
+      weights: ['1g', '0.5g', '1g', '1g', '1g', '0.5g'],
+      thc: ['82%', '78%', '85%', '0%', '80%', '75%'],
+      prices: [45, 35, 55, 40, 48, 32],
+      strains: ['hybrid', 'sativa', 'hybrid', undefined, 'sativa', 'indica'],
+    },
+    {
+      name: 'Concentrates',
+      names: ['Live Resin', 'Shatter', 'Badder', 'Crumble', 'Rosin', 'Sugar'],
+      weights: ['1g', '1g', '1g', '1g', '1g', '1g'],
+      thc: ['78%', '80%', '82%', '75%', '85%', '79%'],
+      prices: [50, 40, 55, 38, 70, 48],
+      strains: ['hybrid', 'hybrid', 'indica', 'sativa', 'hybrid', 'hybrid'],
+    },
+    {
+      name: 'Edibles',
+      names: ['Gummies 100mg', 'Chocolate Bar', 'Mints', 'Cookies', 'Brownie', 'Soda'],
+      weights: ['100mg', '100mg', '100mg', '50mg', '100mg', '10mg'],
+      thc: ['10mg', '10mg', '10mg', '10mg', '10mg', '10mg'],
+      prices: [18, 22, 15, 12, 14, 8],
+      strains: [undefined, undefined, undefined, undefined, undefined, undefined],
+    },
+    {
+      name: 'Tinctures',
+      names: ['THC Tincture', 'CBD Tincture', '1:1 Ratio', 'Sleep Formula', 'Daytime Drops', 'Relief Tincture'],
+      weights: ['30ml', '30ml', '30ml', '30ml', '30ml', '30ml'],
+      thc: ['300mg', '0mg', '150mg', '100mg', '200mg', '250mg'],
+      prices: [45, 40, 55, 50, 48, 52],
+      strains: [undefined, undefined, undefined, 'indica', 'sativa', 'hybrid'],
+    },
+    {
+      name: 'Topicals',
+      names: ['CBD Balm', 'THC Lotion', 'Transdermal Patch', 'Relief Cream', 'Muscle Rub', 'Face Serum'],
+      weights: ['2oz', '4oz', '1pk', '3oz', '2oz', '1oz'],
+      thc: ['200mg', '100mg', '50mg', '150mg', '250mg', '75mg'],
+      prices: [35, 30, 12, 28, 32, 45],
+      strains: [undefined, undefined, undefined, undefined, undefined, undefined],
+    },
+  ];
+
+  const products: ScrapedProduct[] = [];
+  const categoryMap = new Map<string, ScrapedProduct[]>();
+
+  for (const def of categoryDefs) {
+    const categoryProducts: ScrapedProduct[] = [];
+    for (let i = 0; i < def.names.length; i++) {
+      const name = def.names[i];
+      const weight = def.weights[i];
+      const thc = def.thc[i];
+      const price = def.prices[i];
+      const strain = def.strains[i];
+      const id = `${slug}-${def.name.toLowerCase()}-${i + 1}`;
+      const product: ScrapedProduct = {
+        id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
+        name: `${name} ${weight}`,
+        price,
+        category: def.name,
+        thc,
+        cbd: undefined,
+        image: undefined,
+        weight,
+        brand: 'Sample Brand',
+        inStock: true,
+        strain,
+      };
+      products.push(product);
+      categoryProducts.push(product);
+    }
+    categoryMap.set(def.name, categoryProducts);
+  }
+
+  const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
+  const categories: ScrapedCategory[] = Array.from(categoryMap.entries())
+    .sort((a, b) => {
+      const ai = categoryOrder.indexOf(a[0]);
+      const bi = categoryOrder.indexOf(b[0]);
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    })
+    .map(([name, products], i) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+      name,
+      order: i,
+      products: products.slice(0, 40),
+    }));
+
+  return { categories, dispensaryName, productCount: products.length, demo: true };
 }

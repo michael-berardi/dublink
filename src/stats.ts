@@ -1,5 +1,5 @@
 export interface StatsEvent {
-  type: 'account.created' | 'account.updated' | 'subscription.updated' | 'session.created' | 'webhook.received' | 'analytics.tv.load' | 'analytics.widget.load' | 'analytics.config.save';
+  type: 'account.created' | 'account.updated' | 'subscription.updated' | 'session.created' | 'webhook.received' | 'analytics.tv.load' | 'analytics.widget.load' | 'analytics.config.save' | 'dubmenu.first_login' | 'dubmenu.login' | 'pairing.start';
   accountId?: string;
   email?: string;
   payload?: any;
