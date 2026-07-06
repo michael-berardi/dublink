@@ -208,10 +208,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .age-gate .btn{font-size:1.25rem;padding:1rem 2rem;}
   .age-gate .btn-secondary{font-size:1rem;background:var(--surface2);color:var(--text);text-decoration:none;}
 
-  .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));position:relative;}
+  .category-header{margin-bottom:0.35rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));position:relative;}
   .category-header::after{content:'';position:absolute;bottom:-3px;left:0;width:120px;height:3px;background:linear-gradient(90deg,var(--cat-accent,var(--accent)),transparent);}
-  .category-title{font-size:clamp(2.2rem,3.2vw,2.8rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:inline-flex;align-items:center;gap:0.75rem;text-shadow:0 2px 14px var(--cat-accent,var(--accent-dim));}
-  .cat-icon-wrap{width:1.8em;height:1.8em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:0.45em;background:linear-gradient(135deg,var(--cat-accent,var(--accent-dim)) 0%,rgba(0,0,0,0.2) 100%);border:1px solid var(--cat-accent,var(--border-hover));box-shadow:0 4px 18px var(--cat-accent,var(--accent-dim));}
+  .category-title{font-size:clamp(2rem,2.8vw,2.6rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:inline-flex;align-items:center;gap:0.75rem;text-shadow:0 2px 14px var(--cat-accent,var(--accent-dim));}
+  .cat-icon-wrap{width:1.6em;height:1.6em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:0.45em;background:linear-gradient(135deg,var(--cat-accent,var(--accent-dim)) 0%,rgba(0,0,0,0.2) 100%);border:1px solid var(--cat-accent,var(--border-hover));box-shadow:0 4px 18px var(--cat-accent,var(--accent-dim));}
   .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));}
   .cat-icon-flower{color:var(--cat-accent,var(--accent));}
   .cat-icon-edibles{color:var(--cat-accent,var(--accent));}
@@ -229,11 +229,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.75rem;}
   .layout-grid .product-card{background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--card-shadow);transition:border-color 0.3s,transform 0.2s;position:relative;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
-  .layout-grid .card-image{width:100%;height:120px;object-fit:cover;background:var(--bg-elev);}
-  .layout-grid .card-body{padding:0.75rem;display:flex;flex-direction:column;gap:0.3rem;flex:1;}
-  .layout-grid .card-name{font-size:1.4rem;font-weight:800;line-height:1.2;color:var(--text);overflow-wrap:break-word;}
-  .layout-grid .card-meta{font-size:1rem;color:var(--text-muted);}
-  .layout-grid .card-price{font-size:1.8rem;font-weight:900;color:var(--accent);margin-top:auto;}
+  .layout-grid .card-image{width:100%;height:110px;object-fit:cover;background:var(--bg-elev);}
+  .layout-grid .card-body{padding:0.55rem;display:flex;flex-direction:column;gap:0.25rem;flex:1;}
+  .layout-grid .card-name{font-size:1.35rem;font-weight:800;line-height:1.15;color:var(--text);overflow-wrap:break-word;}
+  .layout-grid .card-meta{font-size:0.95rem;line-height:1.2;color:var(--text-muted);}
+  .layout-grid .card-price{font-size:1.65rem;font-weight:900;color:var(--accent);margin-top:auto;}
   .layout-grid .card-price-orig{font-size:0.85rem;color:var(--text-faint);text-decoration:line-through;}
 
   .layout-list .list-products{display:grid;grid-template-columns:repeat(2,1fr);gap:0 2rem;}
