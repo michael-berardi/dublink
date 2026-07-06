@@ -82,6 +82,7 @@ export interface MenuConfig {
   analyticsEnabled: boolean;
   template: 'default' | 'minimal' | 'neon' | 'light' | 'sunset' | 'forest' | 'royal' | 'gold' | 'ocean' | 'crimson' | 'bone' | 'vapor';
   displayCount: number;
+  tvDemo?: boolean;
   updatedAt?: string;
 }
 

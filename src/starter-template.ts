@@ -274,6 +274,7 @@ export function createDemoConfig(): MenuConfig {
     dispensaryName: DEMO_DISPENSARY_NAME,
     categories: JSON.parse(JSON.stringify(starterCategories)) as Category[],
     disclaimer: 'This is a demo menu for visual QA. Product availability and pricing are not real.',
+    tvDemo: true,
   };
 }
 

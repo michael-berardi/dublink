@@ -65,6 +65,15 @@ describe('tvPage', () => {
     expect(page).toContain('color:var(--accent)');
   });
 
+  it('wraps category icons in a premium badge for large-screen TV', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('cat-icon-wrap');
+    expect(page).toContain('cat-icon cat-icon-');
+    // Ensure inline category SVGs remain custom SVGs, not emoji text.
+    expect(page).toContain('<svg');
+    expect(page).toContain('</svg>');
+  });
+
   it('emits a parseable inline script with no broken string literals', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
     const scriptMatch = page.match(/<script>\s*([\s\S]*?)\s*<\/script>/);

@@ -208,26 +208,28 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .age-gate .btn{font-size:1.25rem;padding:1rem 2rem;}
   .age-gate .btn-secondary{font-size:1rem;background:var(--surface2);color:var(--text);text-decoration:none;}
 
-  .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));}
-  .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:flex;align-items:center;gap:0.5rem;}
-  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
-  .cat-icon-flower{color:#34d399;}
-  .cat-icon-edibles{color:#f59e0b;}
-  .cat-icon-concentrates{color:#a855f7;}
-  .cat-icon-prerolls{color:#d97706;}
-  .cat-icon-vapes{color:#3b82f6;}
-  .cat-icon-topicals{color:#14b8a6;}
-  .cat-icon-tinctures{color:#8b5cf6;}
-  .cat-icon-cbd{color:#84cc16;}
-  .cat-icon-accessories{color:#f59e0b;}
-  .cat-icon-other{color:#9ca3af;}
-  .cat-icon-generic{color:#34d399;}
+  .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));position:relative;}
+  .category-header::after{content:'';position:absolute;bottom:-3px;left:0;width:120px;height:3px;background:linear-gradient(90deg,var(--cat-accent,var(--accent)),transparent);}
+  .category-title{font-size:clamp(2.2rem,3.2vw,2.8rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:inline-flex;align-items:center;gap:0.75rem;text-shadow:0 2px 14px var(--cat-accent,var(--accent-dim));}
+  .cat-icon-wrap{width:1.8em;height:1.8em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:0.45em;background:linear-gradient(135deg,var(--cat-accent,var(--accent-dim)) 0%,rgba(0,0,0,0.2) 100%);border:1px solid var(--cat-accent,var(--border-hover));box-shadow:0 4px 18px var(--cat-accent,var(--accent-dim));}
+  .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35));}
+  .cat-icon-flower{color:var(--cat-accent,var(--accent));}
+  .cat-icon-edibles{color:var(--cat-accent,var(--accent));}
+  .cat-icon-concentrates{color:var(--cat-accent,var(--accent));}
+  .cat-icon-prerolls{color:var(--cat-accent,var(--accent));}
+  .cat-icon-vapes{color:var(--cat-accent,var(--accent));}
+  .cat-icon-topicals{color:var(--cat-accent,var(--accent));}
+  .cat-icon-tinctures{color:var(--cat-accent,var(--accent));}
+  .cat-icon-cbd{color:var(--cat-accent,var(--accent));}
+  .cat-icon-accessories{color:var(--cat-accent,var(--accent));}
+  .cat-icon-other{color:var(--cat-accent,var(--accent));}
+  .cat-icon-generic{color:var(--cat-accent,var(--accent));}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
   .cat-icon svg [fill="none"]{stroke-width:1.75px;}
-  .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;}
+  .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0.75rem;}
   .layout-grid .product-card{background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--card-shadow);transition:border-color 0.3s,transform 0.2s;position:relative;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
-  .layout-grid .card-image{width:100%;height:140px;object-fit:cover;background:var(--bg-elev);}
+  .layout-grid .card-image{width:100%;height:120px;object-fit:cover;background:var(--bg-elev);}
   .layout-grid .card-body{padding:0.75rem;display:flex;flex-direction:column;gap:0.3rem;flex:1;}
   .layout-grid .card-name{font-size:1.4rem;font-weight:800;line-height:1.2;color:var(--text);overflow-wrap:break-word;}
   .layout-grid .card-meta{font-size:1rem;color:var(--text-muted);}
@@ -355,7 +357,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
   .card-image-placeholder .placeholder-icon{
     position:relative;z-index:1;
-    width:clamp(40px,52%,140px);height:auto;
+    width:clamp(40px,55%,150px);height:auto;
     opacity:0.95;
   }
   .card-image-placeholder .placeholder-icon .placeholder-label{display:none;}
@@ -374,9 +376,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .card-image-placeholder.placeholder-v1 .placeholder-icon{transform:scale(1.02) rotate(2deg);}
   .card-image-placeholder.placeholder-v2 .placeholder-icon{transform:scale(0.98) rotate(-2deg);}
   .card-image-placeholder.placeholder-v3 .placeholder-icon{transform:scale(1.01) rotate(1deg);}
-  .card-image-placeholder .placeholder-variant-overlay{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;color:var(--accent);opacity:0.88;}
+  .card-image-placeholder .placeholder-variant-overlay{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;color:var(--accent);opacity:0.35;}
   .card-image-placeholder .placeholder-variant-overlay .variant-overlay-shape{width:100%;height:100%;display:block;}
-  .card-image-placeholder.placeholder-quality-premium .placeholder-variant-overlay{opacity:1;}
+  .card-image-placeholder.placeholder-quality-premium .placeholder-variant-overlay{opacity:0.45;}
   .card-image[data-cat]{background:var(--bg-elev);}
   .card-image-loading{opacity:0;transition:opacity 0.2s;}
   .card-image-loaded{opacity:1;}
@@ -384,6 +386,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   @media (max-width:768px){
     .card-image-placeholder .placeholder-icon{width:clamp(28px,35%,80px);}
   }
+
+  .layout-grid .card-image-placeholder .placeholder-icon{width:clamp(40px,48%,110px);}
 
   /* ----------------------------------------------------------------
      Mobile-aware layout.
@@ -405,7 +409,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     .menu-footer{padding:0.5rem 1rem;font-size:0.7rem;}
     .promo-bar{font-size:0.85rem;padding:0.4rem 1rem;}
     .category-header{margin-bottom:0.6rem;padding-bottom:0.35rem;}
-    .category-title{font-size:1.2rem;}
+    .category-title{font-size:1.2rem;gap:0.4rem;}
+    .cat-icon-wrap{width:1.5em;height:1.5em;}
+    .cat-icon{width:100%;height:100%;}
 
     .layout-grid .grid-products{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.6rem;}
     .layout-grid .card-image{height:100px;}
@@ -634,7 +640,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
   function categoryIcon(type){
-    return '<span class="cat-icon cat-icon-' + type + '" aria-hidden="true">' + categoryIconSvg(type) + '</span>';
+    return '<span class="cat-icon-wrap" aria-hidden="true"><span class="cat-icon cat-icon-' + type + '">' + categoryIconSvg(type) + '</span></span>';
   }
 
   var cycleState = {currentPage:0, totalPages:1, interval:null, isTransitioning:false};
@@ -727,19 +733,25 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return cats;
   }
 
+  function isDemoOrDefaultDisplay(cfg){
+    return cfg && (cfg.tvDemo || (cfg.template === 'default' && cfg.layout === 'auto' && cfg.layoutMode === 'auto'));
+  }
+
   function getProductsPerPage(layout, bannerActive){
-    // Default page sizes tuned for a 1080px viewport. Reduce when a promo
+    // Default page sizes tuned for a 1080px viewport. Increase for demo/default
+    // displays so the board looks populated and premium. Reduce when a promo
     // banner is active so the bottom row/category is not clipped by the
     // banner's reserved space.
+    var isDemoDefault = isDemoOrDefaultDisplay(config);
     var base;
     switch(layout){
-      case 'grid': base = 6; break;
-      case 'list': base = 12; break;
-      case 'poster': base = 2; break;
-      case 'cinematic': base = 2; break;
+      case 'grid': base = isDemoDefault ? 12 : 6; break;
+      case 'list': base = isDemoDefault ? 18 : 12; break;
+      case 'poster': base = isDemoDefault ? 4 : 2; break;
+      case 'cinematic': base = isDemoDefault ? 4 : 2; break;
       case 'showcase': base = 1; break;
-      case 'editorial': base = 4; break;
-      case 'sparse': base = 3; break;
+      case 'editorial': base = isDemoDefault ? 6 : 4; break;
+      case 'sparse': base = isDemoDefault ? 4 : 3; break;
       default: base = 10;
     }
     return bannerActive ? Math.max(1, base - (layout === 'showcase' ? 0 : 2)) : base;
@@ -747,14 +759,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function getMaxCategoriesPerPage(layout, bannerActive){
     // Limit categories per page so headers + products fit in the viewport.
+    var isDemoDefault = isDemoOrDefaultDisplay(config);
     var base;
     switch(layout){
-      case 'grid': base = 2; break;
-      case 'list': base = 3; break;
-      case 'poster': base = 2; break;
-      case 'cinematic': base = 2; break;
+      case 'grid': base = isDemoDefault ? 3 : 2; break;
+      case 'list': base = isDemoDefault ? 4 : 3; break;
+      case 'poster': base = isDemoDefault ? 2 : 2; break;
+      case 'cinematic': base = isDemoDefault ? 2 : 2; break;
       case 'showcase': base = 1; break;
-      case 'editorial': base = 3; break;
+      case 'editorial': base = isDemoDefault ? 3 : 3; break;
       case 'sparse': base = 1; break;
       default: base = 3;
     }

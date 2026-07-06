@@ -28,6 +28,17 @@ describe('demo route fallback', () => {
     expect(html).toContain('id="menu" class="phase">');
   });
 
+  it('/tv/demo includes the demo density marker so the board fills the screen', async () => {
+    const res = await SELF.fetch('https://dubmenu.com/tv/demo');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    // The demo config is tagged so the client can render a denser, premium default board.
+    expect(html).toContain('"tvDemo":true');
+    // Premium category header styling should be present.
+    expect(html).toContain('cat-icon-wrap');
+    expect(html).toContain('text-shadow');
+  });
+
   it('createDemoConfig returns a full menu config with starter categories', () => {
     const config = createDemoConfig();
     expect(config.dispensaryName).toBe('DubMenu Demo Dispensary');
