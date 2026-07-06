@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS } from '../src/category-icons';
+import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, getProductVariant, GET_PRODUCT_VARIANT_JS } from '../src/category-icons';
 
 describe('getCategoryType', () => {
   it('classifies canonical category names and synonyms', () => {
@@ -71,5 +71,44 @@ describe('icon SVGs', () => {
     expect(keys).toContain('accessories');
     expect(keys).toContain('other');
     expect(keys).toContain('generic');
+  });
+});
+
+describe('getProductVariant', () => {
+  it('returns a deterministic number between 0 and 3', () => {
+    expect(getProductVariant('p1', 'OG Kush')).toBeGreaterThanOrEqual(0);
+    expect(getProductVariant('p1', 'OG Kush')).toBeLessThan(4);
+  });
+
+  it('is stable for the same id and name', () => {
+    expect(getProductVariant('p1', 'OG Kush')).toBe(getProductVariant('p1', 'OG Kush'));
+  });
+
+  it('varies with different inputs', () => {
+    const variants = new Set<number>();
+    variants.add(getProductVariant('p1', 'OG Kush'));
+    variants.add(getProductVariant('p2', 'Blue Dream'));
+    variants.add(getProductVariant('p3', 'Gelato #33'));
+    variants.add(getProductVariant('p4', 'Runtz'));
+    // At least two distinct variants should appear across a small sample.
+    expect(variants.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('tolerates missing id or name', () => {
+    expect(getProductVariant('', 'Name')).toBeGreaterThanOrEqual(0);
+    expect(getProductVariant('', 'Name')).toBeLessThan(4);
+    expect(getProductVariant('id', '')).toBeGreaterThanOrEqual(0);
+    expect(getProductVariant('id', '')).toBeLessThan(4);
+  });
+});
+
+describe('GET_PRODUCT_VARIANT_JS', () => {
+  it('injects a runnable browser function that matches the server result', () => {
+    expect(GET_PRODUCT_VARIANT_JS).toContain('function getProductVariant');
+    const fn = new Function(GET_PRODUCT_VARIANT_JS + '; return getProductVariant;')();
+    expect(fn('p1', 'OG Kush')).toBe(getProductVariant('p1', 'OG Kush'));
+    expect(fn('', 'Name')).toBe(getProductVariant('', 'Name'));
+    expect(fn('p1', 'OG Kush')).toBeGreaterThanOrEqual(0);
+    expect(fn('p1', 'OG Kush')).toBeLessThan(4);
   });
 });

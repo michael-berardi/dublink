@@ -59,10 +59,10 @@ describe('tvPage', () => {
     expect(page).toContain('config=incoming');
   });
 
-  it('uses premium gray placeholders instead of accent-colored placeholders', () => {
+  it('uses premium accent placeholders', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
     expect(page).toContain('.card-image-placeholder .placeholder-icon');
-    expect(page).toContain('color:var(--text-muted)');
+    expect(page).toContain('color:var(--accent)');
   });
 
   it('emits a parseable inline script with no broken string literals', () => {
@@ -71,5 +71,12 @@ describe('tvPage', () => {
     expect(scriptMatch).toBeTruthy();
     const script = scriptMatch![1].trim();
     expect(() => new Function(script)).not.toThrow();
+  });
+
+  it('emits deterministic product-level placeholder variant classes', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('placeholder-v');
+    expect(page).toContain('data-variant=');
+    expect(page).toContain('getProductVariant');
   });
 });

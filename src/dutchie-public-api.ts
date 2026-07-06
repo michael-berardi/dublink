@@ -233,31 +233,70 @@ function toCategories(products: ScrapedProduct[]): ScrapedCategory[] {
     }));
 }
 
+async function sha256Hash(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 async function fetchDutchiePublicGraphQL<T>(url: string, operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
+  const hash = await sha256Hash(query);
   const extensions = JSON.stringify({
-    persistedQuery: { version: 1, sha256Hash: ' adhoc' },
+    persistedQuery: { version: 1, sha256Hash: hash },
   });
+
+  // Try the persisted-query GET first. Dutchie's own frontend uses this shape.
   const getUrl = `${url}?operationName=${encodeURIComponent(operationName)}&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(extensions)}`;
-  const resp = await fetch(getUrl, {
+  const commonHeaders = {
+    'Accept': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Referer': 'https://dutchie.com/embedded-menu',
+    'Origin': 'https://dutchie.com',
+  };
+  const getResp = await fetch(getUrl, {
     method: 'GET',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Referer': 'https://dutchie.com/embedded-menu',
-      'Origin': 'https://dutchie.com',
-    },
+    headers: commonHeaders,
     signal: AbortSignal.timeout(30000),
   });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`Dutchie public GraphQL returned ${resp.status}${text ? ': ' + text.slice(0, 200) : ''}`);
+
+  // If the server does not recognize the persisted query, fall back to a POST
+  // with the full query text. This is standard Apollo APQ behavior and is
+  // more resilient if Dutchie changes their registered query list.
+  const getData = getResp.ok ? ((await getResp.json().catch(() => ({}))) as { data?: T; errors?: Array<{ message: string }> }) : undefined;
+  const needsRetry = !getResp.ok || (getData?.errors?.some((e) => e?.message?.includes('PersistedQueryNotFound')) ?? false);
+
+  if (!needsRetry) {
+    if (!getResp.ok) {
+      const text = await getResp.text().catch(() => '');
+      throw new Error(`Dutchie public GraphQL returned ${getResp.status}${text ? ': ' + text.slice(0, 200) : ''}`);
+    }
+    if (getData?.errors && getData.errors.length > 0) {
+      throw new Error(getData.errors[0].message);
+    }
+    return getData!.data as T;
   }
-  const data = (await resp.json()) as { data?: T; errors?: Array<{ message: string }> };
-  if (data.errors && data.errors.length > 0) {
-    throw new Error(data.errors[0].message);
+
+  const postResp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      ...commonHeaders,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ operationName, query, variables, extensions: JSON.parse(extensions) }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!postResp.ok) {
+    const text = await postResp.text().catch(() => '');
+    throw new Error(`Dutchie public GraphQL returned ${postResp.status}${text ? ': ' + text.slice(0, 200) : ''}`);
   }
-  return data.data as T;
+  const postData = (await postResp.json()) as { data?: T; errors?: Array<{ message: string }> };
+  if (postData.errors && postData.errors.length > 0) {
+    throw new Error(postData.errors[0].message);
+  }
+  return postData.data as T;
 }
 
 export async function importDutchiePublicMenu(slug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number; logo?: string }> {

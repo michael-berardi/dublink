@@ -36,9 +36,9 @@ describe('menuPage', () => {
     expect(page).toContain('function getCategoryType');
   });
 
-  it('uses premium gray placeholders', () => {
+  it('uses premium accent placeholders', () => {
     const page = menuPage('test-session', sampleConfig, 'https://dubmenu.com');
-    expect(page).toContain('color:var(--text-muted)');
+    expect(page).toContain('color:var(--accent)');
   });
 
   it('registers an image fallback handler on window', () => {
@@ -75,5 +75,18 @@ describe('menuPage', () => {
     expect(page).toContain('width:100%;max-width:100vw');
     // Sticky header wrapper is constrained to viewport width
     expect(page).toMatch(/\.sticky-top\{[^}]*width:100%;max-width:100vw/);
+  });
+
+  it('emits deterministic product-level placeholder variant classes', () => {
+    const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');
+    expect(page).toContain('placeholder-v');
+    expect(page).toContain('data-variant=');
+    expect(page).toContain('getProductVariant');
+  });
+
+  it('uses a responsive header name that can wrap on very narrow screens', () => {
+    const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');
+    expect(page).toContain('.header-name{font-size:clamp(');
+    expect(page).toMatch(/@media\(max-width:374px\)[^}]*\.header-name\{[^}]*white-space:normal/);
   });
 });

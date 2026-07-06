@@ -1,4 +1,4 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS } from './category-icons';
 
 // State-specific compliance disclaimer templates. These are generic
 // templates — operators must verify exact wording with their counsel and
@@ -210,7 +210,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));}
   .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:flex;align-items:center;gap:0.5rem;}
-  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);}
+  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
+  .cat-icon-flower{color:#34d399;}
+  .cat-icon-edibles{color:#f59e0b;}
+  .cat-icon-concentrates{color:#a855f7;}
+  .cat-icon-prerolls{color:#d97706;}
+  .cat-icon-vapes{color:#3b82f6;}
+  .cat-icon-topicals{color:#14b8a6;}
+  .cat-icon-tinctures{color:#8b5cf6;}
+  .cat-icon-cbd{color:#84cc16;}
+  .cat-icon-accessories{color:#f59e0b;}
+  .cat-icon-other{color:#9ca3af;}
+  .cat-icon-generic{color:#34d399;}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
   .cat-icon svg [fill="none"]{stroke-width:1.75px;}
   .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;}
@@ -344,9 +355,24 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .card-image-placeholder .placeholder-icon{
     position:relative;z-index:1;
     width:clamp(32px,45%,120px);height:auto;
-    color:var(--text-muted);opacity:0.8;
+    color:var(--accent);opacity:0.95;
   }
   .card-image-placeholder .placeholder-icon .placeholder-label{display:none;}
+  .card-image-placeholder.placeholder-flower{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-edibles{background:radial-gradient(circle at 50% 30%,rgba(251,191,36,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-concentrates{background:radial-gradient(circle at 50% 30%,rgba(139,92,246,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-prerolls{background:radial-gradient(circle at 50% 30%,rgba(217,119,6,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-vapes{background:radial-gradient(circle at 50% 30%,rgba(96,165,250,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-topicals{background:radial-gradient(circle at 50% 30%,rgba(45,212,191,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-tinctures{background:radial-gradient(circle at 50% 30%,rgba(167,139,250,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-cbd{background:radial-gradient(circle at 50% 30%,rgba(163,230,53,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-accessories{background:radial-gradient(circle at 50% 30%,rgba(251,191,36,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-other{background:radial-gradient(circle at 50% 30%,rgba(156,163,175,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder.placeholder-generic{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
+  .card-image-placeholder .placeholder-icon{transition:transform 0.2s ease-out,filter 0.2s ease-out;}
+  .card-image-placeholder.placeholder-v1 .placeholder-icon{filter:hue-rotate(18deg) saturate(1.12) brightness(1.04);transform:scale(1.02) rotate(2deg);}
+  .card-image-placeholder.placeholder-v2 .placeholder-icon{filter:hue-rotate(-14deg) saturate(1.08) brightness(0.98);transform:scale(0.98) rotate(-2deg);}
+  .card-image-placeholder.placeholder-v3 .placeholder-icon{filter:hue-rotate(32deg) saturate(1.16) brightness(1.05);transform:scale(1.01) rotate(1deg);}
 
   /* Image load state */
   .card-image[data-cat]{background:var(--bg-elev);}
@@ -570,30 +596,33 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var safeUrl = safeImgUrl(p.image);
     var alt = escapeHtml(p.name || '');
     var catType = getCategoryType(p.categoryName || p.name || '');
+    var v = getProductVariant(p.id || '', p.name || '');
     if(!safeUrl || (config && config.showImages === false)){
-      return placeholderMarkup(catType);
+      return placeholderMarkup(catType, v);
     }
-    return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" data-cat="' + catType + '" onload="this.classList.remove(\\'card-image-loading\\');this.classList.add(\\'card-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
+    return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" data-cat="' + catType + '" data-variant="' + v + '" onload="this.classList.remove(\\'card-image-loading\\');this.classList.add(\\'card-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
   }
-  function placeholderMarkup(type){
+  function placeholderMarkup(type, v){
     var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
-    return '<div class="card-image card-image-placeholder">' + svg + '</div>';
+    return '<div class="card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + (v || '0') + '">' + svg + '</div>';
   }
 
   window.dubmenuImgFallback = function(img){
     var type = img.getAttribute('data-cat') || 'generic';
+    var v = img.getAttribute('data-variant') || '0';
     var wrap = document.createElement('div');
-    wrap.className = 'card-image card-image-placeholder';
+    wrap.className = 'card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + v;
     wrap.innerHTML = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
     if(img.parentNode) img.parentNode.replaceChild(wrap, img);
   };
 
   ${GET_CATEGORY_TYPE_JS}
+  ${GET_PRODUCT_VARIANT_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
   function categoryIcon(type){
-    return '<span class="cat-icon" aria-hidden="true">' + categoryIconSvg(type) + '</span>';
+    return '<span class="cat-icon cat-icon-' + type + '" aria-hidden="true">' + categoryIconSvg(type) + '</span>';
   }
 
   var cycleState = {currentPage:0, totalPages:1, interval:null, isTransitioning:false};
