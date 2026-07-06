@@ -15,7 +15,7 @@ const COMPLIANCE_TEMPLATES: Record<string, string> = {
   MI: 'Cannabis is for adults 21 and over only. Do not drive or operate machinery under the influence. Keep out of reach of children and pets.',
 };
 
-export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any }): string {
+export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any; demo?: boolean }): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -530,6 +530,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 <script>
 (function(){
   var WS_URL = location.origin.replace(/^http/, 'ws') + '/ws/${safeSessionId}?role=tv';
+  var DEMO_MODE = ${options?.demo ? 'true' : 'false'};
   var DISPLAY_NUM = parseInt(new URLSearchParams(location.search).get('display') || '1');
   var DISPLAY_TOTAL = parseInt(new URLSearchParams(location.search).get('displays') || '1');
 
@@ -1177,6 +1178,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   function connect(){
+    if(DEMO_MODE) return;
     if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
     try{ws=new WebSocket(WS_URL);}catch(e){scheduleReconnect();return;}
     ws.onopen=function(){
@@ -1256,18 +1258,20 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   window.addEventListener('resize',function(){fitToScreen();});
 
-  var pollTimer=setInterval(function(){
-    if(paired) return;
-    fetch('/status/${safeSessionId}').then(function(r){return r.json();}).then(function(d){
-      if(d.hasPhone && !paired){
-        paired=true;
-        setConn('paired');
-        if(d.config){config=d.config;}
-        setPhase('menu');
-        if(config) renderMenu();
-      }
-    }).catch(function(){});
-  },3000);
+  if(!DEMO_MODE){
+    var pollTimer=setInterval(function(){
+      if(paired) return;
+      fetch('/status/${safeSessionId}').then(function(r){return r.json();}).then(function(d){
+        if(d.hasPhone && !paired){
+          paired=true;
+          setConn('paired');
+          if(d.config){config=d.config;}
+          setPhase('menu');
+          if(config) renderMenu();
+        }
+      }).catch(function(){});
+    },3000);
+  }
 
   if(initialConfig && hasProducts(initialConfig)){
     config = initialConfig;

@@ -390,7 +390,7 @@ export default {
         return redirectResponse(`${url.origin}/tv/demo`);
       }
       if (path === '/') {
-        return htmlResponse(tvPage('demo', url.origin, { noAgeGate: true }));
+        return htmlResponse(tvPage('demo', url.origin, { noAgeGate: true, demo: true }));
       }
     }
 
@@ -1159,10 +1159,10 @@ export default {
             noAgeGate = true;
           }
         }
-        const pageOptions = noAgeGate ? { noAgeGate: true, preview: true, initialConfig } : { initialConfig };
+        const pageOptions = noAgeGate ? { noAgeGate: true, preview: true, initialConfig, demo: sessionId === 'demo' } : { initialConfig, demo: sessionId === 'demo' };
         return tvEmbedResponse(tvPage(sessionId, url.origin, pageOptions));
       }
-      return htmlResponse(tvPage(sessionId, url.origin, { noAgeGate: true, initialConfig }));
+      return htmlResponse(tvPage(sessionId, url.origin, { noAgeGate: true, initialConfig, demo: sessionId === 'demo' }));
     }
 
     if (path.startsWith('/print/')) {
