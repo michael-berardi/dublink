@@ -1,4 +1,4 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
 
 export function menuPage(sessionId: string, config: any, _origin: string): string {
   const escapeHtml = (str: unknown) => String(str ?? '')
@@ -90,6 +90,7 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   .sticky-top{
     position:sticky;top:0;z-index:50;
     background:var(--bg);
+    width:100%;max-width:100vw;
   }
 
   /* ===== Header ===== */
@@ -145,23 +146,21 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   /* ===== Category pills ===== */
   .cat-nav{
     position:relative;
-    display:flex;gap:0.4rem;padding:0.6rem 1rem;
+    display:flex;gap:0.35rem;padding:0.55rem 0.85rem;
     overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;
     background:var(--bg);
     border-bottom:1px solid var(--border);
+    width:100%;max-width:100vw;
+    -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
   }
   .cat-nav::-webkit-scrollbar{display:none;}
-  .cat-nav{-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
 
-  /* ===== Mobile-first: single column products ===== */
-  @media(min-width:480px){
-    .products-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem;}
-  }
   .cat-pill{
-    flex-shrink:0;padding:0.4rem 0.9rem;
+    flex-shrink:0;display:inline-flex;align-items:center;gap:0.35rem;
+    padding:0.35rem 0.75rem;
     border-radius:2rem;border:1px solid var(--border);
     background:var(--bg-card);color:var(--text-muted);
-    font-size:0.85rem;font-weight:600;cursor:pointer;
+    font-size:0.8rem;font-weight:600;cursor:pointer;
     transition:all 0.2s;white-space:nowrap;user-select:none;
   }
   .cat-pill:active{transform:scale(0.95);}
@@ -178,14 +177,17 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     display:flex;align-items:center;gap:0.5rem;
   }
   .cat-icon{
-    width:1.3em;height:1.3em;flex-shrink:0;color:var(--accent);display:inline-flex;align-items:center;justify-content:center;
+    width:1.3em;height:1.3em;flex-shrink:0;color:var(--text-muted);display:inline-flex;align-items:center;justify-content:center;
   }
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
-  .cat-pill{display:inline-flex;align-items:center;gap:0.35rem;}
+  .cat-icon svg [fill="none"]{stroke-width:1.75px;}
+
+  /* ===== Mobile-first: single column products ===== */
   .products-grid{
     display:grid;
     grid-template-columns:1fr;
     gap:0.75rem;
+    max-width:100%;
   }
 
   .product-card{
@@ -207,7 +209,7 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   .product-image-placeholder{
     width:100%;height:100%;display:flex;align-items:center;justify-content:center;
     position:relative;overflow:hidden;
-    background:var(--bg-elev);
+    background:var(--bg-elev) radial-gradient(circle at 50% 50%,rgba(128,128,128,0.08) 0%,transparent 70%);
   }
   .product-image-placeholder::before{
     content:'';position:absolute;inset:0;
@@ -215,43 +217,14 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     background-size:10px 10px;opacity:0.2;
   }
   .placeholder-art{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;width:100%;height:100%;padding:0.5rem;}
-  .placeholder-icon{width:clamp(42px,45%,120px);height:auto;max-width:120px;color:var(--accent);opacity:0.9;filter:drop-shadow(0 0 12px var(--accent-glow));}
-  .placeholder-label{font-size:clamp(0.65rem,2.5vw,0.85rem);font-weight:900;letter-spacing:0.15em;text-transform:uppercase;color:var(--text);opacity:0.9;text-align:center;}
-  .placeholder-flower{background:linear-gradient(135deg,#1a4d2e 0%,#0f2e1c 100%);}
-  .placeholder-flower .placeholder-icon{color:#4ade80;}
-  .placeholder-flower .placeholder-label{color:#86efac;}
-  .placeholder-edibles{background:linear-gradient(135deg,#7c2d12 0%,#4a1a0a 100%);}
-  .placeholder-edibles .placeholder-icon{color:#fb923c;}
-  .placeholder-edibles .placeholder-label{color:#fdba74;}
-  .placeholder-concentrates{background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%);}
-  .placeholder-concentrates .placeholder-icon{color:#60a5fa;}
-  .placeholder-concentrates .placeholder-label{color:#93c5fd;}
-    .placeholder-prerolls{background:linear-gradient(135deg,#854d0e 0%,#451a03 100%);}
-    .placeholder-prerolls .placeholder-icon{color:#d4b37f;}
-    .placeholder-prerolls .placeholder-label{color:#eaddcf;}
-    .placeholder-vapes{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);}
-    .placeholder-vapes .placeholder-icon{color:#38bdf8;}
-    .placeholder-vapes .placeholder-label{color:#bae6fd;}
-    .placeholder-topicals{background:linear-gradient(135deg,#701a75 0%,#4a044e 100%);}
-    .placeholder-topicals .placeholder-icon{color:#e879f9;}
-    .placeholder-topicals .placeholder-label{color:#f5d0fe;}
-    .placeholder-tinctures{background:linear-gradient(135deg,#0f4a3c 0%,#022c22 100%);}
-    .placeholder-tinctures .placeholder-icon{color:#34d399;}
-    .placeholder-tinctures .placeholder-label{color:#a7f3d0;}
-    .placeholder-cbd{background:linear-gradient(135deg,#14532d 0%,#052e16 100%);}
-    .placeholder-cbd .placeholder-icon{color:#86efac;}
-    .placeholder-cbd .placeholder-label{color:#bbf7d0;}
-    .placeholder-accessories{background:linear-gradient(135deg,#374151 0%,#111827 100%);}
-    .placeholder-accessories .placeholder-icon{color:#9ca3af;}
-    .placeholder-accessories .placeholder-label{color:#d1d5db;}
-    .placeholder-other{background:linear-gradient(135deg,#4b5563 0%,#1f2937 100%);}
-    .placeholder-other .placeholder-icon{color:#d1d5db;}
-    .placeholder-other .placeholder-label{color:#e5e7eb;}
-    .placeholder-generic{background:linear-gradient(135deg,var(--accent-dim),var(--bg-elev));}
+  .placeholder-icon{width:clamp(42px,45%,120px);height:auto;max-width:120px;color:var(--text-muted);opacity:0.85;}
+  .placeholder-label{font-size:clamp(0.65rem,2.5vw,0.85rem);font-weight:900;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-muted);opacity:0.8;text-align:center;}
   @media(min-width:600px){
     .placeholder-icon{width:clamp(56px,40%,160px);max-width:160px;}
     .placeholder-label{font-size:clamp(0.8rem,2vw,1rem);}
   }
+  .product-image-loading{opacity:0;transition:opacity 0.2s;}
+  .product-image-loaded{opacity:1;}
   .product-badges{position:absolute;top:0.4rem;left:0.4rem;display:flex;gap:0.3rem;flex-wrap:wrap;}
   .badge-sale{
     background:#ef4444;color:#fff;font-size:0.6rem;font-weight:800;
@@ -332,7 +305,8 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   /* ===== Tablet ===== */
   @media(min-width:600px){
     .header-name{font-size:1.75rem;}
-    .products-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:1rem;}
+    .products-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;}
+    .cat-pill{padding:0.4rem 0.9rem;font-size:0.85rem;}
     .product-name{font-size:1rem;}
     .product-body{padding:0.85rem;gap:0.4rem;}
     .product-image-placeholder span{font-size:3rem;}
@@ -343,43 +317,14 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     .price-tiers .tier-price{font-size:0.95rem;}
   }
   @media(min-width:768px){
-    .products-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.25rem;}
+    .products-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;}
     .menu-body{padding:1rem 1.5rem calc(2rem + var(--safe-bottom));}
     .header{padding-left:1.5rem;padding-right:1.5rem;}
     .cat-nav{padding-left:1.5rem;padding-right:1.5rem;}
     .product-desc{-webkit-line-clamp:3;}
   }
-
-  /* ===== Mobile-first single-column override (<=520px) ===== */
-  @media(max-width:520px){
-    .search-wrap{display:block;margin-top:0.65rem;}
-    .search-input{width:100%;display:block;}
-    .toolbar{display:flex;align-items:center;gap:0.5rem;margin-top:0.65rem;flex-wrap:wrap;}
-    .stock-toggle{display:inline-flex;white-space:nowrap;}
-    .cat-nav{
-      position:relative;
-      display:flex;gap:0.4rem;padding:0.6rem 1rem;
-      overflow-x:auto;-webkit-overflow-scrolling:touch;
-      scrollbar-width:none;-ms-overflow-style:none;
-      white-space:nowrap;
-      background:var(--bg);
-      border-bottom:1px solid var(--border);
-    }
-    .cat-nav::-webkit-scrollbar{display:none;}
-    .cat-pill{flex-shrink:0;white-space:nowrap;}
-    .products-grid{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:0.75rem;
-    }
-    .product-card{min-width:0;}
-    .product-name-row{display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;}
-    .product-name{flex:1 1 0;min-width:0;overflow-wrap:break-word;word-break:break-word;}
-    .product-meta{overflow-wrap:break-word;word-break:break-word;}
-    .canna-pills{display:flex;flex-wrap:wrap;gap:0.25rem;}
-    .canna-pill{white-space:nowrap;}
-    .price-tiers{display:flex;flex-wrap:wrap;gap:0.25rem;}
-    .price-tiers .tier{min-width:0;}
+  @media(min-width:1024px){
+    .products-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.25rem;}
   }
 
   /* ===== Animations ===== */
@@ -555,19 +500,7 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     if(p.brand) parts.push(escapeHtml(p.brand));
     return parts.length ? '<div class="product-meta">'+parts.join(' \\u00B7 ')+'</div>' : '';
   }
-  function getCategoryType(name){
-    var n = (name || '').toLowerCase();
-    if(n.indexOf('flower') !== -1 || n.indexOf('bud') !== -1 || n.indexOf('strain') !== -1) return 'flower';
-    if(n.indexOf('edible') !== -1 || n.indexOf('gummy') !== -1 || n.indexOf('candy') !== -1 || n.indexOf('chocolate') !== -1 || n.indexOf('baked') !== -1) return 'edibles';
-    if(n.indexOf('concentrate') !== -1 || n.indexOf('extract') !== -1 || n.indexOf('wax') !== -1 || n.indexOf('shatter') !== -1 || n.indexOf('resin') !== -1 || n.indexOf('rosin') !== -1 || n.indexOf('oil') !== -1 || n.indexOf('dab') !== -1 || n.indexOf('sauce') !== -1 || n.indexOf('badder') !== -1 || n.indexOf('crumble') !== -1) return 'concentrates';
-    if(n.indexOf('pre-roll') !== -1 || n.indexOf('preroll') !== -1 || n.indexOf('joint') !== -1 || n.indexOf('cone') !== -1 || n.indexOf('blunt') !== -1) return 'prerolls';
-    if(n.indexOf('vape') !== -1 || n.indexOf('vaporizer') !== -1 || n.indexOf('cartridge') !== -1 || n.indexOf('disposable') !== -1 || n.indexOf('pen') !== -1) return 'vapes';
-    if(n.indexOf('topical') !== -1 || n.indexOf('cream') !== -1 || n.indexOf('balm') !== -1 || n.indexOf('lotion') !== -1 || n.indexOf('salve') !== -1) return 'topicals';
-    if(n.indexOf('tincture') !== -1 || n.indexOf('sublingual') !== -1 || n.indexOf('drop') !== -1) return 'tinctures';
-    if(n.indexOf('cbd') !== -1) return 'cbd';
-    if(n.indexOf('accessor') !== -1 || n.indexOf('battery') !== -1 || n.indexOf('paper') !== -1 || n.indexOf('grinder') !== -1 || n.indexOf('pipe') !== -1 || n.indexOf('bong') !== -1) return 'accessories';
-    return 'other';
-  }
+  ${GET_CATEGORY_TYPE_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
@@ -585,11 +518,20 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   }
   function imgMarkup(p){
     var safeUrl = safeImgUrl(p.image);
+    var catType = getCategoryType(p.categoryName || p.name || '');
     if(!safeUrl){
       return placeholderMarkup(p.categoryName || p.name);
     }
-    return '<img class="product-image" src="'+escapeHtml(safeUrl)+'" alt="'+escapeHtml(p.name)+'" loading="lazy">';
+    return '<img class="product-image product-image-loading" src="'+escapeHtml(safeUrl)+'" alt="'+escapeHtml(p.name)+'" loading="lazy" decoding="async" data-cat="'+catType+'" onload="this.classList.remove(\\'product-image-loading\\');this.classList.add(\\'product-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
   }
+
+  window.dubmenuImgFallback = function(img){
+    var type = img.getAttribute('data-cat') || 'generic';
+    var wrap = document.createElement('div');
+    wrap.className = 'product-image-placeholder placeholder-' + type;
+    wrap.innerHTML = '<div class="placeholder-art">' + placeholderIconSvg(type) + '<div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>';
+    if(img.parentNode) img.parentNode.replaceChild(wrap, img);
+  };
 
   // ---- Filter ----
   function getFilteredCats(){

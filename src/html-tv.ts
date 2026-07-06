@@ -1,4 +1,4 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
 
 // State-specific compliance disclaimer templates. These are generic
 // templates — operators must verify exact wording with their counsel and
@@ -15,7 +15,7 @@ const COMPLIANCE_TEMPLATES: Record<string, string> = {
   MI: 'Cannabis is for adults 21 and over only. Do not drive or operate machinery under the influence. Keep out of reach of children and pets.',
 };
 
-export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any }): string {
+export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any }): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -29,7 +29,9 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
     Array.isArray(initialConfig.categories) &&
     initialConfig.categories.some((cat: any) => Array.isArray(cat.products) && cat.products.length > 0);
   const initialTemplate = initialConfig?.template || 'default';
-  const configOrigin = 'https://dubmenu.com';
+  const configOrigin = /^http:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(origin)
+    ? origin
+    : 'https://dubmenu.com';
   const landingUrl = configOrigin + '/?code=' + safeSessionId;
   const qrSrc =
     'https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=' +
@@ -208,8 +210,9 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
 
   .category-header{margin-bottom:0.75rem;padding-bottom:0.4rem;border-bottom:3px solid var(--cat-accent,var(--accent));}
   .category-title{font-size:clamp(1.8rem,2.8vw,2.4rem);font-weight:900;text-transform:uppercase;letter-spacing:0.06em;line-height:1;color:var(--cat-accent,var(--accent));display:flex;align-items:center;gap:0.5rem;}
-  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;}
+  .cat-icon{width:1.1em;height:1.1em;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
+  .cat-icon svg [fill="none"]{stroke-width:1.75px;}
   .layout-grid .grid-products{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.75rem;}
   .layout-grid .product-card{background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--card-shadow);transition:border-color 0.3s,transform 0.2s;position:relative;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
@@ -330,7 +333,7 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
   /* Branded placeholder for product cards without an image */
   .card-image-placeholder{
     display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
-    background:var(--bg-elev) radial-gradient(circle at 50% 50%,var(--accent-dim) 0%,transparent 70%);
+    background:var(--bg-elev) radial-gradient(circle at 50% 50%,rgba(128,128,128,0.08) 0%,transparent 70%);
     border:1px dashed var(--border-hover);
   }
   .card-image-placeholder::before{
@@ -341,9 +344,14 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
   .card-image-placeholder .placeholder-icon{
     position:relative;z-index:1;
     width:clamp(32px,45%,120px);height:auto;
-    color:var(--accent);opacity:0.85;
-    filter:drop-shadow(0 0 20px var(--accent-dim));
+    color:var(--text-muted);opacity:0.8;
   }
+  .card-image-placeholder .placeholder-icon .placeholder-label{display:none;}
+
+  /* Image load state */
+  .card-image[data-cat]{background:var(--bg-elev);}
+  .card-image-loading{opacity:0;transition:opacity 0.2s;}
+  .card-image-loaded{opacity:1;}
 
   @media (max-width:768px){
     .card-image-placeholder .placeholder-icon{width:clamp(28px,35%,80px);}
@@ -561,27 +569,26 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
   function imgMarkup(p, lazy){
     var safeUrl = safeImgUrl(p.image);
     var alt = escapeHtml(p.name || '');
-    if(!safeUrl){
-      var type = getCategoryType(p.categoryName || p.name || '');
-      var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
-      return '<div class="card-image card-image-placeholder">' + svg + '</div>';
+    var catType = getCategoryType(p.categoryName || p.name || '');
+    if(!safeUrl || (config && config.showImages === false)){
+      return placeholderMarkup(catType);
     }
-    return '<img class="card-image" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + '>';
+    return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" data-cat="' + catType + '" onload="this.classList.remove(\\'card-image-loading\\');this.classList.add(\\'card-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
+  }
+  function placeholderMarkup(type){
+    var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+    return '<div class="card-image card-image-placeholder">' + svg + '</div>';
   }
 
-  function getCategoryType(name){
-    var n = (name || '').toLowerCase();
-    if(n.indexOf('flower') !== -1 || n.indexOf('bud') !== -1 || n.indexOf('strain') !== -1) return 'flower';
-    if(n.indexOf('edible') !== -1 || n.indexOf('gummy') !== -1 || n.indexOf('candy') !== -1 || n.indexOf('chocolate') !== -1 || n.indexOf('baked') !== -1 || n.indexOf('munchie') !== -1) return 'edibles';
-    if(n.indexOf('concentrate') !== -1 || n.indexOf('extract') !== -1 || n.indexOf('wax') !== -1 || n.indexOf('shatter') !== -1 || n.indexOf('resin') !== -1 || n.indexOf('rosin') !== -1 || n.indexOf('oil') !== -1 || n.indexOf('dab') !== -1 || n.indexOf('sauce') !== -1 || n.indexOf('badder') !== -1 || n.indexOf('crumble') !== -1) return 'concentrates';
-    if(n.indexOf('pre-roll') !== -1 || n.indexOf('preroll') !== -1 || n.indexOf('joint') !== -1 || n.indexOf('cone') !== -1 || n.indexOf('blunt') !== -1) return 'prerolls';
-    if(n.indexOf('vape') !== -1 || n.indexOf('vaporizer') !== -1 || n.indexOf('cartridge') !== -1 || n.indexOf('disposable') !== -1 || n.indexOf('pen') !== -1) return 'vapes';
-    if(n.indexOf('topical') !== -1 || n.indexOf('cream') !== -1 || n.indexOf('balm') !== -1 || n.indexOf('lotion') !== -1 || n.indexOf('salve') !== -1) return 'topicals';
-    if(n.indexOf('tincture') !== -1 || n.indexOf('sublingual') !== -1 || n.indexOf('drop') !== -1) return 'tinctures';
-    if(n.indexOf('cbd') !== -1) return 'cbd';
-    if(n.indexOf('accessor') !== -1 || n.indexOf('battery') !== -1 || n.indexOf('paper') !== -1 || n.indexOf('grinder') !== -1 || n.indexOf('pipe') !== -1 || n.indexOf('bong') !== -1) return 'accessories';
-    return 'other';
-  }
+  window.dubmenuImgFallback = function(img){
+    var type = img.getAttribute('data-cat') || 'generic';
+    var wrap = document.createElement('div');
+    wrap.className = 'card-image card-image-placeholder';
+    wrap.innerHTML = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+    if(img.parentNode) img.parentNode.replaceChild(wrap, img);
+  };
+
+  ${GET_CATEGORY_TYPE_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
@@ -1128,7 +1135,13 @@ export function tvPage(sessionId: string, _origin: string, options?: { noAgeGate
     ws.onmessage=function(ev){
       try{
         var msg=JSON.parse(ev.data);
-        if(msg.type==='config'){config=msg.payload; if(paired || hasProducts(config)){setPhase('menu');renderMenu();}}
+        if(msg.type==='config'){
+          var incoming=msg.payload;
+          if(hasProducts(incoming) || !hasProducts(config)){
+            config=incoming;
+          }
+          if(paired || hasProducts(config)){setPhase('menu');renderMenu();}
+        }
         if(msg.type==='paired'){paired=true;setConn('paired');setPhase('menu');if(config) renderMenu();}
         if(msg.type==='unpaired'){paired=false;stopCycling();if(!hasProducts(config)){setPhase('pairing');}}
         if(msg.type==='ping'){if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'pong'}));}

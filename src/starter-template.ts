@@ -1,6 +1,9 @@
 import type { MenuConfig, Category } from './types';
+import { DEFAULT_CONFIG } from './types';
 
 export const STARTER_DISPENSARY_NAME = 'Green Leaf Dispensary';
+
+export const DEMO_DISPENSARY_NAME = 'DubMenu Demo Dispensary';
 
 export const starterCategories: Category[] = [
   {
@@ -264,6 +267,15 @@ export const starterCategories: Category[] = [
     ],
   },
 ];
+
+export function createDemoConfig(): MenuConfig {
+  return {
+    ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as MenuConfig,
+    dispensaryName: DEMO_DISPENSARY_NAME,
+    categories: JSON.parse(JSON.stringify(starterCategories)) as Category[],
+    disclaimer: 'This is a demo menu for visual QA. Product availability and pricing are not real.',
+  };
+}
 
 export function createStarterConfig(): Partial<MenuConfig> & { categories: Category[] } {
   return {

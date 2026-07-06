@@ -106,6 +106,7 @@ describe('importDutchieMenu', () => {
     expect(result.categories[0].products[0].strain).toBe('hybrid');
     expect(result.categories[0].products[0].thc).toBe('22%');
     expect(result.categories[0].products[0].weight).toBe('3.5g');
+    expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/prod1.jpg?h=400&w=400');
   });
 
   it('falls back to V1 product query when V2 returns no products', async () => {

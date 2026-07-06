@@ -28,6 +28,21 @@ describe('dedupeAndFormatCategories', () => {
     expect(result.productCount).toBe(2);
   });
 
+  it('preserves product image URLs through formatting', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'a', name: 'OG Kush', price: 45, inStock: true, image: 'https://example.com/og.jpg' },
+        ],
+      },
+    ];
+    const result = dedupeAndFormatCategories(categories);
+    expect(result.categories[0].products[0].image).toBe('https://example.com/og.jpg');
+  });
+
   it('limits categories and warns', () => {
     const categories: ScrapedCategory[] = [
       { id: 'flower', name: 'Flower', order: 0, products: [{ id: 'f1', name: 'F1', price: 10, inStock: true }] },

@@ -22,7 +22,7 @@ import { getStatus } from './status';
 import { resolveMenuSource } from './menu-source';
 import { formatMenu } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
-import { createStarterConfig } from './starter-template';
+import { createStarterConfig, createDemoConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
 
@@ -1126,7 +1126,9 @@ export default {
       // For an existing saved session, preload the persisted public config so the TV
       // can render products immediately instead of waiting for a phone to pair.
       let initialConfig: any = undefined;
-      if (sessionId !== 'demo') {
+      if (sessionId === 'demo') {
+        initialConfig = createDemoConfig();
+      } else {
         try {
           const id = env.SESSION.idFromName(sessionId);
           const session = env.SESSION.get(id);
@@ -1183,11 +1185,16 @@ export default {
     if (path.startsWith('/menu/')) {
       const sessionId = path.slice('/menu/'.length).split('/')[0].split('?')[0];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
-      const id = env.SESSION.idFromName(sessionId);
-      const session = env.SESSION.get(id);
-      const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
-      if (!res.ok) return errorResponse('Failed to load menu', 500);
-      const config = await res.json();
+      let config: any;
+      if (sessionId === 'demo') {
+        config = createDemoConfig();
+      } else {
+        const id = env.SESSION.idFromName(sessionId);
+        const session = env.SESSION.get(id);
+        const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
+        if (!res.ok) return errorResponse('Failed to load menu', 500);
+        config = await res.json();
+      }
       return htmlResponse(menuPage(sessionId, config, origin));
     }
 
