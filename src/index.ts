@@ -1265,6 +1265,13 @@ ${pseoUrls}
       });
     }
 
+    if (path === '/ahrefs_f06791ae01f0c401a83b6d52294a23d1f6c96931a5bd5b97cae568eae48d1a3d') {
+      return new Response('ahrefs-site-verification_f06791ae01f0c401a83b6d52294a23d1f6c96931a5bd5b97cae568eae48d1a3d', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', ...SECURITY_HEADERS },
+      });
+    }
+
     const pseoSlugs = getAllPSEOSlugs();
     if (pseoSlugs.includes(path.slice(1))) {
       const page = pseoPage(path.slice(1), origin);
