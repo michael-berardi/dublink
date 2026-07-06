@@ -82,6 +82,10 @@ describe('menuPage', () => {
     expect(page).toContain('placeholder-v');
     expect(page).toContain('data-variant=');
     expect(page).toContain('getProductVariant');
+    expect(page).toContain('placeholder-quality-premium');
+    expect(page).toContain('placeholder-variant-overlay');
+    expect(page).toContain('variant-overlay-shape');
+    expect(page).toContain('getPlaceholderVariantOverlay');
   });
 
   it('uses a responsive header name that can wrap on very narrow screens', () => {

@@ -1,4 +1,4 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS, GET_PLACEHOLDER_VARIANT_OVERLAY_JS, GET_PLACEHOLDER_OVERLAY_COLORS_JS } from './category-icons';
 
 // State-specific compliance disclaimer templates. These are generic
 // templates — operators must verify exact wording with their counsel and
@@ -344,18 +344,19 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   /* Branded placeholder for product cards without an image */
   .card-image-placeholder{
     display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;
-    background:var(--bg-elev) radial-gradient(circle at 50% 50%,rgba(128,128,128,0.08) 0%,transparent 70%);
-    border:1px dashed var(--border-hover);
+    background:var(--bg-elev) radial-gradient(circle at 35% 35%,rgba(255,255,255,0.04) 0%,transparent 50%),radial-gradient(circle at 65% 65%,rgba(255,255,255,0.03) 0%,transparent 45%);
+    border:1px solid var(--border);
   }
   .card-image-placeholder::before{
     content:'';position:absolute;inset:0;
-    background-image:radial-gradient(circle,var(--border) 1px,transparent 1px);
-    background-size:12px 12px;opacity:0.4;
+    background-image:linear-gradient(135deg,transparent 45%,rgba(255,255,255,0.03) 50%,transparent 55%);
+    background-size:200% 200%;
+    opacity:0.6;
   }
   .card-image-placeholder .placeholder-icon{
     position:relative;z-index:1;
-    width:clamp(32px,45%,120px);height:auto;
-    color:var(--accent);opacity:0.95;
+    width:clamp(40px,52%,140px);height:auto;
+    opacity:0.95;
   }
   .card-image-placeholder .placeholder-icon .placeholder-label{display:none;}
   .card-image-placeholder.placeholder-flower{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
@@ -370,11 +371,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .card-image-placeholder.placeholder-other{background:radial-gradient(circle at 50% 30%,rgba(156,163,175,0.12),transparent 70%),var(--bg-elev);}
   .card-image-placeholder.placeholder-generic{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
   .card-image-placeholder .placeholder-icon{transition:transform 0.2s ease-out,filter 0.2s ease-out;}
-  .card-image-placeholder.placeholder-v1 .placeholder-icon{filter:hue-rotate(18deg) saturate(1.12) brightness(1.04);transform:scale(1.02) rotate(2deg);}
-  .card-image-placeholder.placeholder-v2 .placeholder-icon{filter:hue-rotate(-14deg) saturate(1.08) brightness(0.98);transform:scale(0.98) rotate(-2deg);}
-  .card-image-placeholder.placeholder-v3 .placeholder-icon{filter:hue-rotate(32deg) saturate(1.16) brightness(1.05);transform:scale(1.01) rotate(1deg);}
-
-  /* Image load state */
+  .card-image-placeholder.placeholder-v1 .placeholder-icon{transform:scale(1.02) rotate(2deg);}
+  .card-image-placeholder.placeholder-v2 .placeholder-icon{transform:scale(0.98) rotate(-2deg);}
+  .card-image-placeholder.placeholder-v3 .placeholder-icon{transform:scale(1.01) rotate(1deg);}
+  .card-image-placeholder .placeholder-variant-overlay{position:absolute;inset:0;z-index:2;width:100%;height:100%;pointer-events:none;color:var(--accent);opacity:0.88;}
+  .card-image-placeholder .placeholder-variant-overlay .variant-overlay-shape{width:100%;height:100%;display:block;}
+  .card-image-placeholder.placeholder-quality-premium .placeholder-variant-overlay{opacity:1;}
   .card-image[data-cat]{background:var(--bg-elev);}
   .card-image-loading{opacity:0;transition:opacity 0.2s;}
   .card-image-loaded{opacity:1;}
@@ -602,22 +604,32 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }
     return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" data-cat="' + catType + '" data-variant="' + v + '" onload="this.classList.remove(\\'card-image-loading\\');this.classList.add(\\'card-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
   }
-  function placeholderMarkup(type, v){
+  function basePlaceholderSvg(type){
     var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
-    return '<div class="card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + (v || '0') + '">' + svg + '</div>';
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+    return svg.replace('class="placeholder-icon"', 'class="placeholder-icon" style="color:' + color + '"');
+  }
+  function placeholderMarkup(type, v){
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+    var overlay = getPlaceholderVariantOverlay(v || 0);
+    return '<div class="card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + (v || '0') + ' placeholder-quality-premium">' + basePlaceholderSvg(type) + '<div class="placeholder-variant-overlay v' + (v || '0') + '" aria-hidden="true" style="color:' + color + '">' + overlay + '</div></div>';
   }
 
   window.dubmenuImgFallback = function(img){
     var type = img.getAttribute('data-cat') || 'generic';
     var v = img.getAttribute('data-variant') || '0';
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+    var overlay = getPlaceholderVariantOverlay(v);
     var wrap = document.createElement('div');
-    wrap.className = 'card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + v;
-    wrap.innerHTML = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+    wrap.className = 'card-image card-image-placeholder placeholder-' + type + ' placeholder-v' + v + ' placeholder-quality-premium';
+    wrap.innerHTML = basePlaceholderSvg(type) + '<div class="placeholder-variant-overlay v' + v + '" aria-hidden="true" style="color:' + color + '">' + overlay + '</div>';
     if(img.parentNode) img.parentNode.replaceChild(wrap, img);
   };
 
   ${GET_CATEGORY_TYPE_JS}
   ${GET_PRODUCT_VARIANT_JS}
+  ${GET_PLACEHOLDER_VARIANT_OVERLAY_JS}
+  ${GET_PLACEHOLDER_OVERLAY_COLORS_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }

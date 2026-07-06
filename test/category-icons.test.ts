@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, getProductVariant, GET_PRODUCT_VARIANT_JS } from '../src/category-icons';
+import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, getProductVariant, GET_PRODUCT_VARIANT_JS, getPlaceholderIconSvg, GET_PLACEHOLDER_ICON_SVG_JS, getPlaceholderVariantOverlay, PLACEHOLDER_VARIANT_OVERLAYS, PLACEHOLDER_OVERLAY_COLORS, GET_PLACEHOLDER_OVERLAY_COLORS_JS, GET_PLACEHOLDER_VARIANT_OVERLAY_JS } from '../src/category-icons';
 
 describe('getCategoryType', () => {
   it('classifies canonical category names and synonyms', () => {
@@ -110,5 +110,87 @@ describe('GET_PRODUCT_VARIANT_JS', () => {
     expect(fn('', 'Name')).toBe(getProductVariant('', 'Name'));
     expect(fn('p1', 'OG Kush')).toBeGreaterThanOrEqual(0);
     expect(fn('p1', 'OG Kush')).toBeLessThan(4);
+  });
+});
+
+describe('placeholder variant overlays', () => {
+  it('provides a distinct overlay for every variant 0-3', () => {
+    const shapes = new Set<string>();
+    for (let v = 0; v < 4; v++) {
+      const overlay = getPlaceholderVariantOverlay(v);
+      expect(overlay, `variant ${v}`).toContain('<svg');
+      expect(overlay, `variant ${v}`).toContain('</svg>');
+      expect(overlay, `variant ${v}`).toContain('variant-overlay-shape');
+      shapes.add(overlay);
+    }
+    expect(shapes.size).toBe(4);
+  });
+
+  it('overlays use currentColor for category-aware coloring', () => {
+    for (const [v, overlay] of Object.entries(PLACEHOLDER_VARIANT_OVERLAYS)) {
+      if (!overlay) continue;
+      expect(overlay, `variant ${v}`).toContain('currentColor');
+    }
+  });
+
+  it('returns variant 0 as the fallback for invalid variants', () => {
+    const v0 = getPlaceholderVariantOverlay(0);
+    expect(getPlaceholderVariantOverlay(99)).toBe(v0);
+    expect(getPlaceholderVariantOverlay(-1)).toBe(v0);
+  });
+});
+
+describe('GET_PLACEHOLDER_VARIANT_OVERLAY_JS', () => {
+  it('injects a runnable browser variable matching the server map', () => {
+    expect(GET_PLACEHOLDER_VARIANT_OVERLAY_JS).toContain('PLACEHOLDER_VARIANT_OVERLAYS');
+    const ctx = new Function(GET_PLACEHOLDER_VARIANT_OVERLAY_JS + '; return PLACEHOLDER_VARIANT_OVERLAYS;')();
+    expect(ctx[0]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[0]);
+    expect(ctx[1]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[1]);
+    expect(ctx[2]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[2]);
+    expect(ctx[3]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[3]);
+  });
+});
+
+describe('GET_PLACEHOLDER_OVERLAY_COLORS_JS', () => {
+  it('injects a runnable browser map of category accent colors', () => {
+    expect(GET_PLACEHOLDER_OVERLAY_COLORS_JS).toContain('PLACEHOLDER_OVERLAY_COLORS');
+    const ctx = new Function(GET_PLACEHOLDER_OVERLAY_COLORS_JS + '; return PLACEHOLDER_OVERLAY_COLORS;')();
+    expect(ctx.flower).toBe(PLACEHOLDER_OVERLAY_COLORS.flower);
+    expect(ctx.edibles).toBe(PLACEHOLDER_OVERLAY_COLORS.edibles);
+    expect(ctx.flower).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+});
+
+describe('getPlaceholderIconSvg', () => {
+  it('embeds the category color into the placeholder SVG', () => {
+    const svg = getPlaceholderIconSvg('flower', 1);
+    expect(svg).toContain('class="placeholder-icon"');
+    expect(svg).toContain('style="color:#4ade80"');
+  });
+
+  it('returns the bare category icon for variant 0', () => {
+    const svg = getPlaceholderIconSvg('edibles', 0);
+    expect(svg).toContain('class="placeholder-icon"');
+    expect(svg).toContain('style="color:#fbbf24"');
+    expect(svg).not.toContain('variant-decor');
+  });
+
+  it('is deterministic for the same category and variant', () => {
+    expect(getPlaceholderIconSvg('concentrates', 2)).toBe(getPlaceholderIconSvg('concentrates', 2));
+  });
+
+  it('falls back to generic for unknown categories', () => {
+    const svg = getPlaceholderIconSvg('unknown', 3);
+    expect(svg).toContain('style="color:#34d399"');
+  });
+});
+
+describe('GET_PLACEHOLDER_ICON_SVG_JS', () => {
+  it('injects a runnable browser function that matches the server result', () => {
+    expect(GET_PLACEHOLDER_ICON_SVG_JS).toContain('function getPlaceholderIconSvg');
+    const fn = new Function('PLACEHOLDER_ICON_SVGS', GET_PLACEHOLDER_ICON_SVG_JS + '; return getPlaceholderIconSvg;')(PLACEHOLDER_ICON_SVGS);
+    expect(fn('flower', 1)).toBe(getPlaceholderIconSvg('flower', 1));
+    expect(fn('flower', 0)).toBe(getPlaceholderIconSvg('flower', 0));
+    expect(fn('unknown', 3)).toBe(getPlaceholderIconSvg('unknown', 3));
   });
 });

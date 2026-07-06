@@ -128,3 +128,66 @@ export const GET_PRODUCT_VARIANT_JS = `function getProductVariant(id,name){
   }
   return Math.abs(h)%4;
 }`;
+
+// Category accent colors used for the placeholder SVG and its embedded
+// variant decorations so each product is visually distinct while keeping
+// category identity. These match the existing placeholder gradients.
+export const PLACEHOLDER_OVERLAY_COLORS: Record<string, string> = {
+  flower: '#4ade80',
+  edibles: '#fbbf24',
+  concentrates: '#a855f7',
+  prerolls: '#d97706',
+  vapes: '#60a5fa',
+  topicals: '#2dd4bf',
+  tinctures: '#a78bfa',
+  cbd: '#a3e635',
+  accessories: '#fbbf24',
+  other: '#9ca3af',
+  generic: '#34d399',
+};
+
+export const GET_PLACEHOLDER_OVERLAY_COLORS_JS = `var PLACEHOLDER_OVERLAY_COLORS=${JSON.stringify(PLACEHOLDER_OVERLAY_COLORS)};`;
+
+// Theme-aware overlay color. Overlays are rendered with currentColor so they
+// inherit the surrounding accent or category color and work in every theme.
+export function getPlaceholderOverlayColor(_type: string): string {
+  return 'currentColor';
+}
+
+export const GET_PLACEHOLDER_OVERLAY_COLOR_JS = `function getPlaceholderOverlayColor(type){
+  return 'currentColor';
+}`;
+
+// Premium variant overlays for product-level visual distinction. Each overlay
+// is a full 100x100 SVG that sits on top of the category placeholder icon and
+// uses currentColor so it adapts to any theme. The four silhouettes are
+// deliberately different (crest, sash, compass, frame) so adjacent products in
+// the same category are immediately distinguishable in screenshots.
+export const PLACEHOLDER_VARIANT_OVERLAYS: Record<number, string> = {
+  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M50 10 L86 24 L86 54 C86 71 50 92 50 92 C50 92 14 71 14 54 L14 24 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round" opacity="0.9"/><path d="M24 46 L76 46" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/><circle cx="50" cy="32" r="7" fill="currentColor" opacity="0.9"/></svg>`,
+  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M-8 18 L38 64 L108 -6" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" opacity="0.82"/><circle cx="52" cy="40" r="18" fill="none" stroke="currentColor" stroke-width="4" opacity="0.95"/><circle cx="52" cy="40" r="7" fill="currentColor" opacity="0.9"/></svg>`,
+  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="3" opacity="0.9"/><path d="M50 6 L57 38 L92 38 L63 58 L73 92 L50 70 L27 92 L37 58 L8 38 L43 38 Z" fill="currentColor" opacity="0.85"/><circle cx="50" cy="50" r="9" fill="currentColor" opacity="0.35"/></svg>`,
+  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M10 20 L10 10 L20 10 M80 10 L90 10 L90 20 M90 80 L90 90 L80 90 M20 90 L10 90 L10 80" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/><circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" stroke-width="3.5" opacity="0.85"/><path d="M34 50 L66 50 M50 34 L50 66" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/></svg>`,
+};
+
+export const GET_PLACEHOLDER_VARIANT_OVERLAY_JS = `var PLACEHOLDER_VARIANT_OVERLAYS=${JSON.stringify(PLACEHOLDER_VARIANT_OVERLAYS)};
+function getPlaceholderVariantOverlay(v){
+  return PLACEHOLDER_VARIANT_OVERLAYS[v] || PLACEHOLDER_VARIANT_OVERLAYS[0];
+}`;
+
+export function getPlaceholderVariantOverlay(variant: number): string {
+  return PLACEHOLDER_VARIANT_OVERLAYS[variant] || PLACEHOLDER_VARIANT_OVERLAYS[0];
+}
+
+export function getPlaceholderIconSvg(type: string, _variant: number): string {
+  const base = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+  const color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+  return base.replace('class="placeholder-icon"', `class="placeholder-icon" style="color:${color}"`);
+}
+
+export const GET_PLACEHOLDER_ICON_SVG_JS = `function getPlaceholderIconSvg(type,v){
+  var base=PLACEHOLDER_ICON_SVGS[type]||PLACEHOLDER_ICON_SVGS.generic;
+  var colors=${JSON.stringify(PLACEHOLDER_OVERLAY_COLORS)};
+  var color=colors[type]||colors.generic;
+  return base.replace('class="placeholder-icon"','class="placeholder-icon" style="color:'+color+'"');
+}`;

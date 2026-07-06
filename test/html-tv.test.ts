@@ -78,5 +78,9 @@ describe('tvPage', () => {
     expect(page).toContain('placeholder-v');
     expect(page).toContain('data-variant=');
     expect(page).toContain('getProductVariant');
+    expect(page).toContain('placeholder-quality-premium');
+    expect(page).toContain('placeholder-variant-overlay');
+    expect(page).toContain('variant-overlay-shape');
+    expect(page).toContain('getPlaceholderVariantOverlay');
   });
 });

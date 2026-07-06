@@ -1,4 +1,4 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS, GET_PLACEHOLDER_VARIANT_OVERLAY_JS, GET_PLACEHOLDER_OVERLAY_COLORS_JS } from './category-icons';
 
 export function menuPage(sessionId: string, config: any, _origin: string): string {
   const escapeHtml = (str: unknown) => String(str ?? '')
@@ -231,8 +231,11 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     background-size:10px 10px;opacity:0.2;
   }
   .placeholder-art{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;width:100%;height:100%;padding:0.5rem;}
-  .placeholder-icon{width:clamp(42px,45%,120px);height:auto;max-width:120px;color:var(--accent);opacity:0.95;}
-  .placeholder-label{font-size:clamp(0.65rem,2.5vw,0.85rem);font-weight:900;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);opacity:0.9;text-align:center;}
+  .placeholder-icon{position:relative;z-index:2;width:clamp(48px,52%,140px);height:auto;max-width:140px;opacity:0.95;}
+  .placeholder-variant-overlay{position:absolute;inset:0;z-index:3;width:100%;height:100%;pointer-events:none;color:var(--accent);opacity:0.88;}
+  .placeholder-variant-overlay .variant-overlay-shape{width:100%;height:100%;display:block;}
+  .placeholder-quality-premium .placeholder-variant-overlay{opacity:1;}
+  .placeholder-label{position:relative;z-index:4;font-size:clamp(0.65rem,2.5vw,0.85rem);font-weight:900;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);opacity:0.9;text-align:center;}
   .product-image-placeholder.placeholder-flower{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
   .product-image-placeholder.placeholder-edibles{background:radial-gradient(circle at 50% 30%,rgba(251,191,36,0.12),transparent 70%),var(--bg-elev);}
   .product-image-placeholder.placeholder-concentrates{background:radial-gradient(circle at 50% 30%,rgba(139,92,246,0.12),transparent 70%),var(--bg-elev);}
@@ -245,11 +248,11 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   .product-image-placeholder.placeholder-other{background:radial-gradient(circle at 50% 30%,rgba(156,163,175,0.12),transparent 70%),var(--bg-elev);}
   .product-image-placeholder.placeholder-generic{background:radial-gradient(circle at 50% 30%,rgba(52,211,153,0.12),transparent 70%),var(--bg-elev);}
   .placeholder-icon{transition:transform 0.2s ease-out,filter 0.2s ease-out;}
-  .product-image-placeholder.placeholder-v1 .placeholder-icon{filter:hue-rotate(18deg) saturate(1.12) brightness(1.04);transform:scale(1.02) rotate(2deg);}
-  .product-image-placeholder.placeholder-v2 .placeholder-icon{filter:hue-rotate(-14deg) saturate(1.08) brightness(0.98);transform:scale(0.98) rotate(-2deg);}
-  .product-image-placeholder.placeholder-v3 .placeholder-icon{filter:hue-rotate(32deg) saturate(1.16) brightness(1.05);transform:scale(1.01) rotate(1deg);}
+  .product-image-placeholder.placeholder-v1 .placeholder-icon{transform:scale(1.02) rotate(2deg);}
+  .product-image-placeholder.placeholder-v2 .placeholder-icon{transform:scale(0.98) rotate(-2deg);}
+  .product-image-placeholder.placeholder-v3 .placeholder-icon{transform:scale(1.01) rotate(1deg);}
   @media(min-width:600px){
-    .placeholder-icon{width:clamp(56px,40%,160px);max-width:160px;}
+    .placeholder-icon{width:clamp(64px,48%,180px);max-width:180px;}
     .placeholder-label{font-size:clamp(0.8rem,2vw,1rem);}
   }
   .product-image-loading{opacity:0;transition:opacity 0.2s;}
@@ -531,20 +534,25 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   }
   ${GET_CATEGORY_TYPE_JS}
   ${GET_PRODUCT_VARIANT_JS}
+  ${GET_PLACEHOLDER_VARIANT_OVERLAY_JS}
+  ${GET_PLACEHOLDER_OVERLAY_COLORS_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
   function categoryIcon(type){
     return '<span class="cat-icon cat-icon-' + type + '" aria-hidden="true">' + categoryIconSvg(type) + '</span>';
   }
-  function placeholderIconSvg(type){
-    return PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+  function basePlaceholderSvg(type){
+    var svg = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+    return svg.replace('class="placeholder-icon"', 'class="placeholder-icon" style="color:' + color + '"');
   }
   function placeholderMarkup(p){
     var type = getCategoryType(p.categoryName || p.name || '');
     var v = getProductVariant(p.id || '', p.name || '');
-    return '<div class="product-image-placeholder placeholder-' + type + ' placeholder-v' + v + '">' +
-      '<div class="placeholder-art">' + placeholderIconSvg(type) + '<div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>' +
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
+    return '<div class="product-image-placeholder placeholder-' + type + ' placeholder-v' + v + ' placeholder-quality-premium">' +
+      '<div class="placeholder-art">' + basePlaceholderSvg(type) + '<div class="placeholder-variant-overlay" aria-hidden="true" style="color:' + color + '">' + getPlaceholderVariantOverlay(v) + '</div><div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>' +
       '</div>';
   }
   function imgMarkup(p){
@@ -560,9 +568,10 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   window.dubmenuImgFallback = function(img){
     var type = img.getAttribute('data-cat') || 'generic';
     var v = img.getAttribute('data-variant') || '0';
+    var color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
     var wrap = document.createElement('div');
-    wrap.className = 'product-image-placeholder placeholder-' + type + ' placeholder-v' + v;
-    wrap.innerHTML = '<div class="placeholder-art">' + placeholderIconSvg(type) + '<div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>';
+    wrap.className = 'product-image-placeholder placeholder-' + type + ' placeholder-v' + v + ' placeholder-quality-premium';
+    wrap.innerHTML = '<div class="placeholder-art">' + basePlaceholderSvg(type) + '<div class="placeholder-variant-overlay" aria-hidden="true" style="color:' + color + '">' + getPlaceholderVariantOverlay(v) + '</div><div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>';
     if(img.parentNode) img.parentNode.replaceChild(wrap, img);
   };
 
