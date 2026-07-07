@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu } from '../src/menu-formatter';
+import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts } from '../src/menu-formatter';
 import type { ScrapedCategory } from '../src/dutchie-scraper';
 
 describe('canonicalCategoryName', () => {
@@ -88,6 +88,81 @@ describe('smartLayout', () => {
   });
 });
 
+describe('TV product selection', () => {
+  it('scores image-rich complete products above sparse products', () => {
+    const rich = scoreProductForTv({
+      id: 'rich',
+      name: 'Premium Blue Dream',
+      price: 48,
+      image: 'https://example.com/blue.jpg',
+      brand: 'Top Shelf',
+      strain: 'sativa',
+      thc: '24%',
+      weight: '3.5g',
+      inStock: true,
+    });
+    const sparse = scoreProductForTv({
+      id: 'sparse',
+      name: 'Mystery Item With A Very Long Product Name That Does Not Read Well On TV',
+      price: 12,
+      inStock: true,
+    });
+    expect(rich).toBeGreaterThan(sparse);
+  });
+
+  it('selects TV products by image and metadata quality, not source order', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'cheap', name: 'Cheap Flower', price: 10, inStock: true },
+          { id: 'hero', name: 'Hero Flower', price: 40, image: 'https://example.com/hero.jpg', brand: 'Hero Brand', strain: 'hybrid', thc: '28%', weight: '3.5g', inStock: true },
+          { id: 'mid', name: 'Mid Flower', price: 30, brand: 'Mid Brand', inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxProductsPerCategory: 2 });
+    expect(selected[0].products.map((p) => p.id)).toEqual(['hero', 'mid']);
+  });
+
+  it('uses bestseller wording and source order as popularity signals', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'vapes',
+        name: 'Vapes',
+        order: 0,
+        products: [
+          { id: 'regular', name: 'Regular Cart', price: 40, image: 'https://example.com/regular.jpg', brand: 'A', inStock: true },
+          { id: 'best', name: 'Best Seller Live Resin Cart', price: 42, image: 'https://example.com/best.jpg', brand: 'B', inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxProductsPerCategory: 1 });
+    expect(selected[0].products[0].id).toBe('best');
+  });
+
+  it('promotes scraped deals into a dedicated Specials category', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'deal', name: 'BOGO Blue Dream Eighths', price: 35, image: 'https://example.com/deal.jpg', brand: 'House', inStock: true },
+          { id: 'regular', name: 'Regular Blue Dream', price: 40, image: 'https://example.com/regular.jpg', brand: 'House', inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxCategories: 2, maxProductsPerCategory: 2 });
+    expect(selected[0].name).toBe('Specials');
+    expect(selected[0].products[0]).toMatchObject({ id: 'deal', special: true, specialLabel: 'BOGO' });
+    expect(selected[1].name).toBe('Flower');
+    expect(selected[1].products.map((p) => p.id)).toEqual(['regular']);
+  });
+});
+
 describe('formatMenu', () => {
   it('returns a fully formatted menu with smart layout', () => {
     const categories: ScrapedCategory[] = [
@@ -98,5 +173,25 @@ describe('formatMenu', () => {
     expect(result.logo).toBe('https://example.com/logo.png');
     expect(result.layout.displayCount).toBe(1);
     expect(result.layout.layoutMode).toBe('grid');
+  });
+
+  it('TV-optimizes imported menus and preserves selected assets', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'first', name: 'First No Image', price: 20, inStock: true },
+          { id: 'asset', name: 'Asset Product', price: 30, image: 'https://example.com/asset.jpg', brand: 'Asset Brand', thc: '26%', weight: '3.5g', inStock: true },
+        ],
+      },
+    ];
+    const result = formatMenu(categories, 'Green Leaf', undefined, { tvOptimize: true, maxTvProductsPerCategory: 1 });
+    expect(result.productCount).toBe(1);
+    expect(result.categories[0].products[0].id).toBe('asset');
+    expect(result.categories[0].products[0].image).toBe('https://example.com/asset.jpg');
+    expect(result.layout.showImages).toBe(true);
+    expect(result.warnings.join(' ')).toContain('TV-ready products');
   });
 });

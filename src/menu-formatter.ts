@@ -19,9 +19,10 @@ export interface FormattedMenu {
   warnings: string[];
 }
 
-const CATEGORY_ORDER = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
+const CATEGORY_ORDER = ['Specials', 'Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
 
 const CATEGORY_SYNONYMS: { canonical: string; needles: string[] }[] = [
+  { canonical: 'Specials', needles: ['special', 'specials', 'deal', 'deals', 'sale', 'promo', 'promotion', 'bogo', 'clearance', 'discount'] },
   { canonical: 'Flower', needles: ['flower', 'bud', 'whole flower', 'ground flower', 'loose flower', 'smalls', 'popcorn'] },
   { canonical: 'Pre-Rolls', needles: ['pre-roll', 'preroll', 'pre roll', 'joint', 'blunt', 'cone'] },
   { canonical: 'Vapes', needles: ['vape', 'vaporizer', 'cartridge', 'cart', 'disposable', 'aio', '510'] },
@@ -52,9 +53,155 @@ function normalizeProductName(name: string): string {
     .slice(0, 40);
 }
 
-export function dedupeAndFormatCategories(
+export interface FormatMenuOptions {
+  maxCategories?: number;
+  maxProductsPerCategory?: number;
+  tvOptimize?: boolean;
+  maxTvCategories?: number;
+  maxTvProductsPerCategory?: number;
+}
+export function isSpecialProduct(p: ScrapedProduct): boolean {
+  if (p.special) return true;
+  const text = `${p.name} ${p.brand || ''} ${p.category || ''} ${p.specialLabel || ''}`.toLowerCase();
+  return /\b(special|deal|sale|promo|promotion|bogo|clearance|discount|staff\s?pick|best\s?seller|top\s?seller)\b/.test(text) || /\b\d{1,2}%\s*off\b/.test(text);
+}
+
+function specialLabel(p: ScrapedProduct): string {
+  if (p.specialLabel) return p.specialLabel;
+  const text = `${p.name} ${p.brand || ''} ${p.category || ''}`.toLowerCase();
+  if (/\bbogo\b/.test(text)) return 'BOGO';
+  const percent = text.match(/\b(\d{1,2}%\s*off)\b/);
+  if (percent) return percent[1].toUpperCase();
+  if (/\b(clearance|sale)\b/.test(text)) return 'Sale';
+  if (/\b(staff\s?pick|best\s?seller|top\s?seller)\b/.test(text)) return 'Best Seller';
+  return 'Special';
+}
+
+
+export function scoreProductForTv(p: ScrapedProduct): number {
+  let score = 0;
+  if (p.inStock === false) score -= 1000;
+  if (p.price > 0) score += 28;
+  if (p.image) score += 60;
+  else score -= 18;
+  if (p.brand) score += 14;
+  if (p.strain) score += 10;
+  if (p.thc) score += 10;
+  if (p.cbd) score += 3;
+  if (p.weight) score += 10;
+  if (isSpecialProduct(p)) score += 34;
+  const nameLength = p.name.trim().length;
+  if (nameLength >= 5 && nameLength <= 38) score += 8;
+  else if (nameLength <= 54) score += 3;
+  if (nameLength > 70) score -= 12;
+  return score;
+}
+
+function categoryPriority(name: string): number {
+  const index = CATEGORY_ORDER.indexOf(name);
+  return index === -1 ? 99 : index;
+}
+
+function tvNameKey(product: ScrapedProduct): string {
+  return product.name
+    .toLowerCase()
+    .replace(/\b(\d+(?:\.\d+)?\s*(g|mg|ml|oz|ct|pack|pk)|indica|sativa|hybrid)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 48);
+}
+
+function tvBrandKey(product: ScrapedProduct): string {
+  return (product.brand || 'unknown').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 32);
+}
+
+function tvStrainKey(product: ScrapedProduct): string {
+  return product.strain || 'unknown';
+}
+
+function bestSellerSignal(product: ScrapedProduct, sourceIndex: number): number {
+  const text = `${product.name} ${product.brand || ''} ${product.category || ''}`.toLowerCase();
+  let score = Math.max(0, 24 - sourceIndex);
+  if (/\b(best\s?seller|top\s?seller|popular|staff\s?pick|featured|customer\s?favorite|favorite|special)\b/.test(text)) {
+    score += 32;
+  }
+  return score;
+}
+
+
+function selectDiverseTvProducts(products: ScrapedProduct[], maxProducts: number): ScrapedProduct[] {
+  const priced = products.filter((p) => p.inStock !== false && p.price > 0);
+  const candidatePool = priced.length > 0 ? priced : products.filter((p) => p.inStock !== false);
+  const candidates = candidatePool
+    .map((product, sourceIndex) => ({
+      product,
+      score: scoreProductForTv(product) + bestSellerSignal(product, sourceIndex),
+    }))
+    .sort((a, b) => {
+      const scoreDelta = b.score - a.score;
+      if (scoreDelta !== 0) return scoreDelta;
+      const priceDelta = b.product.price - a.product.price;
+      if (priceDelta !== 0) return priceDelta;
+      return a.product.name.localeCompare(b.product.name);
+    })
+    .map((item) => item.product);
+
+  const selected: ScrapedProduct[] = [];
+  const nameKeys = new Set<string>();
+  const brandCounts = new Map<string, number>();
+  const strainCounts = new Map<string, number>();
+  const brandLimit = Math.max(2, Math.ceil(maxProducts / 3));
+  const strainLimit = Math.max(2, Math.ceil(maxProducts / 2));
+
+  const tryAdd = (product: ScrapedProduct, enforceDiversity: boolean): void => {
+    if (selected.length >= maxProducts) return;
+    const nameKey = tvNameKey(product);
+    if (nameKey && nameKeys.has(nameKey)) return;
+    const brandKey = tvBrandKey(product);
+    const strainKey = tvStrainKey(product);
+    if (enforceDiversity && (brandCounts.get(brandKey) || 0) >= brandLimit) return;
+    if (enforceDiversity && strainKey !== 'unknown' && (strainCounts.get(strainKey) || 0) >= strainLimit) return;
+    selected.push(product);
+    if (nameKey) nameKeys.add(nameKey);
+    brandCounts.set(brandKey, (brandCounts.get(brandKey) || 0) + 1);
+    strainCounts.set(strainKey, (strainCounts.get(strainKey) || 0) + 1);
+  };
+
+  for (const product of candidates) tryAdd(product, true);
+  for (const product of candidates) tryAdd(product, false);
+  return selected;
+}
+
+export function selectTvProducts(
   categories: ScrapedCategory[],
   opts: { maxCategories?: number; maxProductsPerCategory?: number } = {}
+): ScrapedCategory[] {
+  const maxCategories = opts.maxCategories ?? 6;
+  const maxProductsPerCategory = opts.maxProductsPerCategory ?? 6;
+  const specialProducts = categories.flatMap((cat) =>
+    cat.products
+      .filter(isSpecialProduct)
+      .map((product) => ({ ...product, category: 'Specials', special: true, specialLabel: specialLabel(product) }))
+  );
+  const specialCategory: ScrapedCategory[] = specialProducts.length > 0
+    ? [{
+        id: 'specials',
+        name: 'Specials',
+        order: 0,
+        products: selectDiverseTvProducts(specialProducts, maxProductsPerCategory),
+      }]
+    : [];
+  const regularCategories = categories
+    .map((cat) => ({ ...cat, products: selectDiverseTvProducts(cat.products.filter((product) => !isSpecialProduct(product)), maxProductsPerCategory) }))
+    .filter((cat) => cat.products.length > 0)
+    .sort((a, b) => categoryPriority(a.name) - categoryPriority(b.name));
+  return [...specialCategory, ...regularCategories]
+    .slice(0, maxCategories)
+    .map((cat, index) => ({ ...cat, order: index }));
+}
+
+export function dedupeAndFormatCategories(
+  categories: ScrapedCategory[],
+  opts: FormatMenuOptions = {}
 ): { categories: ScrapedCategory[]; productCount: number; warnings: string[] } {
   const maxCategories = opts.maxCategories ?? 20;
   const maxProductsPerCategory = opts.maxProductsPerCategory ?? 40;
@@ -163,16 +310,30 @@ export function formatMenu(
   categories: ScrapedCategory[],
   dispensaryName: string,
   logo?: string,
-  opts?: { maxCategories?: number; maxProductsPerCategory?: number }
+  opts: FormatMenuOptions = {}
 ): FormattedMenu {
   const deduped = dedupeAndFormatCategories(categories, opts);
-  const layout = smartLayout(deduped.productCount, deduped.categories.length);
+  const tvCategories = opts.tvOptimize
+    ? selectTvProducts(deduped.categories, {
+        maxCategories: opts.maxTvCategories,
+        maxProductsPerCategory: opts.maxTvProductsPerCategory,
+      })
+    : deduped.categories;
+  const productCount = tvCategories.reduce((total, category) => total + category.products.length, 0);
+  const layout = smartLayout(productCount, tvCategories.length);
+  if (opts.tvOptimize) {
+    layout.showImages = true;
+  }
+  const warnings = deduped.warnings.slice();
+  if (opts.tvOptimize && productCount < deduped.productCount) {
+    warnings.push(`Selected ${productCount} TV-ready products from ${deduped.productCount} imported products using image, price, and metadata quality.`);
+  }
   return {
-    categories: deduped.categories,
-    productCount: deduped.productCount,
+    categories: tvCategories,
+    productCount,
     dispensaryName,
     logo,
     layout,
-    warnings: deduped.warnings,
+    warnings,
   };
 }

@@ -47,6 +47,16 @@ export interface ScheduledBanner {
   active: boolean;
 }
 
+
+export interface MenuSpecial {
+  id: string;
+  title: string;
+  description: string;
+  brand?: string;
+  image?: string;
+  active: boolean;
+}
+
 export interface CustomDomain {
   domain: string;
   sessionId: string;
@@ -76,6 +86,7 @@ export interface MenuConfig {
   showCategory: string | null;
   promoBanner: PromoBanner;
   scheduledBanners?: ScheduledBanner[];
+  specials?: MenuSpecial[];
   ageVerified: boolean;
   disclaimer: string;
   complianceState?: string; // 2-letter US state code, e.g. 'CA','NY'. Used to look up a template when `disclaimer` is empty.
@@ -113,6 +124,7 @@ export const DEFAULT_CONFIG: MenuConfig = {
     textColor: '#000000'
   },
   scheduledBanners: [],
+  specials: [],
   ageVerified: false,
   disclaimer: 'Must be 21+ with valid ID. Product availability and pricing are subject to change.',
   analyticsEnabled: true,

@@ -991,7 +991,11 @@ export default {
           BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN,
         });
 
-        const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo);
+        const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo, {
+          tvOptimize: true,
+          maxTvCategories: 6,
+          maxTvProductsPerCategory: 8,
+        });
         const importPayload = {
           dispensaryName: formatted.dispensaryName,
           logo: formatted.logo,

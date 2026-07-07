@@ -111,4 +111,35 @@ describe('tvPage', () => {
     expect(page).toContain('category-spotlight');
     expect(page).toContain('aligned pricing');
   });
+
+  it('renders real product images in price-board rows when assets exist', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: true } });
+    expect(page).toContain('hasImage');
+    expect(page).toContain(' has-image');
+    expect(page).toContain("imgMarkup(p, true)");
+    expect(page).toContain('.layout-grid .product-card.has-image');
+  });
+
+  it('renders manual specials as a dedicated TV category', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: {
+        ...sampleConfig,
+        showImages: true,
+        specials: [
+          {
+            id: 'wyld-10',
+            title: '10% off Wyld gummies',
+            description: 'Brand promotion for today only',
+            brand: 'Wyld',
+            image: 'https://example.com/wyld.jpg',
+            active: true,
+          },
+        ],
+      },
+    });
+    expect(page).toContain('manualSpecialsCategory');
+    expect(page).toContain('categoriesWithManualSpecials');
+    expect(page).toContain('10% off Wyld gummies');
+    expect(page).toContain('promo-price');
+  });
 });

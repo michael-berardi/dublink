@@ -15,6 +15,8 @@ export interface ScrapedProduct {
   brand?: string;
   inStock: boolean;
   strain?: 'indica' | 'sativa' | 'hybrid';
+  special?: boolean;
+  specialLabel?: string;
 }
 
 export interface ScrapedCategory {
@@ -131,15 +133,27 @@ function guessCategory(href: string, text: string, parsedCategory?: string): str
   return 'Other';
 }
 
+function delay(ms: number): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  setTimeout(resolve, ms);
+  return promise;
+}
+
+
 export async function scrapeDutchie(dispensarySlug: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
   const dutchieUrl = `https://dutchie.com/embedded-menu/${dispensarySlug}`;
+  let structuredError: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const structured = await scrapeDutchieStructured(dutchieUrl, token);
-    if (structured.categories.length) {
-      return structured;
+    try {
+      const structured = await scrapeDutchieStructured(dutchieUrl, token);
+      if (structured.categories.length) {
+        return structured;
+      }
+    } catch (err) {
+      structuredError = err instanceof Error ? err.message : 'Structured Dutchie scrape failed';
     }
     if (attempt === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await delay(1500);
     }
   }
 
@@ -151,13 +165,13 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
   });
 
   if (!resp.ok) {
-    throw new Error(`Scrape failed: ${resp.status}`);
+    throw new Error(`Scrape failed: ${resp.status}${structuredError ? ` after structured scrape failed: ${structuredError}` : ''}`);
   }
 
   const data = await resp.json() as { products: Array<{ href: string; text: string; img: string }>; count: number };
 
   if (!data.products || !data.products.length) {
-    throw new Error('No products found. Check the dispensary slug.');
+    throw new Error(`No products found. Check the dispensary slug.${structuredError ? ` Structured scrape failed first: ${structuredError}` : ''}`);
   }
 
   // Deduplicate by slug

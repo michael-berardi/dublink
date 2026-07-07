@@ -375,6 +375,13 @@ export function configPage(sessionId: string, origin: string): string {
 </div>
 
 <div class="card">
+  <h2 class="card-title">Specials Section</h2>
+  <div id="specialsList"></div>
+  <button class="btn btn-secondary btn-sm" type="button" style="margin-top:0.5rem;" onclick="addSpecial()">+ Add Special</button>
+  <div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">These display as a dedicated TV category before products. Use them for brand promos, BOGO offers, staff picks, and non-product discounts.</div>
+</div>
+
+<div class="card">
   <h2 class="card-title">Compliance</h2>
   <div class="field"><label for="disclaimer">Disclaimer Text</label><textarea id="disclaimer" placeholder="Must be 21+ with valid ID." rows="2" oninput="debounceConfig('disclaimer',this.value)"></textarea></div>
 </div>
@@ -614,6 +621,52 @@ function removeScheduledBanner(idx){
   sendConfig('scheduledBanners',config.scheduledBanners);
   renderScheduledBanners();
 }
+function renderSpecials(){
+  var list=document.getElementById('specialsList');
+  if(!list)return;
+  var specials=config.specials||[];
+  if(!specials.length){list.innerHTML='<div style="color:var(--muted);padding:0.5rem;font-size:0.875rem;">No manual specials. Add one for promos like “10% off Wyld gummies” or “BOGO pre-rolls”.</div>';return;}
+  var html='';
+  specials.forEach(function(s,idx){
+    html+='<div data-special-idx="'+idx+'" style="background:var(--surface);border-radius:0.5rem;padding:0.75rem;margin-bottom:0.5rem;">';
+    html+='<input type="text" class="sp-title" aria-label="Special title" value="'+escapeHtml(s.title||'')+'" placeholder="10% off Wyld gummies" style="background:var(--surface2);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);width:100%;margin-bottom:0.5rem;font-size:0.9rem;">';
+    html+='<textarea class="sp-description" aria-label="Special description" placeholder="Short promo details shown on the TV menu" rows="2" style="background:var(--surface2);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);width:100%;margin-bottom:0.5rem;font-size:0.85rem;resize:vertical;">'+escapeHtml(s.description||'')+'</textarea>';
+    html+='<input type="text" class="sp-brand" aria-label="Brand or category" value="'+escapeHtml(s.brand||'')+'" placeholder="Brand/category (optional)" style="background:var(--surface2);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);width:100%;margin-bottom:0.5rem;font-size:0.85rem;">';
+    html+='<input type="url" class="sp-image" aria-label="Special image URL" value="'+escapeHtml(s.image||'')+'" placeholder="Image URL (optional)" style="background:var(--surface2);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);width:100%;margin-bottom:0.5rem;font-size:0.85rem;">';
+    html+='<div style="display:flex;gap:0.5rem;align-items:center;justify-content:space-between;"><span style="color:var(--muted);font-size:0.8rem;">Show on TV</span><div style="display:flex;gap:0.5rem;align-items:center;"><button type="button" class="switch sp-active'+(s.active!==false?' on':'')+'" role="switch" aria-checked="'+(s.active!==false?'true':'false')+'" aria-label="Special active"></button><button type="button" class="btn btn-danger btn-sm sp-remove">Remove</button></div></div>';
+    html+='</div>';
+  });
+  list.innerHTML=html;
+  list.querySelectorAll('[data-special-idx]').forEach(function(row){
+    var i=parseInt(row.dataset.specialIdx);
+    row.querySelector('.sp-title').addEventListener('input',function(){updateSpecial(i,'title',this.value);});
+    row.querySelector('.sp-description').addEventListener('input',function(){updateSpecial(i,'description',this.value);});
+    row.querySelector('.sp-brand').addEventListener('input',function(){updateSpecial(i,'brand',this.value);});
+    row.querySelector('.sp-image').addEventListener('input',function(){updateSpecial(i,'image',this.value);});
+    row.querySelector('.sp-active').addEventListener('click',function(){toggleSwitch(this);updateSpecial(i,'active',this.classList.contains('on'));});
+    row.querySelector('.sp-remove').addEventListener('click',function(){removeSpecial(i);});
+  });
+}
+function saveSpecials(){
+  sendConfig('specials',config.specials||[]);
+}
+function addSpecial(){
+  if(!config.specials)config.specials=[];
+  config.specials.push({id:Date.now().toString(),title:'',description:'',brand:'',image:'',active:true});
+  saveSpecials();
+  renderSpecials();
+}
+function updateSpecial(idx,field,value){
+  if(!config.specials||!config.specials[idx])return;
+  config.specials[idx][field]=value;
+  saveSpecials();
+}
+function removeSpecial(idx){
+  if(!config.specials)return;
+  config.specials.splice(idx,1);
+  saveSpecials();
+  renderSpecials();
+}
 function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show';setTimeout(function(){t.classList.remove('show');},2500);}
 function escapeHtml(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
@@ -696,6 +749,7 @@ function render(){
   document.getElementById('customFont').value=(config.customFont&&config.customFont!=='system')?config.customFont:'';
   setSwitch('promoBannerActive',config.promoBanner?config.promoBanner.active===true:false);
   renderScheduledBanners();
+  renderSpecials();
   document.querySelectorAll('#templateSelect .theme-option').forEach(function(el){var sel=el.dataset.template===(config.template||'default');el.classList.toggle('selected',sel);el.setAttribute('aria-checked',sel?'true':'false');el.setAttribute('tabindex',sel?'0':'-1');});
   renderCategories();
   updateScreenSet();
