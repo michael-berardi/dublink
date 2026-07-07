@@ -16,6 +16,15 @@ export function landingPage(origin: string): string {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DubMenu — Digital Menu Boards for Cannabis Dispensaries</title>
   <meta name="description" content="Turn any TV into a real-time cannabis menu board. Scan to configure from your phone. No app, no install, no hassle.">
+  <link rel="canonical" href="${safeOrigin}/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DubMenu">
+  <meta property="og:title" content="DubMenu — Digital Menu Boards for Cannabis Dispensaries">
+  <meta property="og:description" content="Turn any TV into a real-time cannabis menu board. Scan to configure from your phone. No app, no install, no hassle.">
+  <meta property="og:url" content="${safeOrigin}/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="DubMenu — Digital Menu Boards for Cannabis Dispensaries">
+  <meta name="twitter:description" content="Turn any TV into a real-time cannabis menu board. Scan to configure from your phone. No app, no install, no hassle.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
