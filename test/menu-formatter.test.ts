@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts } from '../src/menu-formatter';
+import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts, isSpecialProduct } from '../src/menu-formatter';
 import type { ScrapedCategory } from '../src/dutchie-scraper';
 
 describe('canonicalCategoryName', () => {
@@ -88,6 +88,26 @@ describe('smartLayout', () => {
   });
 });
 
+describe('isSpecialProduct', () => {
+  it('detects deal wording in the description', () => {
+    expect(isSpecialProduct({ id: 'a', name: 'Regular', price: 35, inStock: true, description: '10% off today only' })).toBe(true);
+    expect(isSpecialProduct({ id: 'a', name: 'Regular', price: 35, inStock: true, description: 'BOGO while supplies last' })).toBe(true);
+  });
+
+  it('detects a markdown from originalPrice when it is higher than price', () => {
+    expect(isSpecialProduct({ id: 'a', name: 'Regular', price: 30, originalPrice: 40, inStock: true })).toBe(true);
+  });
+
+  it('honours the explicit special flag', () => {
+    expect(isSpecialProduct({ id: 'a', name: 'Regular', price: 30, inStock: true, special: true })).toBe(true);
+  });
+
+  it('does not flag ordinary products without special signals', () => {
+    expect(isSpecialProduct({ id: 'a', name: 'Premium Flower', price: 45, inStock: true, description: 'High quality indoor flower' })).toBe(false);
+    expect(isSpecialProduct({ id: 'a', name: 'Premium Flower', price: 45, originalPrice: 45, inStock: true })).toBe(false);
+  });
+});
+
 describe('TV product selection', () => {
   it('scores image-rich complete products above sparse products', () => {
     const rich = scoreProductForTv({
@@ -160,6 +180,65 @@ describe('TV product selection', () => {
     expect(selected[0].products[0]).toMatchObject({ id: 'deal', special: true, specialLabel: 'BOGO' });
     expect(selected[1].name).toBe('Flower');
     expect(selected[1].products.map((p) => p.id)).toEqual(['regular']);
+  });
+
+  it('promotes products with deal descriptions into Specials with derived labels', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'bogo', name: 'BOGO Blue Dream', price: 35, inStock: true, description: 'Buy one get one free' },
+          { id: 'percent', name: 'Sour Diesel', price: 30, inStock: true, description: '20% off this week' },
+          { id: 'regular', name: 'Regular Blue Dream', price: 40, inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxCategories: 2, maxProductsPerCategory: 2 });
+    expect(selected[0].name).toBe('Specials');
+    const ids = selected[0].products.map((p) => p.id);
+    expect(ids).toContain('bogo');
+    expect(ids).toContain('percent');
+    const bogo = selected[0].products.find((p) => p.id === 'bogo');
+    expect(bogo?.specialLabel).toBe('BOGO');
+    const percent = selected[0].products.find((p) => p.id === 'percent');
+    expect(percent?.specialLabel).toBe('20% OFF');
+    expect(selected[1].name).toBe('Flower');
+  });
+
+  it('promotes products with originalPrice markdowns into Specials as Sale', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'markdown', name: 'Markdown Kush', price: 30, originalPrice: 45, inStock: true },
+          { id: 'regular', name: 'Regular Kush', price: 40, inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxCategories: 2, maxProductsPerCategory: 2 });
+    expect(selected[0].name).toBe('Specials');
+    expect(selected[0].products[0]).toMatchObject({ id: 'markdown', special: true, specialLabel: 'Sale' });
+    expect(selected[1].products.map((p) => p.id)).toEqual(['regular']);
+  });
+
+  it('does not promote products whose originalPrice equals price', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'flower',
+        name: 'Flower',
+        order: 0,
+        products: [
+          { id: 'same', name: 'Same Price', price: 40, originalPrice: 40, inStock: true },
+          { id: 'regular', name: 'Regular', price: 40, inStock: true },
+        ],
+      },
+    ];
+    const selected = selectTvProducts(categories, { maxCategories: 2, maxProductsPerCategory: 2 });
+    expect(selected.every((cat) => cat.name !== 'Specials')).toBe(true);
   });
 });
 

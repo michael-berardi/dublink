@@ -201,6 +201,7 @@ export class SessionDurableObject implements DurableObject {
           showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
           showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
           showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : true,
+          tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : false,
         };
         if (!this.ownerAccountId) {
           this.ownerAccountId = accountId;

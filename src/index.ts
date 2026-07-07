@@ -364,7 +364,7 @@ export default {
     // Enforce HTTPS for all production hosts. Cloudflare passes http:// requests
     // through to the worker when Always Use HTTPS is not enabled; redirect them
     // with a permanent redirect so search engines index the secure URL.
-    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
+    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(url.hostname)) {
       url.protocol = 'https:';
       return new Response(null, { status: 301, headers: { Location: url.toString(), ...SECURITY_HEADERS } });
     }
@@ -1008,6 +1008,7 @@ export default {
           showBrand: formatted.layout.showBrand,
           showStrain: formatted.layout.showStrain,
           theme: formatted.layout.theme,
+          tvDemo: raw.demo === true,
         };
 
         if (body.session && SESSION_ID_REGEX.test(body.session)) {

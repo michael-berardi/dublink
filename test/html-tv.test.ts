@@ -142,4 +142,71 @@ describe('tvPage', () => {
     expect(page).toContain('10% off Wyld gummies');
     expect(page).toContain('promo-price');
   });
+
+  it('maps manual special price, originalPrice, and priceTiers to the specials category', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: {
+        ...sampleConfig,
+        showImages: true,
+        specials: [
+          {
+            id: 'tier-deal',
+            title: 'Tiered Flower Special',
+            description: 'Multi-tier promo',
+            price: 25,
+            originalPrice: 40,
+            priceTiers: [
+              { label: '1g', price: '$12' },
+              { label: '8th', price: '$25' },
+            ],
+            active: true,
+          },
+        ],
+      },
+    });
+    expect(page).toContain('originalPrice: typeof s.originalPrice');
+    expect(page).toContain('priceTiers: Array.isArray(s.priceTiers)');
+    expect(page).toContain('price: price');
+    expect(page).toContain('Tiered Flower Special');
+  });
+
+  it('applies the configured font size to the body class', () => {
+    const small = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'small' } });
+    const medium = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'medium' } });
+    const large = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'large' } });
+    expect(small).toContain('<body class="template-default font-small">');
+    expect(medium).toContain('<body class="template-default font-medium">');
+    expect(large).toContain('<body class="template-default font-large">');
+  });
+
+  it('wires brand primary color into the inline override style', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: { ...sampleConfig, primaryColor: '#ff0000' },
+    });
+    expect(page).toContain('function applyBrandStyle');
+    expect(page).toContain('brand-overrides');
+    expect(page).toContain('cfg.primaryColor');
+    expect(page).toContain('--accent:');
+  });
+
+  it('computes the cycle interval from autoScrollSpeed', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true, autoScrollSpeed: 75 } });
+    expect(page).toContain('function getCycleInterval');
+    expect(page).toContain('config.autoScrollSpeed');
+    expect(page).toContain('Math.max(4000, Math.min(20000, 5000 + raw * 100))');
+  });
+
+  it('shows the demo pill when tvDemo is enabled', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, tvDemo: true } });
+    expect(page).toContain('<div class="demo-pill" id="demo-pill">Demo data</div>');
+    expect(page).toContain('config.tvDemo');
+    expect(page).toContain("demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo)");
+  });
+
+  it('uses placeholder images for all cards when showImages is false', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('config && config.showImages === false');
+    expect(page).toContain('placeholderMarkup');
+    expect(page).toContain('card-image-placeholder');
+  });
 });

@@ -1,5 +1,18 @@
 import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS } from './category-icons';
 
+type TvPageInitialConfig = {
+  template?: string;
+  fontSize?: 'small' | 'medium' | 'large';
+  categories?: Array<{ products?: unknown[] }>;
+} & Record<string, unknown>;
+
+const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;
+
+function isTvTemplate(value: unknown): value is (typeof TV_TEMPLATES)[number] {
+  return typeof value === 'string' && (TV_TEMPLATES as readonly string[]).includes(value);
+}
+
+
 // State-specific compliance disclaimer templates. These are generic
 // templates — operators must verify exact wording with their counsel and
 // state regulator before relying on them. [Year] and [Dispensary] are
@@ -15,7 +28,7 @@ const COMPLIANCE_TEMPLATES: Record<string, string> = {
   MI: 'Cannabis is for adults 21 and over only. Do not drive or operate machinery under the influence. Keep out of reach of children and pets.',
 };
 
-export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: any; demo?: boolean }): string {
+export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?: boolean; preview?: boolean; initialConfig?: TvPageInitialConfig; demo?: boolean }): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -27,8 +40,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   const initialConfig = options?.initialConfig;
   const hasInitialMenu = initialConfig &&
     Array.isArray(initialConfig.categories) &&
-    initialConfig.categories.some((cat: any) => Array.isArray(cat.products) && cat.products.length > 0);
-  const initialTemplate = initialConfig?.template || 'default';
+    initialConfig.categories.some((cat) => Array.isArray(cat.products) && cat.products.length > 0);
+  const initialTemplate = isTvTemplate(initialConfig?.template) ? initialConfig.template : 'default';
+  const initialFontSize = initialConfig?.fontSize || 'medium';
   const configOrigin = /^http:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(origin)
     ? origin
     : 'https://dubmenu.com';
@@ -168,6 +182,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:100%;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;}
+  body.font-small{font-size:16px;}
+  body.font-medium{font-size:18px;}
+  body.font-large{font-size:20px;}
+  body.font-small .layout-grid .card-name{font-size:clamp(1.05rem,1.32vw,1.52rem);}
+  body.font-large .layout-grid .card-name{font-size:clamp(1.32rem,1.7vw,2rem);}
+  body.font-small .layout-grid .card-price{font-size:clamp(1.35rem,1.65vw,1.95rem);}
+  body.font-large .layout-grid .card-price{font-size:clamp(1.78rem,2.15vw,2.55rem);}
+  body.font-small .row-name{font-size:0.92em;}
+  body.font-large .row-name{font-size:1.12em;}
   ::-webkit-scrollbar{display:none;width:0;height:0;}
   body{scrollbar-width:none;-ms-overflow-style:none;}
   .phase{position:fixed;inset:0;display:flex;transition:opacity 0.8s ease;}
@@ -230,7 +253,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-grid .product-card.strain-sativa .strain-bar{background:linear-gradient(180deg,#f97316,#c2410c);box-shadow:0 0 16px rgba(249,115,22,0.35);}
   .layout-grid .product-card.strain-hybrid .strain-bar{background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 0 16px rgba(34,197,94,0.35);}
   .layout-grid .card-image{display:block;width:4.4rem;height:4.4rem;object-fit:cover;border-radius:0.48rem;border:1px solid var(--border);background:var(--bg-elev);box-shadow:0 10px 22px rgba(0,0,0,0.22);}
-  .layout-grid .card-image-placeholder{display:none;}
+  .layout-grid .card-image-placeholder{display:flex;align-items:center;justify-content:center;color:var(--accent);opacity:0.92;}
   .layout-grid .card-body{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(8rem,auto);grid-template-areas:"name meta" "desc meta";column-gap:0.8rem;row-gap:0.28rem;min-width:0;}
   .layout-grid .card-name{grid-area:name;font-size:clamp(1.2rem,1.5vw,1.75rem);font-weight:900;line-height:1.06;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;}
   .layout-grid .card-meta{grid-area:meta;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:0.3rem 0.46rem;min-width:8rem;max-width:14rem;font-size:clamp(0.78rem,0.9vw,1rem);line-height:1.15;color:var(--text-muted);}
@@ -303,6 +326,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .tv-info{position:fixed;bottom:1rem;left:1rem;display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.9rem;border-radius:1.5rem;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);border:1px solid var(--border);font-size:0.7rem;font-weight:700;letter-spacing:0.04em;z-index:200;opacity:0;transition:opacity 1s ease;pointer-events:none;text-transform:uppercase;}
   .tv-info.visible{opacity:0.85;}
+  .demo-pill{position:fixed;top:1rem;left:1rem;display:none;padding:0.38rem 0.75rem;border-radius:999px;background:rgba(250,204,21,0.16);border:1px solid rgba(250,204,21,0.34);color:#fde68a;font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;z-index:210;pointer-events:none;backdrop-filter:blur(10px);}
+  .demo-pill.visible{display:block;}
 
   .price-tiers{display:flex;flex-wrap:wrap;gap:0.45rem 0.55rem;margin-top:auto;align-items:stretch;}
   .price-tiers .tier{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0.05rem;padding:0.28rem 0.45rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.5rem;}
@@ -479,7 +504,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 </style>
 </head>
-<body class="template-${initialTemplate}">
+<body class="template-${initialTemplate} font-${initialFontSize}">
 
 <div id="pairing" class="phase"${hasInitialMenu ? ' hidden' : ''}>
   <div class="pairing-glow"></div>
@@ -526,6 +551,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 </div>
 
 <div class="tv-info" id="tv-info"></div>
+<div class="demo-pill" id="demo-pill">Demo data</div>
 
 <script>
 (function(){
@@ -600,6 +626,27 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(!v || typeof v !== 'string') return '';
     if(/[;{}<>]/.test(v)) return '';
     return v;
+  }
+
+  function safeFontSize(v){
+    return v === 'small' || v === 'large' || v === 'medium' ? v : 'medium';
+  }
+  function hexToRgb(hex){
+    var m = /^#([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if(!m) return null;
+    var n = parseInt(m[1], 16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255, hex:'#' + m[1] };
+  }
+  function applyBrandStyle(cfg){
+    var style = document.getElementById('brand-overrides');
+    if(!style){
+      style = document.createElement('style');
+      style.id = 'brand-overrides';
+      document.head.appendChild(style);
+    }
+    var rgb = hexToRgb(cfg && cfg.primaryColor);
+    if(!rgb){ style.textContent = ''; return; }
+    style.textContent = 'body{--accent:' + rgb.hex + ';--accent-dim:rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.13);--accent-glow:rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.30);--border-hover:rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.44);}';
   }
   function imgMarkup(p, lazy){
     var safeUrl = safeImgUrl(p.image);
@@ -734,13 +781,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       name: 'Specials',
       order: -1,
       products: specials.slice(0, 8).map(function(s, idx){
+        var price = typeof s.price === 'number' ? s.price : 0;
         return {
           id: s.id || ('manual-special-' + idx),
           name: s.title,
           description: s.description || '',
           brand: s.brand || '',
           image: s.image || '',
-          price: 0,
+          price: price,
+          originalPrice: typeof s.originalPrice === 'number' ? s.originalPrice : undefined,
+          priceTiers: Array.isArray(s.priceTiers) ? s.priceTiers : undefined,
+          specialLabel: s.specialLabel || 'Special',
           inStock: true,
           isPromo: true
         };
@@ -817,6 +868,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }).filter(function(c){return c.products.length>0;});
   }
 
+  function getCycleInterval(){
+    var raw = Number(config && config.autoScrollSpeed);
+    if(!isFinite(raw)) return 10000;
+    return Math.max(4000, Math.min(20000, 5000 + raw * 100));
+  }
+
   function startCycling(){
     stopCycling();
     if(cycleState.totalPages<=1) return;
@@ -832,7 +889,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         content.style.opacity = '1';
         setTimeout(function(){cycleState.isTransitioning=false;},500);
       },500);
-    },10000);
+    },getCycleInterval());
   }
 
   function stopCycling(){
@@ -906,8 +963,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderMenu(){
     if(!config) return;
-    document.body.className = 'template-' + getActiveTemplate(config);
-    
+    document.body.className = 'template-' + getActiveTemplate(config) + ' font-' + safeFontSize(config.fontSize);
+    applyBrandStyle(config);
+    var demoPill = document.getElementById('demo-pill');
+    if(demoPill) demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo);
     var headerName = document.getElementById('dispensary-name');
     if(config.dispensaryName) headerName.textContent = config.dispensaryName;
     else headerName.textContent = 'DubMenu TV';
@@ -967,7 +1026,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function makeSub(p){
     var parts = [];
-    if(p.strain) parts.push(strainBadge(p));
+    if(current.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.sku) parts.push('SKU ' + escapeHtml(p.sku));
     if(p.weight) parts.push(escapeHtml(p.weight));
     if(p.thc || p.cbd){
@@ -976,12 +1035,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       if(p.cbd) cannabinoids.push('CBD ' + escapeHtml(p.cbd));
       if(cannabinoids.length) parts.push(cannabinoids.join(' / '));
     }
-    if(p.brand) parts.push(escapeHtml(p.brand));
+    if(current.showBrand !== false && p.brand) parts.push(escapeHtml(p.brand));
     return parts.join(' \u00B7 ');
   }
 
   function makePrice(p){
-    if(p && p.isPromo && (!p.price || p.price <= 0)) return '<span class="promo-price">Promo</span>';
+    if(p && current.showPromos === false){
+      return '$' + (typeof p.price === 'number' ? p.price.toFixed(2).replace(/\\.00$/, '') : escapeHtml(p.price || ''));
+    }
+    if(p && p.isPromo && (!p.price || p.price <= 0)) return '<span class="promo-price">' + escapeHtml(p.specialLabel || 'Promo') + '</span>';
     if(p && Array.isArray(p.priceTiers) && p.priceTiers.length > 0){
       var tiers = p.priceTiers.map(function(t){
         var label = escapeHtml((t && t.label) || '');
@@ -1014,11 +1076,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function makeGridMeta(p){
     var parts = [];
-    if(p.strain) parts.push(strainBadge(p));
+    if(current.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.weight) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
     if(p.thc) parts.push('<span>THC ' + escapeHtml(p.thc) + '</span>');
     if(p.cbd) parts.push('<span>CBD ' + escapeHtml(p.cbd) + '</span>');
-    if(p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
+    if(current.showBrand !== false && p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
     return parts.join('');
   }
 
@@ -1033,9 +1095,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var hasImage = !!(p.image && current.showImages !== false);
+        var visual = imgMarkup(p, true);
         var card = document.createElement('div');
-        card.className = 'product-card' + (hasImage ? ' has-image' : '') + gridStrainClass(p) + (p.inStock === false ? ' out-of-stock' : '');
-        card.innerHTML = '<span class="strain-bar"></span>' + (hasImage ? imgMarkup(p, true) : '') + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
+        card.className = 'product-card has-image' + gridStrainClass(p) + (p.inStock === false ? ' out-of-stock' : '');
+        card.innerHTML = '<span class="strain-bar"></span>' + visual + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
         grid.appendChild(card);
       });
       if(cat.products.length < 6) grid.insertAdjacentHTML('beforeend', '<div class="category-spotlight"><div class="spotlight-watermark">' + escapeHtml(cat.name) + '</div><div class="spotlight-mark">' + categoryIcon(getCategoryType(cat.name)) + '</div><div class="spotlight-kicker">Live menu</div><div class="spotlight-title">' + escapeHtml(cat.name) + '</div><div class="spotlight-sub">Fresh availability · aligned pricing · premium display</div></div>');
