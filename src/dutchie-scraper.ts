@@ -60,16 +60,53 @@ function potencyValue(content: any): string | undefined {
   return content.unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
 }
 
-function cleanImageUrl(url: string | undefined): string | undefined {
-  if (!url) return undefined;
+function imageCandidateUrl(value: any): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return firstImageUrl(value);
+  if (typeof value === 'object') {
+    return imageCandidateUrl(
+      value.url ||
+      value.src ||
+      value.href ||
+      value.image ||
+      value.Image ||
+      value.original ||
+      value.thumbnail ||
+      value.medium ||
+      value.large
+    );
+  }
+  return undefined;
+}
+
+function firstImageUrl(...values: any[]): string | undefined {
+  for (const value of values) {
+    if (!value) continue;
+    if (Array.isArray(value)) {
+      const active = value.find((item) => item && item.active !== false) || value[0];
+      const activeUrl = imageCandidateUrl(active);
+      if (activeUrl) return activeUrl;
+      continue;
+    }
+    const url = imageCandidateUrl(value);
+    if (url) return url;
+  }
+  return undefined;
+}
+
+function cleanImageUrl(url: any): string | undefined {
+  const raw = imageCandidateUrl(url);
+  if (!raw) return undefined;
   try {
-    const u = new URL(url);
+    const u = new URL(raw);
+    if (u.protocol !== 'https:') return undefined;
     u.searchParams.set('h', '400');
     u.searchParams.set('w', '400');
     u.searchParams.delete('dpr');
     return u.toString();
   } catch {
-    return url;
+    return undefined;
   }
 }
 
@@ -269,7 +306,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const price = firstNumber(p.recPrices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price);
       if (!price) continue;
 
-      const image = cleanImageUrl(p.Image || p.images?.find((img: any) => img?.active !== false)?.url || p.POSMetaData?.canonicalImgUrl);
+      const image = cleanImageUrl(firstImageUrl(p.Image, p.image, p.images, p.POSMetaData?.canonicalImgUrl, p.posMetadata?.canonicalImgUrl, p.thumbnail, p.productImage));
       const strain = parseStrain(String(p.strainType || parts[2] || rawName));
       const thc = potencyValue(p.THCContent) || parseTHC(rawName);
       const cbd = potencyValue(p.CBDContent);
