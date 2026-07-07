@@ -7,20 +7,20 @@ describe('demo route fallback', () => {
     const res = await SELF.fetch('https://dubmenu.com/menu/demo');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('DubMenu Demo Dispensary');
+    expect(html).toContain('Simply Green');
     expect(html).toContain('OG Kush');
     expect(html).toContain('Blue Dream');
     expect(html).toContain('Flower');
     expect(html).toContain('Edibles');
     expect(html).toContain('placeholder-art');
-    expect(html).toContain('This is a demo menu for visual QA');
+    expect(html).toContain('used with permission for visual QA');
   });
 
   it('/tv/demo renders the menu board phase immediately', async () => {
     const res = await SELF.fetch('https://dubmenu.com/tv/demo');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('DubMenu Demo Dispensary');
+    expect(html).toContain('Simply Green');
     expect(html).toContain('OG Kush');
     expect(html).toContain('Flower');
     // Pairing phase should be hidden when demo menu data is present.
@@ -39,12 +39,12 @@ describe('demo route fallback', () => {
     expect(html).toContain('text-shadow');
   });
 
-  it('createDemoConfig returns a full menu config with starter categories', () => {
+  it('createDemoConfig returns the Simply Green demo menu config', () => {
     const config = createDemoConfig();
-    expect(config.dispensaryName).toBe('DubMenu Demo Dispensary');
+    expect(config.dispensaryName).toBe('Simply Green');
     expect(config.categories.length).toBeGreaterThan(0);
     expect(config.categories.some((cat) => cat.products.length > 0)).toBe(true);
-    expect(config.disclaimer).toContain('demo menu');
+    expect(config.disclaimer).toContain('used with permission');
   });
 
   it('/menu/:unowned still returns empty categories (no fake data leak)', async () => {
@@ -52,7 +52,7 @@ describe('demo route fallback', () => {
     const res = await SELF.fetch(`https://dubmenu.com/menu/${sessionId}`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).not.toContain('DubMenu Demo Dispensary');
+    expect(html).not.toContain('Simply Green');
     expect(html).toContain('No products found');
   });
 });

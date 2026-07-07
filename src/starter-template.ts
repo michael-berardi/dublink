@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG } from './types';
 
 export const STARTER_DISPENSARY_NAME = 'Green Leaf Dispensary';
 
-export const DEMO_DISPENSARY_NAME = 'DubMenu Demo Dispensary';
+export const DEMO_DISPENSARY_NAME = 'Simply Green';
 
 export const starterCategories: Category[] = [
   {
@@ -268,12 +268,98 @@ export const starterCategories: Category[] = [
   },
 ];
 
+type DemoCategorySeed = {
+  name: string;
+  names: string[];
+  weights: string[];
+  thc: string[];
+  prices: number[];
+  strains: Array<'indica' | 'sativa' | 'hybrid' | undefined>;
+};
+
+const simplyGreenDemoSeeds: DemoCategorySeed[] = [
+  {
+    name: 'Flower',
+    names: ['Blue Dream', 'OG Kush', 'Gelato', 'Wedding Cake', 'Sour Diesel', 'Northern Lights'],
+    weights: ['3.5g', '7g', '14g', '1g', '3.5g', '7g'],
+    thc: ['22%', '24%', '20%', '19%', '25%', '21%'],
+    prices: [35, 40, 75, 12, 38, 72],
+    strains: ['hybrid', 'indica', 'hybrid', 'indica', 'sativa', 'indica'],
+  },
+  {
+    name: 'Pre-Rolls',
+    names: ['Classic Joint', 'Infused Pre-Roll', 'Sativa Blend', 'Indica Blend', 'Hybrid Roll', 'Mini Joints'],
+    weights: ['1g', '1.5g', '1g', '1g', '1g', '0.5g'],
+    thc: ['18%', '28%', '20%', '22%', '19%', '17%'],
+    prices: [8, 15, 9, 10, 9, 14],
+    strains: ['hybrid', 'hybrid', 'sativa', 'indica', 'hybrid', 'hybrid'],
+  },
+  {
+    name: 'Vapes',
+    names: ['Blueberry Cart', 'Tangie Disposable', 'Live Resin Pod', 'CBD Cartridge', 'Pineapple Express', 'Nighttime Indica'],
+    weights: ['1g', '0.5g', '1g', '1g', '1g', '0.5g'],
+    thc: ['82%', '78%', '85%', '0%', '80%', '75%'],
+    prices: [45, 35, 55, 40, 48, 32],
+    strains: ['hybrid', 'sativa', 'hybrid', undefined, 'sativa', 'indica'],
+  },
+  {
+    name: 'Concentrates',
+    names: ['Live Resin', 'Shatter', 'Badder', 'Crumble', 'Rosin', 'Sugar'],
+    weights: ['1g', '1g', '1g', '1g', '1g', '1g'],
+    thc: ['78%', '80%', '82%', '75%', '85%', '79%'],
+    prices: [50, 40, 55, 38, 70, 48],
+    strains: ['hybrid', 'hybrid', 'indica', 'sativa', 'hybrid', 'hybrid'],
+  },
+  {
+    name: 'Edibles',
+    names: ['Gummies 100mg', 'Chocolate Bar', 'Mints', 'Cookies', 'Brownie', 'Soda'],
+    weights: ['100mg', '100mg', '100mg', '50mg', '100mg', '10mg'],
+    thc: ['10mg', '10mg', '10mg', '10mg', '10mg', '10mg'],
+    prices: [18, 22, 15, 12, 14, 8],
+    strains: [undefined, undefined, undefined, undefined, undefined, undefined],
+  },
+  {
+    name: 'Tinctures',
+    names: ['THC Tincture', 'CBD Tincture', '1:1 Ratio', 'Sleep Formula', 'Daytime Drops', 'Relief Tincture'],
+    weights: ['30ml', '30ml', '30ml', '30ml', '30ml', '30ml'],
+    thc: ['300mg', '0mg', '150mg', '100mg', '200mg', '250mg'],
+    prices: [45, 40, 55, 50, 48, 52],
+    strains: [undefined, undefined, undefined, 'indica', 'sativa', 'hybrid'],
+  },
+  {
+    name: 'Topicals',
+    names: ['CBD Balm', 'THC Lotion', 'Transdermal Patch', 'Relief Cream', 'Muscle Rub', 'Face Serum'],
+    weights: ['2oz', '4oz', '1pk', '3oz', '2oz', '1oz'],
+    thc: ['200mg', '100mg', '50mg', '150mg', '250mg', '75mg'],
+    prices: [35, 30, 12, 28, 32, 45],
+    strains: [undefined, undefined, undefined, undefined, undefined, undefined],
+  },
+];
+
+function createSimplyGreenDemoCategories(): Category[] {
+  return simplyGreenDemoSeeds.map((seed, categoryIndex) => ({
+    id: seed.name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    name: seed.name,
+    order: categoryIndex,
+    products: seed.names.map((name, productIndex) => ({
+      id: `simply-green-${seed.name.toLowerCase()}-${productIndex + 1}`.replace(/[^a-z0-9_-]/g, '-'),
+      name: `${name} ${seed.weights[productIndex]}`,
+      price: seed.prices[productIndex],
+      thc: seed.thc[productIndex],
+      weight: seed.weights[productIndex],
+      brand: 'Simply Green',
+      strain: seed.strains[productIndex],
+      inStock: true,
+    })),
+  }));
+}
+
 export function createDemoConfig(): MenuConfig {
   return {
     ...JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as MenuConfig,
     dispensaryName: DEMO_DISPENSARY_NAME,
-    categories: JSON.parse(JSON.stringify(starterCategories)) as Category[],
-    disclaimer: 'This is a demo menu for visual QA. Product availability and pricing are not real.',
+    categories: createSimplyGreenDemoCategories(),
+    disclaimer: 'This Simply Green demo menu is used with permission for visual QA. Product availability and pricing should be verified before use.',
     tvDemo: true,
   };
 }

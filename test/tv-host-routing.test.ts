@@ -74,7 +74,7 @@ describe('tv.dubmenu.com routing', () => {
     const res = await SELF.fetch(`${TV_BASE}/tv/demo`);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('DubMenu Demo Dispensary');
+    expect(html).toContain('Simply Green');
     expect(html).toContain('OG Kush');
     expect(html).toContain('Flower');
     expect(html).toContain('id="pairing" class="phase" hidden');
@@ -93,7 +93,7 @@ describe('tv.dubmenu.com routing', () => {
     expect(html).toContain('id="menu" class="phase" hidden>');
     // It must not accidentally render the owned demo session (Bills House) or the
     // demo menu board.
-    expect(html).not.toContain('DubMenu Demo Dispensary');
+    expect(html).not.toContain('Simply Green');
     expect(html).not.toContain('Bills House');
     // It runs in demo mode so it does not contact the persistent demo session DO.
     expect(html).toContain('DEMO_MODE = true');

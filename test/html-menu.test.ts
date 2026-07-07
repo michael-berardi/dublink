@@ -50,7 +50,7 @@ describe('menuPage', () => {
 
   it('renders demo config with category pills and placeholder icons', () => {
     const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');
-    expect(page).toContain('DubMenu Demo Dispensary');
+    expect(page).toContain('Simply Green');
     expect(page).toContain('Flower');
     expect(page).toContain('Pre-Rolls');
     expect(page).toContain('OG Kush');
