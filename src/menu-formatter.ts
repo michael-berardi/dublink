@@ -62,17 +62,17 @@ export interface FormatMenuOptions {
 }
 export function isSpecialProduct(p: ScrapedProduct): boolean {
   if (p.special) return true;
-  const text = `${p.name} ${p.brand || ''} ${p.category || ''} ${p.specialLabel || ''}`.toLowerCase();
-  return /\b(special|deal|sale|promo|promotion|bogo|clearance|discount|staff\s?pick|best\s?seller|top\s?seller)\b/.test(text) || /\b\d{1,2}%\s*off\b/.test(text);
+  const text = `${p.name} ${p.brand || ''} ${p.category || ''} ${p.description || ''} ${p.specialLabel || ''}`.toLowerCase();
+  return /\b(special|deal|sale|promo|promotion|bogo|clearance|discount|staff\s?pick|best\s?seller|top\s?seller|bundle|mix\s*&\s*match|happy\s*hour|flash\s*sale)\b/.test(text) || /\b\d{1,2}%\s*off\b/.test(text) || (p.originalPrice !== undefined && p.originalPrice > p.price);
 }
 
 function specialLabel(p: ScrapedProduct): string {
   if (p.specialLabel) return p.specialLabel;
-  const text = `${p.name} ${p.brand || ''} ${p.category || ''}`.toLowerCase();
+  const text = `${p.name} ${p.brand || ''} ${p.category || ''} ${p.description || ''}`.toLowerCase();
   if (/\bbogo\b/.test(text)) return 'BOGO';
   const percent = text.match(/\b(\d{1,2}%\s*off)\b/);
   if (percent) return percent[1].toUpperCase();
-  if (/\b(clearance|sale)\b/.test(text)) return 'Sale';
+  if (/\b(clearance|sale|promo|promotion|deal|discount|bundle|mix\s*&\s*match|happy\s*hour|flash\s*sale)\b/.test(text) || (p.originalPrice !== undefined && p.originalPrice > p.price)) return 'Sale';
   if (/\b(staff\s?pick|best\s?seller|top\s?seller)\b/.test(text)) return 'Best Seller';
   return 'Special';
 }

@@ -1,13 +1,7 @@
-import { MenuConfig, DEFAULT_CONFIG } from './types';
-import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse } from './auth';
+import { MenuConfig, DEFAULT_CONFIG, type Category, type Product, type PriceTier, type MenuSpecial } from './types';
+import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
 
-export interface Env {
-  SESSION: DurableObjectNamespace;
-  ACCOUNTS: DurableObjectNamespace;
-  BROWSERLESS_TOKEN?: string;
-  RESEND_API_KEY?: string;
-  AUTH_SECRET?: string;
-}
+export interface Env extends AuthEnv {}
 
 interface WSConnection {
   socket: WebSocket;
@@ -24,8 +18,23 @@ interface StoredSession {
 
 interface WSMessage {
   type: string;
-  payload?: any;
+  payload?: unknown;
 }
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+type CategoryAddPayload = { name: string; order?: number };
+type CategoryUpdatePayload = { categoryId: string; updates: UnknownRecord };
+type ProductAddPayload = { categoryId: string; product: UnknownRecord & { name: string; price: number } };
+type ProductUpdatePayload = { categoryId: string; productId: string; updates: UnknownRecord };
+type ReorderPayload =
+  | { type: 'categories'; ids: string[] }
+  | { type: 'products'; categoryId: string; ids: string[] };
+
 
 // Security and rate limiting constants
 const MAX_MESSAGE_SIZE = 65536; // 64KB
@@ -99,10 +108,9 @@ export class SessionDurableObject implements DurableObject {
     }
   }
 
-  private isValidConfig(config: any): config is MenuConfig {
+  private isValidConfig(config: unknown): config is MenuConfig {
+    if (!isRecord(config)) return false;
     return (
-      config &&
-      typeof config === 'object' &&
       typeof config.dispensaryName === 'string' &&
       typeof config.primaryColor === 'string' &&
       typeof config.secondaryColor === 'string' &&
@@ -114,11 +122,11 @@ export class SessionDurableObject implements DurableObject {
       typeof config.showPromos === 'boolean' &&
       typeof config.currency === 'string' &&
       Array.isArray(config.categories) &&
-      ['auto', 'grid', 'list', 'cards', 'compact', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'].includes(config.layout) &&
-      ['auto', 'columns', 'pricelist', 'compact', 'grid'].includes(config.layoutMode) &&
-      ['small', 'medium', 'large'].includes(config.fontSize) &&
-      ['dark', 'light'].includes(config.theme) &&
-      ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(config.template) &&
+      this.sanitizeLayout(config.layout) !== undefined &&
+      this.sanitizeLayoutMode(config.layoutMode) !== undefined &&
+      this.sanitizeFontSize(config.fontSize) !== undefined &&
+      this.sanitizeTheme(config.theme) !== undefined &&
+      ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
       typeof config.displayCount === 'number'
     );
   }
@@ -143,13 +151,7 @@ export class SessionDurableObject implements DurableObject {
         if (!token) {
           return new Response('Invalid or expired session', { status: 403 });
         }
-        // Add account id to request for handleWebSocket
-        request = new Request(request.url, {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-        });
-        (request as any).dubmenuAccountId = token.accountId;
+        return this.handleWebSocket(request, role || 'tv', token.accountId);
       }
       return this.handleWebSocket(request, role || 'tv');
     }
@@ -181,8 +183,8 @@ export class SessionDurableObject implements DurableObject {
         if (this.ownerAccountId && this.ownerAccountId !== accountId) {
           return new Response(JSON.stringify({ ok: false, error: 'Not owner' }), { status: 403 });
         }
-        const data = await request.json() as any;
-        if (!this.isValidImportedCategories(data?.categories) || data.categories.length < 1) {
+        const data: unknown = await request.json();
+        if (!isRecord(data) || !this.isValidImportedCategories(data.categories) || data.categories.length < 1) {
           return new Response(JSON.stringify({ ok: false, error: 'Invalid imported categories' }), { status: 400 });
         }
 
@@ -191,10 +193,14 @@ export class SessionDurableObject implements DurableObject {
           dispensaryName: typeof data.dispensaryName === 'string' ? this.sanitizeString(data.dispensaryName) : this.config.dispensaryName,
           logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
           categories: this.sanitizeCategories(data.categories),
-          layoutMode: 'auto',
-          showImages: true,
-          showBrand: true,
-          showStrain: true,
+          layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
+          layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? 'auto',
+          fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
+          theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
+          displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
+          showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
+          showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
+          showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : true,
         };
         if (!this.ownerAccountId) {
           this.ownerAccountId = accountId;
@@ -356,7 +362,7 @@ export class SessionDurableObject implements DurableObject {
     return new Response('Not found', { status: 404 });
   }
 
-  private handleWebSocket(request: Request, role: 'tv' | 'phone'): Response {
+  private handleWebSocket(request: Request, role: 'tv' | 'phone', accountId?: string): Response {
     if (this.connections.size >= MAX_CONNECTIONS) {
       return new Response('Too many connections', { status: 503 });
     }
@@ -366,7 +372,6 @@ export class SessionDurableObject implements DurableObject {
     server.accept();
 
     const connId = crypto.randomUUID();
-    const accountId = (request as any).dubmenuAccountId as string | undefined;
 
     this.connections.set(connId, { socket: server, role, id: connId, lastPong: Date.now(), accountId });
 
@@ -383,9 +388,9 @@ export class SessionDurableObject implements DurableObject {
           server.close(1008, 'Rate limit exceeded');
           return;
         }
-        const msg: WSMessage = JSON.parse(data);
-        if (!msg || typeof msg.type !== 'string') return;
-        await this.handleMessage(msg, connId, server);
+        const msg = JSON.parse(data) as unknown;
+        if (!isRecord(msg) || typeof msg.type !== 'string') return;
+        await this.handleMessage(msg as WSMessage, connId, server);
       } catch (err) {
         console.error('WS message error:', err);
       }
@@ -506,6 +511,9 @@ export class SessionDurableObject implements DurableObject {
           else if (sanitizedPayload.complianceState === '') sanitizedPayload.complianceState = '';
           else delete sanitizedPayload.complianceState;
         }
+        if (sanitizedPayload.specials !== undefined) {
+          sanitizedPayload.specials = this.sanitizeSpecials(sanitizedPayload.specials);
+        }
         this.config = { ...this.config, ...sanitizedPayload };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
@@ -563,7 +571,7 @@ export class SessionDurableObject implements DurableObject {
       case 'category_remove': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
-        if (!payload || typeof payload !== 'object' || typeof payload.categoryId !== 'string') return;
+        if (!isRecord(payload) || typeof payload.categoryId !== 'string') return;
 
         this.config.categories = this.config.categories.filter(
           c => c.id !== payload.categoryId
@@ -585,21 +593,19 @@ export class SessionDurableObject implements DurableObject {
           id: `prod-${crypto.randomUUID()}`,
           name: this.sanitizeString(payload.product.name),
           price: this.sanitizePrice(payload.product.price),
-          originalPrice: payload.product.originalPrice ? this.sanitizePrice(payload.product.originalPrice) : undefined,
-        thc: payload.product.thc ? this.sanitizeString(payload.product.thc) : undefined,
-        cbd: payload.product.cbd ? this.sanitizeString(payload.product.cbd) : undefined,
-        description: payload.product.description ? this.sanitizeString(payload.product.description) : undefined,
-        image: payload.product.image ? this.sanitizeString(payload.product.image) : undefined,
-        weight: payload.product.weight ? this.sanitizeString(payload.product.weight) : undefined,
-        brand: payload.product.brand ? this.sanitizeString(payload.product.brand) : undefined,
-        sku: payload.product.sku ? this.sanitizeString(payload.product.sku) : undefined,
-        inStock: payload.product.inStock !== false,
-        strain: ['indica', 'sativa', 'hybrid'].includes(payload.product.strain) 
-          ? payload.product.strain 
-          : undefined,
-        isPromo: Boolean(payload.product.isPromo),
-        priceTiers: payload.product.priceTiers ? this.sanitizePriceTiers(payload.product.priceTiers) : undefined
-      };
+          originalPrice: typeof payload.product.originalPrice === 'number' ? this.sanitizePrice(payload.product.originalPrice) : undefined,
+          thc: typeof payload.product.thc === 'string' ? this.sanitizeString(payload.product.thc) : undefined,
+          cbd: typeof payload.product.cbd === 'string' ? this.sanitizeString(payload.product.cbd) : undefined,
+          description: typeof payload.product.description === 'string' ? this.sanitizeString(payload.product.description) : undefined,
+          image: typeof payload.product.image === 'string' ? this.sanitizeString(payload.product.image) : undefined,
+          weight: typeof payload.product.weight === 'string' ? this.sanitizeString(payload.product.weight) : undefined,
+          brand: typeof payload.product.brand === 'string' ? this.sanitizeString(payload.product.brand) : undefined,
+          sku: typeof payload.product.sku === 'string' ? this.sanitizeString(payload.product.sku) : undefined,
+          inStock: payload.product.inStock !== false,
+          strain: this.sanitizeStrain(payload.product.strain),
+          isPromo: Boolean(payload.product.isPromo),
+          priceTiers: this.sanitizePriceTiers(payload.product.priceTiers)
+        };
 
         targetCat.products.push(product);
         await this.persistConfig();
@@ -626,36 +632,34 @@ export class SessionDurableObject implements DurableObject {
           prod.price = this.sanitizePrice(updates.price);
         }
         if (updates.originalPrice !== undefined) {
-          prod.originalPrice = updates.originalPrice ? this.sanitizePrice(updates.originalPrice) : undefined;
+          prod.originalPrice = typeof updates.originalPrice === 'number' ? this.sanitizePrice(updates.originalPrice) : undefined;
         }
         if (updates.thc !== undefined) {
-          prod.thc = updates.thc ? this.sanitizeString(updates.thc) : undefined;
+          prod.thc = typeof updates.thc === 'string' ? this.sanitizeString(updates.thc) : undefined;
         }
         if (updates.cbd !== undefined) {
-          prod.cbd = updates.cbd ? this.sanitizeString(updates.cbd) : undefined;
+          prod.cbd = typeof updates.cbd === 'string' ? this.sanitizeString(updates.cbd) : undefined;
         }
         if (updates.description !== undefined) {
-          prod.description = updates.description ? this.sanitizeString(updates.description) : undefined;
+          prod.description = typeof updates.description === 'string' ? this.sanitizeString(updates.description) : undefined;
         }
         if (updates.image !== undefined) {
-          prod.image = updates.image ? this.sanitizeString(updates.image) : undefined;
+          prod.image = typeof updates.image === 'string' ? this.sanitizeString(updates.image) : undefined;
         }
         if (updates.weight !== undefined) {
-          prod.weight = updates.weight ? this.sanitizeString(updates.weight) : undefined;
+          prod.weight = typeof updates.weight === 'string' ? this.sanitizeString(updates.weight) : undefined;
         }
         if (updates.brand !== undefined) {
-          prod.brand = updates.brand ? this.sanitizeString(updates.brand) : undefined;
+          prod.brand = typeof updates.brand === 'string' ? this.sanitizeString(updates.brand) : undefined;
         }
         if (updates.sku !== undefined) {
-          prod.sku = updates.sku ? this.sanitizeString(updates.sku) : undefined;
+          prod.sku = typeof updates.sku === 'string' ? this.sanitizeString(updates.sku) : undefined;
         }
         if (updates.inStock !== undefined) {
           prod.inStock = Boolean(updates.inStock);
         }
         if (updates.strain !== undefined) {
-          prod.strain = ['indica', 'sativa', 'hybrid'].includes(updates.strain) 
-            ? updates.strain 
-            : undefined;
+          prod.strain = this.sanitizeStrain(updates.strain);
         }
         if (updates.isPromo !== undefined) {
           prod.isPromo = Boolean(updates.isPromo);
@@ -672,7 +676,7 @@ export class SessionDurableObject implements DurableObject {
       case 'product_remove': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
-        if (!payload || typeof payload !== 'object' || 
+        if (!isRecord(payload) ||
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
 
         const rc = this.config.categories.find(c => c.id === payload.categoryId);
@@ -687,7 +691,7 @@ export class SessionDurableObject implements DurableObject {
       case 'product_toggle_stock': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
-        if (!payload || typeof payload !== 'object' || 
+        if (!isRecord(payload) ||
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
 
         const tc = this.config.categories.find(c => c.id === payload.categoryId);
@@ -705,7 +709,7 @@ export class SessionDurableObject implements DurableObject {
       case 'product_move': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
-        if (!payload || typeof payload !== 'object' ||
+        if (!isRecord(payload) ||
             typeof payload.fromCategoryId !== 'string' ||
             typeof payload.toCategoryId !== 'string' ||
             typeof payload.productId !== 'string') return;
@@ -745,8 +749,8 @@ export class SessionDurableObject implements DurableObject {
           // products array in the requested id order.
           const byId = new Map(cat.products.map(p => [p.id, p]));
           const reordered = payload.ids
-            .map((id: string) => byId.get(id))
-            .filter((p: any): p is NonNullable<typeof p> => Boolean(p));
+            .map((id) => byId.get(id))
+            .filter((p): p is NonNullable<typeof p> => Boolean(p));
           cat.products = reordered;
         }
 
@@ -757,14 +761,14 @@ export class SessionDurableObject implements DurableObject {
     }
   }
 
-  private isValidConfigUpdate(payload: any): boolean {
-    if (!payload || typeof payload !== 'object') return false;
+  private isValidConfigUpdate(payload: unknown): payload is Partial<MenuConfig> {
+    if (!isRecord(payload)) return false;
     
-    const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor', 
+    const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
                          'layoutMode', 'fontSize', 'theme', 'autoScroll', 'autoScrollSpeed', 'showCategory',
-                         'promoBanner', 'scheduledBanners', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
+                         'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
                          'displayCount'];
     
     for (const key of Object.keys(payload)) {
@@ -773,73 +777,67 @@ export class SessionDurableObject implements DurableObject {
     
     if (payload.dispensaryName !== undefined && typeof payload.dispensaryName !== 'string') return false;
     if (payload.logo !== undefined && typeof payload.logo !== 'string') return false;
-    if (payload.primaryColor !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor)) return false;
-    if (payload.secondaryColor !== undefined && !/^#[0-9A-Fa-f]{6}$/.test(payload.secondaryColor)) return false;
+    if (payload.primaryColor !== undefined && (typeof payload.primaryColor !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor))) return false;
+    if (payload.secondaryColor !== undefined && (typeof payload.secondaryColor !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(payload.secondaryColor))) return false;
     if (payload.currency !== undefined && typeof payload.currency !== 'string') return false;
     if (payload.customFont !== undefined && typeof payload.customFont !== 'string') return false;
-    if (payload.layout !== undefined && !['auto', 'grid', 'list', 'cards', 'compact', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'].includes(payload.layout)) return false;
-    if (payload.fontSize !== undefined && !['small', 'medium', 'large'].includes(payload.fontSize)) return false;
-    if (payload.theme !== undefined && !['dark', 'light'].includes(payload.theme)) return false;
+    if (payload.layout !== undefined && this.sanitizeLayout(payload.layout) === undefined) return false;
+    if (payload.fontSize !== undefined && this.sanitizeFontSize(payload.fontSize) === undefined) return false;
+    if (payload.theme !== undefined && this.sanitizeTheme(payload.theme) === undefined) return false;
     if (payload.template !== undefined && !['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(payload.template)) return false;
-    if (payload.layoutMode !== undefined && !['auto', 'columns', 'pricelist', 'compact', 'grid'].includes(payload.layoutMode)) return false;
-    if (payload.displayCount !== undefined && (typeof payload.displayCount !== 'number' || payload.displayCount < 1 || payload.displayCount > 4)) return false;
+    if (payload.layoutMode !== undefined && this.sanitizeLayoutMode(payload.layoutMode) === undefined) return false;
+    if (payload.displayCount !== undefined && this.sanitizeDisplayCount(payload.displayCount) === undefined) return false;
     if (payload.autoScrollSpeed !== undefined && (typeof payload.autoScrollSpeed !== 'number' || payload.autoScrollSpeed < 1 || payload.autoScrollSpeed > 200)) return false;
     if (payload.showCategory !== undefined && payload.showCategory !== null && typeof payload.showCategory !== 'string') return false;
-    if (payload.promoBanner !== undefined && (typeof payload.promoBanner !== 'object' || !payload.promoBanner)) return false;
+    if (payload.promoBanner !== undefined && !isRecord(payload.promoBanner)) return false;
+    if (payload.specials !== undefined && !Array.isArray(payload.specials)) return false;
     if (payload.disclaimer !== undefined && typeof payload.disclaimer !== 'string') return false;
     if (payload.complianceState !== undefined && payload.complianceState !== '' && this.sanitizeComplianceState(payload.complianceState) === undefined) return false;
     
     return true;
   }
 
-  private isValidCategoryAdd(payload: any): boolean {
-    return payload && typeof payload === 'object' && 
+  private isValidCategoryAdd(payload: unknown): payload is CategoryAddPayload {
+    return isRecord(payload) &&
            typeof payload.name === 'string' && payload.name.trim().length > 0 &&
-           payload.name.trim().length <= 100;
+           payload.name.trim().length <= 100 &&
+           (payload.order === undefined || typeof payload.order === 'number');
   }
 
-  private isValidCategoryUpdate(payload: any): boolean {
-    return payload && typeof payload === 'object' && 
+  private isValidCategoryUpdate(payload: unknown): payload is CategoryUpdatePayload {
+    return isRecord(payload) &&
            typeof payload.categoryId === 'string' &&
-           payload.updates && typeof payload.updates === 'object' &&
-           (payload.updates.name === undefined || 
+           isRecord(payload.updates) &&
+           (payload.updates.name === undefined ||
             (typeof payload.updates.name === 'string' && payload.updates.name.trim().length <= 100)) &&
            (payload.updates.order === undefined || typeof payload.updates.order === 'number');
   }
 
-  private isValidProductAdd(payload: any): boolean {
-    return payload && typeof payload === 'object' && 
+  private isValidProductAdd(payload: unknown): payload is ProductAddPayload {
+    return isRecord(payload) &&
            typeof payload.categoryId === 'string' &&
-           payload.product && typeof payload.product === 'object' &&
+           isRecord(payload.product) &&
            typeof payload.product.name === 'string' && payload.product.name.trim().length > 0 &&
            payload.product.name.trim().length <= 100 &&
-           typeof payload.product.price === 'number' && !isNaN(payload.product.price) &&
+           typeof payload.product.price === 'number' && !Number.isNaN(payload.product.price) &&
            payload.product.price >= 0 && payload.product.price <= 1000000;
   }
 
-  private isValidProductUpdate(payload: any): boolean {
-    return payload && typeof payload === 'object' && 
+  private isValidProductUpdate(payload: unknown): payload is ProductUpdatePayload {
+    return isRecord(payload) &&
            typeof payload.categoryId === 'string' &&
            typeof payload.productId === 'string' &&
-           payload.updates && typeof payload.updates === 'object';
+           isRecord(payload.updates);
   }
 
-  // Validate a batch reorder payload.
-  //   { type: 'categories', ids: string[] }
-  //   { type: 'products', categoryId: string, ids: string[] }
-  // `ids` must be a non-empty array of unique strings whose set exactly
-  // matches the existing items of the target scope. This rejects unknown
-  // ids, partial lists, and duplicate ids atomically.
-  private isValidReorder(payload: any): boolean {
-    if (!payload || typeof payload !== 'object') return false;
+  private isValidReorder(payload: unknown): payload is ReorderPayload {
+    if (!isRecord(payload)) return false;
     if (payload.type !== 'categories' && payload.type !== 'products') return false;
     if (payload.type === 'products' && typeof payload.categoryId !== 'string') return false;
     if (!Array.isArray(payload.ids)) return false;
-    // Every id must be a string.
-    if (!payload.ids.every((id: any) => typeof id === 'string' && id.length > 0 && id.length <= 120)) return false;
-    // No duplicate ids allowed.
+    if (!payload.ids.every((id) => typeof id === 'string' && id.length > 0 && id.length <= 120)) return false;
     const seen = new Set<string>();
-    for (const id of payload.ids as string[]) {
+    for (const id of payload.ids) {
       if (seen.has(id)) return false;
       seen.add(id);
     }
@@ -847,7 +845,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.type === 'categories') {
       const existing = new Set(this.config.categories.map(c => c.id));
       if (payload.ids.length !== existing.size) return false;
-      if (!(payload.ids as string[]).every((id: string) => existing.has(id))) return false;
+      if (!payload.ids.every((id) => existing.has(id))) return false;
       return true;
     }
 
@@ -855,43 +853,60 @@ export class SessionDurableObject implements DurableObject {
     if (!cat) return false;
     const existingProducts = new Set(cat.products.map(p => p.id));
     if (payload.ids.length !== existingProducts.size) return false;
-    if (!(payload.ids as string[]).every((id: string) => existingProducts.has(id))) return false;
+    if (!payload.ids.every((id) => existingProducts.has(id))) return false;
     return true;
   }
 
-  private isValidImportedCategories(categories: any): boolean {
+  private isValidImportedCategories(categories: unknown): categories is unknown[] {
     if (!Array.isArray(categories) || categories.length > 20) return false;
-    return categories.every((cat) => (
-      cat && typeof cat === 'object' &&
-      typeof cat.name === 'string' && cat.name.trim().length > 0 &&
-      Array.isArray(cat.products) && cat.products.length <= 500 &&
-      cat.products.every((p: any) => p && typeof p === 'object' && typeof p.name === 'string' && typeof p.price === 'number')
-    ));
+    return categories.every((cat) => {
+      if (!isRecord(cat) || typeof cat.name !== 'string' || cat.name.trim().length === 0 || !Array.isArray(cat.products) || cat.products.length > 500) return false;
+      return cat.products.every((product) => isRecord(product) && typeof product.name === 'string' && typeof product.price === 'number');
+    });
   }
 
-  private sanitizeCategories(categories: any[]) {
-    return categories.slice(0, 20).map((cat, index) => ({
-      id: typeof cat.id === 'string' ? this.sanitizeString(cat.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) : `cat-${index}`,
-      name: this.sanitizeString(cat.name),
-      order: typeof cat.order === 'number' ? Math.max(0, Math.floor(cat.order)) : index,
-      products: (cat.products || []).slice(0, 500).map((p: any, pIndex: number) => ({
-        id: typeof p.id === 'string' ? this.sanitizeString(p.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120) : `prod-${index}-${pIndex}`,
-        name: this.sanitizeString(p.name),
-        price: this.sanitizePrice(p.price),
-        originalPrice: typeof p.originalPrice === 'number' ? this.sanitizePrice(p.originalPrice) : undefined,
-        thc: typeof p.thc === 'string' ? this.sanitizeString(p.thc) : undefined,
-        cbd: typeof p.cbd === 'string' ? this.sanitizeString(p.cbd) : undefined,
-        description: typeof p.description === 'string' ? this.sanitizeString(p.description) : undefined,
-        image: typeof p.image === 'string' ? this.sanitizeString(p.image) : undefined,
-        weight: typeof p.weight === 'string' ? this.sanitizeString(p.weight) : undefined,
-        brand: typeof p.brand === 'string' ? this.sanitizeString(p.brand) : undefined,
-        sku: typeof p.sku === 'string' ? this.sanitizeString(p.sku) : undefined,
-        inStock: p.inStock !== false,
-        strain: ['indica', 'sativa', 'hybrid'].includes(p.strain) ? p.strain : undefined,
-        isPromo: Boolean(p.isPromo),
-        priceTiers: this.sanitizePriceTiers(p.priceTiers),
-      })),
-    })).sort((a, b) => a.order - b.order);
+  private sanitizeCategories(categories: unknown[]): Category[] {
+    return categories.slice(0, 20).filter(isRecord).map((cat, index) => {
+      const rawProducts = Array.isArray(cat.products) ? cat.products : [];
+      return {
+        id: typeof cat.id === 'string' ? this.sanitizeString(cat.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) : `cat-${index}`,
+        name: typeof cat.name === 'string' ? this.sanitizeString(cat.name) : `Category ${index + 1}`,
+        order: typeof cat.order === 'number' ? Math.max(0, Math.floor(cat.order)) : index,
+        products: rawProducts.slice(0, 500).filter(isRecord).map((p, pIndex): Product => ({
+          id: typeof p.id === 'string' ? this.sanitizeString(p.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120) : `prod-${index}-${pIndex}`,
+          name: typeof p.name === 'string' ? this.sanitizeString(p.name) : `Product ${pIndex + 1}`,
+          price: typeof p.price === 'number' ? this.sanitizePrice(p.price) : 0,
+          originalPrice: typeof p.originalPrice === 'number' ? this.sanitizePrice(p.originalPrice) : undefined,
+          thc: typeof p.thc === 'string' ? this.sanitizeString(p.thc) : undefined,
+          cbd: typeof p.cbd === 'string' ? this.sanitizeString(p.cbd) : undefined,
+          description: typeof p.description === 'string' ? this.sanitizeString(p.description) : undefined,
+          image: typeof p.image === 'string' ? this.sanitizeString(p.image) : undefined,
+          weight: typeof p.weight === 'string' ? this.sanitizeString(p.weight) : undefined,
+          brand: typeof p.brand === 'string' ? this.sanitizeString(p.brand) : undefined,
+          sku: typeof p.sku === 'string' ? this.sanitizeString(p.sku) : undefined,
+          inStock: p.inStock !== false,
+          strain: this.sanitizeStrain(p.strain),
+          isPromo: Boolean(p.isPromo),
+          priceTiers: this.sanitizePriceTiers(p.priceTiers),
+        })),
+      };
+    }).sort((a, b) => a.order - b.order);
+  }
+
+  private sanitizeSpecials(specials: unknown): MenuSpecial[] {
+    if (!Array.isArray(specials)) return [];
+    return specials.slice(0, 12).filter(isRecord).map((special, index): MenuSpecial => ({
+      id: typeof special.id === 'string' ? this.sanitizeString(special.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120) : `special-${index}`,
+      title: typeof special.title === 'string' ? this.sanitizeString(special.title) : '',
+      description: typeof special.description === 'string' ? this.sanitizeString(special.description) : '',
+      brand: typeof special.brand === 'string' ? this.sanitizeString(special.brand) : undefined,
+      image: typeof special.image === 'string' ? this.sanitizeString(special.image) : undefined,
+      price: typeof special.price === 'number' ? this.sanitizePrice(special.price) : undefined,
+      originalPrice: typeof special.originalPrice === 'number' ? this.sanitizePrice(special.originalPrice) : undefined,
+      priceTiers: this.sanitizePriceTiers(special.priceTiers),
+      specialLabel: typeof special.specialLabel === 'string' ? this.sanitizeString(special.specialLabel) : undefined,
+      active: special.active !== false,
+    })).filter((special) => special.title.length > 0);
   }
 
   private sanitizeString(str: string): string {
@@ -902,11 +917,11 @@ export class SessionDurableObject implements DurableObject {
     return Math.max(0, Math.min(1000000, Math.round(price * 100) / 100));
   }
 
-  private sanitizePriceTiers(tiers: any): { label: string; price: string }[] | undefined {
+  private sanitizePriceTiers(tiers: unknown): PriceTier[] | undefined {
     if (!Array.isArray(tiers)) return undefined;
-    const out: { label: string; price: string }[] = [];
+    const out: PriceTier[] = [];
     for (const t of tiers) {
-      if (!t || typeof t !== 'object') continue;
+      if (!isRecord(t)) continue;
       const label = typeof t.label === 'string' ? t.label.trim().slice(0, 20) : '';
       const price = typeof t.price === 'string' ? t.price.trim().slice(0, 20) : '';
       if (!label || !price) continue;
@@ -916,10 +931,38 @@ export class SessionDurableObject implements DurableObject {
     return out.length > 0 ? out : undefined;
   }
 
-  private sanitizeComplianceState(value: any): string | undefined {
+  private sanitizeComplianceState(value: unknown): string | undefined {
     if (typeof value !== 'string') return undefined;
     const v = value.trim().toUpperCase();
     return /^[A-Z]{2}$/.test(v) ? v : undefined;
+  }
+
+  private sanitizeStrain(value: unknown): Product['strain'] {
+    return value === 'indica' || value === 'sativa' || value === 'hybrid' ? value : undefined;
+  }
+
+  private sanitizeLayout(value: unknown): MenuConfig['layout'] | undefined {
+    if (value === 'auto' || value === 'grid' || value === 'list' || value === 'cards' || value === 'compact' || value === 'poster' || value === 'cinematic' || value === 'showcase' || value === 'editorial' || value === 'sparse') return value;
+    return undefined;
+  }
+
+  private sanitizeLayoutMode(value: unknown): MenuConfig['layoutMode'] | undefined {
+    if (value === 'auto' || value === 'columns' || value === 'pricelist' || value === 'compact' || value === 'grid') return value;
+    return undefined;
+  }
+
+  private sanitizeFontSize(value: unknown): MenuConfig['fontSize'] | undefined {
+    if (value === 'small' || value === 'medium' || value === 'large') return value;
+    return undefined;
+  }
+
+  private sanitizeTheme(value: unknown): MenuConfig['theme'] | undefined {
+    if (value === 'dark' || value === 'light') return value;
+    return undefined;
+  }
+
+  private sanitizeDisplayCount(value: unknown): number | undefined {
+    return typeof value === 'number' && value >= 1 && value <= 4 ? value : undefined;
   }
 
   private async requireModifyPermission(conn: WSConnection, server: WebSocket): Promise<boolean> {
@@ -939,7 +982,7 @@ export class SessionDurableObject implements DurableObject {
     if (!this.ownerAccountId) return false;
     if (this.ownerAccountId !== conn.accountId) return false;
     if (!this.env.ACCOUNTS) return false;
-    const account = await getAccount(this.env as any, conn.accountId);
+    const account = await getAccount(this.env, conn.accountId);
     if (!account) return false;
     return isSubscriptionActive(account);
   }

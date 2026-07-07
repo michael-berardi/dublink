@@ -409,7 +409,7 @@ export async function scrapeDutchieDemo(slug: string): Promise<{ categories: Scr
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 
-  const categoryDefs: { name: string; names: string[]; weights: string[]; thc: string[]; prices: number[]; strains: ('indica' | 'sativa' | 'hybrid')[] }[] = [
+  const categoryDefs: { name: string; names: string[]; weights: string[]; thc: string[]; prices: number[]; strains: Array<'indica' | 'sativa' | 'hybrid' | undefined> }[] = [
     {
       name: 'Flower',
       names: ['Blue Dream', 'OG Kush', 'Gelato', 'Wedding Cake', 'Sour Diesel', 'Northern Lights'],

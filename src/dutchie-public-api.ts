@@ -41,6 +41,17 @@ interface DutchiePublicProduct {
   Prices?: number[];
   prices?: number[];
   medicalPrices?: number[];
+  salePrice?: number;
+  specialPrice?: number;
+  discountPrice?: number;
+  discountedPrice?: number;
+  originalPrice?: number;
+  retailPrice?: number;
+  listPrice?: number;
+  special?: boolean;
+  specials?: Array<{ name?: string; title?: string; label?: string; description?: string }>;
+  discount?: string | number | { label?: string; description?: string; name?: string };
+  deal?: string | { label?: string; description?: string; name?: string };
   Options?: string[];
   options?: string[];
   POSMetaData?: {
@@ -62,6 +73,11 @@ interface DutchiePublicProduct {
   sku?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+
 function firstNumber(values: unknown): number {
   if (Array.isArray(values)) {
     const v = values.find((item) => typeof item === 'number' && item > 0);
@@ -74,9 +90,10 @@ function potencyValue(content: unknown): string | undefined {
   if (!content) return undefined;
   if (typeof content === 'string') return content;
   if (typeof content === 'number') return `${content}%`;
-  const value = (content as any).value;
+  if (!isRecord(content)) return undefined;
+  const value = content.value;
   if (typeof value !== 'number') return undefined;
-  return (content as any).unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
+  return content.unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
 }
 
 function cleanImageUrl(url: string | undefined): string | undefined {
@@ -156,6 +173,37 @@ function extractCannabinoid(product: DutchiePublicProduct, name: string): string
   return typeof match.value === 'number' ? `${match.value}${unit}` : undefined;
 }
 
+
+function dealLabelText(product: DutchiePublicProduct): string {
+  const specialText = Array.isArray(product.specials)
+    ? product.specials
+        .map((special) => [special.label, special.title, special.name, special.description].filter(Boolean).join(' '))
+        .join(' ')
+    : '';
+  const discountText = typeof product.discount === 'string' || typeof product.discount === 'number'
+    ? String(product.discount)
+    : product.discount
+      ? [product.discount.label, product.discount.name, product.discount.description].filter(Boolean).join(' ')
+      : '';
+  const dealText = typeof product.deal === 'string'
+    ? product.deal
+    : product.deal
+      ? [product.deal.label, product.deal.name, product.deal.description].filter(Boolean).join(' ')
+      : '';
+  return `${specialText} ${discountText} ${dealText} ${product.description || ''}`.trim();
+}
+
+function dealLabel(product: DutchiePublicProduct, originalPrice?: number): string | undefined {
+  const text = dealLabelText(product);
+  if (/\bbogo\b/i.test(text)) return 'BOGO';
+  const percent = text.match(/\b(\d{1,2}%\s*off)\b/i);
+  if (percent) return percent[1].toUpperCase();
+  if (/\b(staff\s?pick|best\s?seller|top\s?seller)\b/i.test(text)) return 'Best Seller';
+  if (/\b(bundle|mix\s*&\s*match|happy\s*hour|flash\s*sale|special|deal|sale|promo|promotion|clearance|discount)\b/i.test(text)) return 'Special';
+  if (originalPrice) return 'Sale';
+  return undefined;
+}
+
 function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
   const rawName = String(p.name || 'Product');
   const category = guessCategory(
@@ -166,7 +214,7 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
       p.type
   );
   const brand = p.brand || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName;
-  const price =
+  const basePrice =
     firstNumber(p.recPrices) ||
     firstNumber(p.prices) ||
     firstNumber(p.Prices) ||
@@ -177,7 +225,12 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     firstNumber(p.POSMetaData?.children?.[0]?.price) ||
     firstNumber(p.posMetadata?.children?.[0]?.recPrice) ||
     firstNumber(p.posMetadata?.children?.[0]?.price);
-  if (!price) return null;
+  if (!basePrice) return null;
+  const dealPrice = firstNumber([p.salePrice, p.specialPrice, p.discountPrice, p.discountedPrice]);
+  const explicitOriginalPrice = firstNumber([p.originalPrice, p.retailPrice, p.listPrice]);
+  const price = dealPrice && dealPrice < basePrice ? dealPrice : basePrice;
+  const originalPrice = explicitOriginalPrice && explicitOriginalPrice > price ? explicitOriginalPrice : dealPrice && dealPrice < basePrice ? basePrice : undefined;
+  const specialLabel = dealLabel(p, originalPrice);
   const image = cleanImageUrl(
     p.image ||
       p.images?.find((img) => img?.active !== false)?.url ||
@@ -199,6 +252,7 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     id: String(p.id || p.name || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, '-'),
     name: rawName.replace(/\s+/g, ' ').trim(),
     price,
+    originalPrice,
     sku: p.sku || p.id,
     category,
     thc,
@@ -208,6 +262,8 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     brand,
     inStock: true,
     strain,
+    special: Boolean(p.special || specialLabel || originalPrice),
+    specialLabel,
   };
 }
 

@@ -54,6 +54,10 @@ export interface MenuSpecial {
   description: string;
   brand?: string;
   image?: string;
+  price?: number;
+  originalPrice?: number;
+  priceTiers?: PriceTier[];
+  specialLabel?: string;
   active: boolean;
 }
 
