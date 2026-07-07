@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { scrapeDutchie } from '../src/dutchie-scraper';
 import { formatMenu } from '../src/menu-formatter';
 import { tvPage } from '../src/html-tv';
+import { bundleImportedImages } from '../src/upload';
 
 const DUTCHIE_MENU_URL = 'https://overseer-browser-production.up.railway.app/scrape-dutchie-menu';
 const BROWSERLESS_URL = 'https://overseer-browser-production.up.railway.app/scrape-specials';
@@ -217,5 +218,120 @@ describe('Dutchie scraper image extraction', () => {
     expect(page).toContain('var initialConfig = ');
     expect(page).toContain('imgMarkup(p, true)');
     expect(page).toContain('class="card-image card-image-loading"');
+  });
+});
+
+describe('Dutchie import image bundling', () => {
+  let originalFetch: typeof fetch;
+
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  const pngBytes = new Uint8Array([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89,
+  ]);
+
+  it('stores imported product images in R2 and rewrites menu config to DubMenu upload URLs', async () => {
+    const stored = new Map<string, { body: Blob; metadata?: R2PutOptions }>();
+    const uploads = {
+      put: vi.fn(async (key: string, body: Blob, options?: R2PutOptions) => {
+        stored.set(key, { body, metadata: options });
+        return null;
+      }),
+    } as unknown as R2Bucket;
+
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url === 'https://images.dutchie.com/bundled.jpg?h=400&w=400') {
+        return new Response(pngBytes, { status: 200, headers: { 'Content-Type': 'image/png' } });
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const config = {
+      categories: [
+        {
+          products: [
+            { name: 'Bundled Flower', image: 'https://images.dutchie.com/bundled.jpg?h=400&w=400' },
+            { name: 'Same Image', image: 'https://images.dutchie.com/bundled.jpg?h=400&w=400' },
+          ],
+        },
+      ],
+      showImages: true,
+    };
+
+    const result = await bundleImportedImages(config, { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+    const first = result.config.categories?.[0]?.products?.[0]?.image;
+    const second = result.config.categories?.[0]?.products?.[1]?.image;
+
+    expect(result.warnings).toEqual([]);
+    expect(first).toMatch(/^https:\/\/dubmenu\.com\/api\/uploads\/acct_123\/import-[a-f0-9]+\.png$/);
+    expect(second).toBe(first);
+    expect(uploads.put).toHaveBeenCalledTimes(1);
+    expect([...stored.keys()][0]).toMatch(/^acct_123\/import-[a-f0-9]+\.png$/);
+  });
+
+  it('omits external image URLs that cannot be safely ingested', async () => {
+    const uploads = {
+      put: vi.fn(),
+    } as unknown as R2Bucket;
+
+    globalThis.fetch = vi.fn(async () => new Response('not-image', { status: 200, headers: { 'Content-Type': 'text/plain' } })) as unknown as typeof fetch;
+
+    const config = {
+      categories: [
+        {
+          products: [
+            { name: 'HTTP Image', image: 'http://images.dutchie.com/insecure.jpg' },
+            { name: 'Bad Image', image: 'https://images.dutchie.com/bad.jpg' },
+          ],
+        },
+      ],
+      showImages: true,
+    };
+
+    const result = await bundleImportedImages(config, { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+
+    expect(result.config.categories?.[0]?.products?.[0]?.image).toBeUndefined();
+    expect(result.config.categories?.[0]?.products?.[1]?.image).toBeUndefined();
+    expect(result.warnings).toHaveLength(2);
+    expect(uploads.put).not.toHaveBeenCalled();
+  });
+
+  it('omits imported image URLs when R2 storage rejects the bundled image', async () => {
+    const uploads = {
+      put: vi.fn(async () => {
+        throw new Error('R2 unavailable');
+      }),
+    } as unknown as R2Bucket;
+
+    globalThis.fetch = vi.fn(async () => new Response(pngBytes, { status: 200, headers: { 'Content-Type': 'image/png' } })) as unknown as typeof fetch;
+
+    const config = {
+      categories: [
+        {
+          products: [
+            { name: 'Storage Fail Image', image: 'https://images.dutchie.com/storage-fail.jpg' },
+          ],
+        },
+      ],
+      showImages: true,
+    };
+
+    const result = await bundleImportedImages(config, { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+
+    expect(result.config.categories?.[0]?.products?.[0]?.image).toBeUndefined();
+    expect(result.warnings).toHaveLength(1);
+    expect(uploads.put).toHaveBeenCalledTimes(1);
   });
 });

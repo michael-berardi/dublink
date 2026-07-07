@@ -623,7 +623,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function safeImgUrl(url){
     if(!url || typeof url !== 'string') return '';
     var u = url.trim();
-    if(/^\\/api\\/uploads\\//.test(u) || /^https:\\/\\//.test(u) || /^data:image\\//.test(u)) return u;
+    if(/^\\/api\\/uploads\\//.test(u) || /^data:image\\//.test(u)) return u;
+    try {
+      var parsed = new URL(u, location.origin);
+      var host = parsed.hostname;
+      if(parsed.protocol === 'https:' && parsed.pathname.indexOf('/api/uploads/') === 0 && (host === location.hostname || host === 'dubmenu.com' || host === 'www.dubmenu.com')) return parsed.toString();
+    } catch(e) {}
     return '';
   }
   function safeCssValue(v){

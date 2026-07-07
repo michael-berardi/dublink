@@ -24,7 +24,7 @@ import { resolveMenuSource } from './menu-source';
 import { formatMenu } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
 import { createStarterConfig, createDemoConfig } from './starter-template';
-import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload } from './upload';
+import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload, bundleImportedImages } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
 
 export { SessionDurableObject, AccountDurableObject, StatsDurableObject, DomainDurableObject };
@@ -1011,25 +1011,29 @@ export default {
           tvDemo: raw.demo === true,
         };
 
+        const bundled = await bundleImportedImages(importPayload, env, auth.accountId);
+        const bundledPayload = bundled.config;
+
+
         if (body.session && SESSION_ID_REGEX.test(body.session)) {
           const id = env.SESSION.idFromName(body.session);
           const session = env.SESSION.get(id);
           await session.fetch(new Request('https://internal/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
-            body: JSON.stringify(importPayload),
+            body: JSON.stringify(bundledPayload),
           }));
           await addSessionToAccount(env, auth.accountId, body.session);
         }
 
         return jsonResponse({
           success: true,
-          ...importPayload,
+          ...bundledPayload,
           source: raw.source,
           apiUsed: raw.apiUsed,
           apiError: raw.apiError,
           demo: raw.demo,
-          warnings: [...(raw.warnings || []), ...formatted.warnings],
+          warnings: [...(raw.warnings || []), ...formatted.warnings, ...bundled.warnings],
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Import failed';

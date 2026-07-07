@@ -55,6 +55,84 @@ function generateKey(accountId: string, ext: string): string {
   return `${accountId}/${uuid}.${ext}`;
 }
 
+async function importKey(accountId: string, sourceUrl: string, ext: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sourceUrl));
+  const hex = [...new Uint8Array(digest)]
+    .slice(0, 12)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${accountId}/import-${hex}.${ext}`;
+}
+
+function isDubMenuUploadUrl(value: string, appUrl?: string): boolean {
+  if (value.startsWith('/api/uploads/')) return true;
+  if (!appUrl) return false;
+  try {
+    const url = new URL(value);
+    const app = new URL(appUrl);
+    return url.origin === app.origin && url.pathname.startsWith('/api/uploads/');
+  } catch {
+    return false;
+  }
+}
+
+async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; detected: MagicSignature; size: number } | null> {
+  let url: URL;
+  try {
+    url = new URL(sourceUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'https:') return null;
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Accept: 'image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1' },
+    });
+    if (!res.ok) return null;
+    const buffer = await res.arrayBuffer();
+    if (buffer.byteLength > MAX_IMAGE_SIZE) return null;
+    const detected = detectImage(new Uint8Array(buffer));
+    if (!detected) return null;
+    return { body: new Blob([buffer], { type: detected.contentType }), detected, size: buffer.byteLength };
+  } catch {
+    return null;
+  }
+}
+
+async function ingestImportedImage(
+  sourceUrl: string,
+  env: { UPLOADS?: R2Bucket; APP_URL?: string },
+  accountId: string,
+  cache: Map<string, Promise<string | undefined>>
+): Promise<string | undefined> {
+  if (!sourceUrl || isDubMenuUploadUrl(sourceUrl, env.APP_URL)) return sourceUrl;
+  if (!env.UPLOADS) return undefined;
+  let pending = cache.get(sourceUrl);
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const image = await fetchImportedImage(sourceUrl);
+        if (!image) return undefined;
+        const key = await importKey(accountId, sourceUrl, image.detected.ext);
+        await env.UPLOADS!.put(key, image.body, {
+          httpMetadata: { contentType: image.detected.contentType },
+          customMetadata: {
+            originalName: sanitizeFilename(new URL(sourceUrl).pathname.split('/').pop() || 'imported-image'),
+            sourceUrl: sourceUrl.slice(0, 256),
+            contentType: image.detected.contentType,
+            size: String(image.size),
+          },
+        });
+        return `${env.APP_URL || ''}/api/uploads/${key}`;
+      } catch {
+        return undefined;
+      }
+    })();
+    cache.set(sourceUrl, pending);
+  }
+  return pending;
+}
+
 function bytesEqual(buf: Uint8Array, offset: number, expected: readonly number[]): boolean {
   if (offset + expected.length > buf.length) return false;
   for (let i = 0; i < expected.length; i++) {
@@ -81,6 +159,51 @@ function detectImage(bytes: Uint8Array): MagicSignature | null {
 function sanitizeFilename(name: string): string {
   const cleaned = (name || '').replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64);
   return cleaned.length > 0 ? cleaned : 'image';
+}
+
+export async function bundleImportedImages(
+  config: {
+    logo?: unknown;
+    categories?: Array<{ products?: Array<{ image?: unknown }> }>;
+    specials?: Array<{ image?: unknown }>;
+    [key: string]: unknown;
+  },
+  env: { UPLOADS?: R2Bucket; APP_URL?: string },
+  accountId: string
+): Promise<{ config: typeof config; warnings: string[] }> {
+  const warnings: string[] = [];
+  const cache = new Map<string, Promise<string | undefined>>();
+  const rewrite = async (value: unknown, label: string): Promise<string | undefined> => {
+    if (typeof value !== 'string' || !value.trim()) return undefined;
+    const bundled = await ingestImportedImage(value.trim(), env, accountId, cache);
+    if (!bundled && value.trim().startsWith('http')) {
+      warnings.push(`Image omitted for ${label}: DubMenu could not ingest a safe HTTPS image`);
+    }
+    return bundled;
+  };
+
+  const logo = await rewrite(config.logo, 'logo');
+  if (logo) config.logo = logo;
+  else if (typeof config.logo === 'string' && config.logo.startsWith('http')) delete config.logo;
+
+  const categories = Array.isArray(config.categories) ? config.categories : [];
+  for (const category of categories) {
+    const products = Array.isArray(category.products) ? category.products : [];
+    for (const product of products) {
+      const bundled = await rewrite(product.image, 'product');
+      if (bundled) product.image = bundled;
+      else if (typeof product.image === 'string' && product.image.startsWith('http')) delete product.image;
+    }
+  }
+
+  const specials = Array.isArray(config.specials) ? config.specials : [];
+  for (const special of specials) {
+    const bundled = await rewrite(special.image, 'special');
+    if (bundled) special.image = bundled;
+    else if (typeof special.image === 'string' && special.image.startsWith('http')) delete special.image;
+  }
+
+  return { config, warnings };
 }
 
 export async function handleImageUpload(

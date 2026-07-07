@@ -10,7 +10,7 @@ describe('tvPage', () => {
         name: 'Flower',
         order: 0,
         products: [
-          { id: 'p1', name: 'OG Kush', price: 45, inStock: true, image: 'https://example.com/og.jpg' },
+          { id: 'p1', name: 'OG Kush', price: 45, inStock: true, image: 'https://dubmenu.com/api/uploads/acct_123/og.jpg' },
         ],
       },
     ],
@@ -19,16 +19,37 @@ describe('tvPage', () => {
 
   it('renders product images when showImages is true', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: true } });
-    expect(page).toContain('https://example.com/og.jpg');
+    expect(page).toContain('https://dubmenu.com/api/uploads/acct_123/og.jpg');
     expect(page).toContain('card-image');
   });
 
   it('hides product images when showImages is false', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
     // The image URL may still appear in the embedded JSON, but no product card should render it as an <img src>.
-    const imgSrcMatches = page.match(/<img[^>]+src="https:\/\/example\.com\/og\.jpg"/g) || [];
+    const imgSrcMatches = page.match(/<img[^>]+src="https:\/\/dubmenu\.com\/api\/uploads\/acct_123\/og\.jpg"/g) || [];
     expect(imgSrcMatches.length).toBe(0);
     expect(page).toContain('card-image-placeholder');
+  });
+
+  it('does not render external CDN image URLs from stale configs', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: {
+        ...sampleConfig,
+        showImages: true,
+        categories: [
+          {
+            id: 'cat-flower',
+            name: 'Flower',
+            order: 0,
+            products: [
+              { id: 'p1', name: 'OG Kush', price: 45, inStock: true, image: 'https://images.dutchie.com/og.jpg' },
+            ],
+          },
+        ],
+      },
+    });
+    expect(page).toContain("parsed.pathname.indexOf('/api/uploads/') === 0");
+    expect(page).not.toContain("if(/^\\\\/api\\\\/uploads\\\\//.test(u) || /^https:");
   });
 
   it('uses production origin for the QR code on non-local hosts', () => {
