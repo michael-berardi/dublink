@@ -333,6 +333,15 @@ ${sections || '<p style="text-align:center;color:#666;">No in-stock products to 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // Enforce HTTPS for all production hosts. Cloudflare passes http:// requests
+    // through to the worker when Always Use HTTPS is not enabled; redirect them
+    // with a permanent redirect so search engines index the secure URL.
+    if (url.protocol === 'http:' && url.hostname !== 'localhost') {
+      url.protocol = 'https:';
+      return new Response(null, { status: 301, headers: { Location: url.toString(), ...SECURITY_HEADERS } });
+    }
+
     const path = url.pathname;
     const origin = appUrl(env, request);
     const secure = url.protocol === 'https:';
