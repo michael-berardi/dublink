@@ -200,9 +200,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .header-logo{max-height:52px;max-width:200px;object-fit:contain;display:none;}
   .header-logo.show{display:block;}
   .dispensary-name{font-size:clamp(2rem,3vw,3rem);font-weight:950;letter-spacing:-0.035em;line-height:1.05;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 32px var(--accent-glow);}
-  .menu-content{flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem 2rem 1rem;width:100%;}
+  .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem 2rem 1rem;width:100%;}
   .menu-content.content-refresh{animation:content-refresh 420ms ease-out;}
-  .menu-footer{flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.45rem 2rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.2),transparent),var(--bg);font-size:0.72rem;color:var(--text-faint);gap:1rem;}
+  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.55rem 2rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.38),rgba(0,0,0,0.16)),var(--bg);font-size:0.8rem;font-weight:800;color:var(--text-muted);gap:1rem;text-transform:uppercase;letter-spacing:0.055em;}
   .footer-right{text-align:center;max-width:90%;}
 
   .age-gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:500;gap:1.5rem;padding:2rem;text-align:center;}
@@ -218,18 +218,32 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;color:inherit;}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
   .layout-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:stretch;}
-  .layout-grid .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.045),rgba(0,0,0,0.12)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:0.95rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
+  .layout-grid .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:0.95rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
   .layout-grid .category-header{margin-bottom:0.75rem;padding-bottom:0.65rem;border-bottom:1px solid var(--border);}
-  .layout-grid .grid-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:0.75rem;flex:1;min-height:0;}
-  .layout-grid .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.055),rgba(255,255,255,0.012)),var(--bg-card);border:1px solid var(--border);border-radius:0.8rem;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 14px 34px rgba(0,0,0,0.18);transition:border-color 0.3s,transform 0.2s;position:relative;isolation:isolate;min-height:0;}
+  .layout-grid .grid-products{display:flex;flex-direction:column;gap:0.48rem;flex:1;min-height:0;}
+  .layout-grid .product-table-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;padding:0 0.25rem 0.1rem 0.55rem;color:var(--text-faint);font-size:clamp(0.62rem,0.72vw,0.82rem);font-weight:900;letter-spacing:0.11em;text-transform:uppercase;}
+  .layout-grid .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);border:1px solid var(--border);border-left:0;border-radius:0.62rem;overflow:hidden;display:grid;grid-template-columns:0.38rem minmax(0,1fr) auto;align-items:center;gap:0.8rem;min-height:5.65rem;padding:0.65rem 0.78rem 0.65rem 0;box-shadow:0 12px 28px rgba(0,0,0,0.16);transition:border-color 0.3s,transform 0.2s;position:relative;isolation:isolate;}
   .layout-grid .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
-  .layout-grid .card-image,.layout-grid .card-image-placeholder{position:absolute;right:-1.4rem;bottom:-1.2rem;width:48%;height:72%;object-fit:cover;background:transparent;border:0;opacity:0.16;z-index:0;filter:saturate(0.9);}
-  .layout-grid .card-body{position:relative;z-index:1;padding:0.8rem;display:flex;flex-direction:column;gap:0.38rem;flex:1;min-height:0;}
-  .layout-grid .card-name{font-size:clamp(1.15rem,1.45vw,1.65rem);font-weight:900;line-height:1.08;color:var(--text);overflow-wrap:break-word;}
-  .layout-grid .card-meta{font-size:clamp(0.78rem,0.92vw,1rem);line-height:1.22;color:var(--text-muted);}
-  .layout-grid .card-desc{font-size:clamp(0.82rem,0.95vw,1.02rem);line-height:1.28;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-width:88%;}
-  .layout-grid .card-price{font-size:clamp(1.55rem,2vw,2.25rem);font-weight:950;color:var(--accent);margin-top:auto;letter-spacing:-0.03em;text-shadow:0 0 18px var(--accent-glow);}
+  .layout-grid .strain-bar{align-self:stretch;width:0.38rem;background:linear-gradient(180deg,var(--accent),rgba(255,255,255,0.08));box-shadow:0 0 18px var(--accent-glow);}
+  .layout-grid .product-card.strain-indica .strain-bar{background:linear-gradient(180deg,#8b5cf6,#4c1d95);box-shadow:0 0 16px rgba(139,92,246,0.35);}
+  .layout-grid .product-card.strain-sativa .strain-bar{background:linear-gradient(180deg,#f97316,#c2410c);box-shadow:0 0 16px rgba(249,115,22,0.35);}
+  .layout-grid .product-card.strain-hybrid .strain-bar{background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 0 16px rgba(34,197,94,0.35);}
+  .layout-grid .card-image,.layout-grid .card-image-placeholder{display:none;}
+  .layout-grid .card-body{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(8rem,auto);grid-template-areas:"name meta" "desc meta";column-gap:0.8rem;row-gap:0.28rem;min-width:0;}
+  .layout-grid .card-name{grid-area:name;font-size:clamp(1.2rem,1.5vw,1.75rem);font-weight:900;line-height:1.06;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;}
+  .layout-grid .card-meta{grid-area:meta;display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:0.3rem 0.46rem;min-width:8rem;max-width:14rem;font-size:clamp(0.78rem,0.9vw,1rem);line-height:1.15;color:var(--text-muted);}
+  .layout-grid .card-meta .strain-badge-tv{font-size:0.72rem;padding:0.18rem 0.46rem;margin-right:0;}
+  .layout-grid .card-desc{grid-area:desc;font-size:clamp(0.8rem,0.92vw,1rem);line-height:1.22;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;}
+  .layout-grid .card-price{font-size:clamp(1.55rem,1.9vw,2.25rem);font-weight:950;color:var(--accent);letter-spacing:-0.03em;text-align:right;min-width:4.6rem;text-shadow:0 0 18px var(--accent-glow);}
   .layout-grid .card-price-orig{font-size:0.85rem;color:var(--text-faint);text-decoration:line-through;}
+  .layout-grid .category-spotlight{position:relative;display:flex;flex-direction:column;justify-content:flex-end;gap:0.38rem;flex:1;min-height:4.75rem;margin-top:0.15rem;padding:1.1rem;border:1px solid var(--border);border-radius:0.7rem;overflow:hidden;background:radial-gradient(circle at 78% 26%,rgba(16,185,129,0.22),transparent 26%),radial-gradient(circle at 50% 100%,rgba(16,185,129,0.18),transparent 38%),linear-gradient(145deg,rgba(255,255,255,0.055),rgba(0,0,0,0.26)),var(--bg-elev);}
+  .layout-grid .category-spotlight::after{content:'';position:absolute;right:-1.2rem;bottom:-1.4rem;width:12rem;height:12rem;border-radius:50%;background:var(--accent);opacity:0.1;filter:blur(1px);}
+  .layout-grid .spotlight-watermark{position:absolute;right:0.65rem;bottom:1.1rem;max-width:92%;font-size:clamp(3rem,5vw,5.8rem);font-weight:1000;line-height:0.82;letter-spacing:-0.08em;color:var(--accent);opacity:0.055;text-transform:uppercase;text-align:right;white-space:normal;word-break:break-word;pointer-events:none;}
+  .layout-grid .spotlight-mark{position:absolute;right:0.75rem;top:0.75rem;width:7rem;height:7rem;color:var(--accent);opacity:0.22;}
+  .layout-grid .spotlight-mark .cat-icon-wrap{width:100%;height:100%;filter:none;}
+  .layout-grid .spotlight-kicker{position:relative;z-index:1;font-size:0.72rem;font-weight:900;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);}
+  .layout-grid .spotlight-title{position:relative;z-index:1;font-size:clamp(1.35rem,1.75vw,2.15rem);font-weight:950;line-height:0.95;color:var(--text);}
+  .layout-grid .spotlight-sub{position:relative;z-index:1;font-size:0.86rem;font-weight:750;color:var(--text-muted);}
 
   .layout-list .list-products{display:grid;grid-template-columns:repeat(2,1fr);gap:0 2rem;}
   .layout-list .product-row{display:flex;align-items:baseline;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border);}
@@ -291,6 +305,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .price-tiers .tier{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0.05rem;padding:0.28rem 0.45rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.5rem;}
   .price-tiers .tier-label{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);line-height:1;}
   .price-tiers .tier-price{font-size:1.15rem;font-weight:950;line-height:1.05;color:var(--accent);}
+  .layout-grid .price-tiers{justify-content:flex-end;gap:0.3rem;margin-top:0;}
+  .layout-grid .price-tiers .tier{min-width:3.25rem;padding:0.22rem 0.38rem;border-radius:0.38rem;}
+  .layout-grid .price-tiers .tier-label{font-size:0.62rem;}
+  .layout-grid .price-tiers .tier-price{font-size:1.05rem;}
   .layout-list .price-tiers{margin-top:0;gap:0.35rem;}
   .layout-list .price-tiers .tier{padding:0;background:transparent;border:0;min-width:auto;flex-direction:row;align-items:baseline;gap:0.25rem;}
   .layout-list .price-tiers .tier-price{font-size:1rem;}
@@ -387,12 +405,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
     .layout-grid{grid-template-columns:1fr;gap:0.9rem;}
     .layout-grid .category-block{padding:0.75rem;border-radius:0.75rem;}
-    .layout-grid .grid-products{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0.6rem;}
-    .layout-grid .card-image,.layout-grid .card-image-placeholder{width:42%;height:58%;right:-0.8rem;bottom:-0.6rem;}
-    .layout-grid .card-name{font-size:1rem;}
-    .layout-grid .card-meta{font-size:0.8rem;}
-    .layout-grid .card-price{font-size:1.15rem;}
-    .layout-grid .card-body{padding:0.55rem;gap:0.25rem;min-height:7.2rem;}
+    .layout-grid .grid-products{display:flex;flex-direction:column;gap:0.55rem;}
+    .layout-grid .product-table-head{font-size:0.62rem;padding-left:0.45rem;}
+    .layout-grid .product-card{grid-template-columns:0.28rem minmax(0,1fr);gap:0.5rem;min-height:auto;padding:0.55rem 0.6rem 0.55rem 0;}
+    .layout-grid .card-body{display:flex;flex-direction:column;gap:0.22rem;min-width:0;}
+    .layout-grid .card-name{font-size:1rem;white-space:normal;}
+    .layout-grid .card-meta{font-size:0.72rem;justify-content:flex-start;min-width:0;max-width:none;}
+    .layout-grid .card-desc{font-size:0.78rem;-webkit-line-clamp:2;}
+    .layout-grid .card-price{grid-column:2;font-size:1.25rem;text-align:left;min-width:0;}
+    .layout-grid .category-spotlight{min-height:4.5rem;padding:0.75rem;}
 
     .layout-list .list-products{grid-template-columns:1fr;gap:0;}
     .layout-list .row-name{font-size:1rem;}
@@ -948,6 +969,24 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return '<div class="card-desc">' + escapeHtml(p.description) + '</div>';
   }
 
+  function gridStrainClass(p){
+    var raw = String((p && p.strain) || '').toLowerCase().trim();
+    var map = {h:'hybrid',s:'sativa',i:'indica',hybrid:'hybrid',sativa:'sativa',indica:'indica'};
+    var strain = map[raw];
+    return strain ? ' strain-' + strain : '';
+  }
+
+  function makeGridMeta(p){
+    var parts = [];
+    if(p.strain) parts.push(strainBadge(p));
+    if(p.weight) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
+    if(p.thc) parts.push('<span>THC ' + escapeHtml(p.thc) + '</span>');
+    if(p.cbd) parts.push('<span>CBD ' + escapeHtml(p.cbd) + '</span>');
+    if(p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
+    return parts.join('');
+  }
+
+
   function renderGrid(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
@@ -955,13 +994,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'grid-products';
+      grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
-        card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
-        var img = imgMarkup(p, true);
-        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div></div>';
+        card.className = 'product-card' + gridStrainClass(p) + (p.inStock === false ? ' out-of-stock' : '');
+        card.innerHTML = '<span class="strain-bar"></span><div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
         grid.appendChild(card);
       });
+      if(cat.products.length < 6) grid.insertAdjacentHTML('beforeend', '<div class="category-spotlight"><div class="spotlight-watermark">' + escapeHtml(cat.name) + '</div><div class="spotlight-mark">' + categoryIcon(getCategoryType(cat.name)) + '</div><div class="spotlight-kicker">Live menu</div><div class="spotlight-title">' + escapeHtml(cat.name) + '</div><div class="spotlight-sub">Fresh availability · aligned pricing · premium display</div></div>');
       catEl.appendChild(grid);
       container.appendChild(catEl);
     });

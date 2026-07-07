@@ -102,4 +102,13 @@ describe('tvPage', () => {
     expect(page).toContain('.layout-grid .category-block{min-width:0;min-height:0;display:flex;flex-direction:column');
     expect(page).toContain('function makeDesc');
   });
+
+  it('uses price-board rows for the default TV grid', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('product-table-head');
+    expect(page).toContain('strain-bar');
+    expect(page).toContain('gridStrainClass');
+    expect(page).toContain('category-spotlight');
+    expect(page).toContain('aligned pricing');
+  });
 });
