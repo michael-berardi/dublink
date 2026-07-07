@@ -1,5 +1,5 @@
 import { Env as SessionEnv, SessionDurableObject, SESSION_ID_REGEX } from './session';
-import { AccountDurableObject, createAccount, authenticate, signToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, addSessionToAccount, generateSessionId } from './auth';
+import { AccountDurableObject, createAccount, authenticate, signToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, addSessionToAccount, generateSessionId, constantTimeEqual, ensureDemoAccount } from './auth';
 import { StatsDurableObject } from './stats';
 import { DomainDurableObject } from './domains';
 import { buildDubHavenAuthUrl, handleDubHavenCallback, isDubHavenStartConfigured } from './dubhaven-auth';
@@ -15,6 +15,7 @@ import { contactPage } from './html-contact';
 import { privacyPage } from './html-privacy';
 import { termsPage } from './html-terms';
 import { authPage } from './html-auth';
+import { demoLoginPage } from './html-demo-login';
 import { statusPage } from './html-status';
 import { adminPage } from './html-admin';
 import { widgetPage, widgetJs } from './html-widget';
@@ -36,6 +37,8 @@ export interface Env extends SessionEnv {
   APP_URL?: string;
   TV_URL?: string;
   ADMIN_EMAILS?: string;
+  DEMO_LOGIN_PASSWORD?: string;
+  DEMO_LOGIN_EMAIL?: string;
   STATS?: DurableObjectNamespace;
   DOMAINS?: DurableObjectNamespace;
   UPLOADS?: R2Bucket;
@@ -150,6 +153,30 @@ function appUrl(env: Env, request: Request): string {
 
 function tvUrl(env: Env): string {
   return env.TV_URL || 'https://tv.dubmenu.com';
+}
+
+function demoLoginEnabled(env: Env): boolean {
+  return Boolean(env.DEMO_LOGIN_PASSWORD && env.AUTH_SECRET);
+}
+
+// Validate a ?next / form next value so login/signup redirects stay on the
+// same origin. Relative paths are preferred; absolute URLs are allowed only when
+// they match the app's origin. This prevents open-redirect abuse via the
+// auth forms.
+function safeRedirectUrl(env: Env, request: Request, next: string, fallback: string): string {
+  if (!next) return fallback;
+  const origin = appUrl(env, request);
+  if (next.startsWith('/')) {
+    return origin + next;
+  }
+  try {
+    const nextUrl = new URL(next);
+    const originUrl = new URL(origin);
+    if (nextUrl.origin === originUrl.origin) return next;
+  } catch {
+    // invalid URL
+  }
+  return fallback;
 }
 
 // Auto-create a starter display for an account with zero sessions. Seeds the
@@ -337,7 +364,7 @@ export default {
     // Enforce HTTPS for all production hosts. Cloudflare passes http:// requests
     // through to the worker when Always Use HTTPS is not enabled; redirect them
     // with a permanent redirect so search engines index the secure URL.
-    if (url.protocol === 'http:' && url.hostname !== 'localhost') {
+    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(url.hostname)) {
       url.protocol = 'https:';
       return new Response(null, { status: 301, headers: { Location: url.toString(), ...SECURITY_HEADERS } });
     }
@@ -528,12 +555,14 @@ export default {
     }
 
     if (path === '/login' && request.method === 'GET') {
-      const dubHavenEnabled = isDubHavenStartConfigured(env);
-      return htmlResponse(authPage(origin, 'login', undefined, undefined, dubHavenEnabled));
+      const dubHavenEnabled = isDubHavenStartConfigured(env, origin);
+      const next = url.searchParams.get('next') || '';
+      return htmlResponse(authPage(origin, 'login', undefined, undefined, dubHavenEnabled, next));
     }
     if (path === '/signup' && request.method === 'GET') {
-      const dubHavenEnabled = isDubHavenStartConfigured(env);
-      return htmlResponse(authPage(origin, 'signup', undefined, undefined, dubHavenEnabled));
+      const dubHavenEnabled = isDubHavenStartConfigured(env, origin);
+      const next = url.searchParams.get('next') || '';
+      return htmlResponse(authPage(origin, 'signup', undefined, undefined, dubHavenEnabled, next));
     }
     if (path === '/account' && request.method === 'GET') {
       const auth = await requireAuth(request, env);
@@ -551,11 +580,17 @@ export default {
     }
 
     if (path === '/auth/dubhaven' && request.method === 'GET') {
-      if (!isDubHavenStartConfigured(env)) {
-        return htmlResponse(authPage(origin, 'login', undefined, 'DubHaven sign-in is not configured yet.', false));
-      }
       const redirectAfter = url.searchParams.get('next') || `${origin}/account`;
-      const authUrl = buildDubHavenAuthUrl(env, origin, redirectAfter);
+      const hostHeader = request.headers.get('host') || '';
+      const actualHost = hostHeader.split(':')[0] || url.hostname;
+      const isLocalHost = actualHost === 'localhost' || actualHost === '127.0.0.1' || actualHost === '0.0.0.0';
+      console.log({ DEBUG: '/auth/dubhaven', urlOrigin: url.origin, urlHostname: url.hostname, hostHeader, actualHost, isLocalHost, isConfigured: isDubHavenStartConfigured(env, url.origin) });
+      if (isLocalHost || !isDubHavenStartConfigured(env, url.origin)) {
+        // On localhost/loopback the DubHaven provider rejects the callback; fall
+        // back to the local email/password login so visual QA can proceed.
+        return redirectResponse(`${origin}/login?next=${encodeURIComponent(redirectAfter)}`);
+      }
+      const authUrl = buildDubHavenAuthUrl(env, url.origin, redirectAfter);
       return redirectResponse(authUrl);
     }
 
@@ -568,32 +603,58 @@ export default {
       return result.response;
     }
 
+    if (path === '/demo-login') {
+      if (!demoLoginEnabled(env)) {
+        return errorResponse('Not found', 404);
+      }
+      if (request.method === 'GET') {
+        const next = url.searchParams.get('next') || '';
+        return htmlResponse(demoLoginPage(origin, next));
+      }
+      if (request.method === 'POST') {
+        const form = await request.formData();
+        const token = String(form.get('token') || '');
+        const next = String(form.get('next') || '').trim();
+        if (!env.DEMO_LOGIN_PASSWORD || !constantTimeEqual(token, env.DEMO_LOGIN_PASSWORD)) {
+          return htmlResponse(demoLoginPage(origin, next, 'Invalid demo token'));
+        }
+        const email = (env.DEMO_LOGIN_EMAIL || 'demo@dubmenu.qa').trim().toLowerCase();
+        const account = await ensureDemoAccount(env, email);
+        const authToken = await signToken({ accountId: account.id, email: account.email }, env.AUTH_SECRET as string);
+        return redirectResponse(safeRedirectUrl(env, request, next, `${origin}/account`), [setCookie('dubmenu_auth', authToken, 60 * 60 * 24 * 7, secure)]);
+      }
+    }
+
     if (path === '/api/signup' && request.method === 'POST') {
       const form = await request.formData();
       const email = String(form.get('email') || '').trim().toLowerCase();
       const password = String(form.get('password') || '');
+      const next = String(form.get('next') || '').trim();
+      const dubHavenEnabled = isDubHavenStartConfigured(env, origin);
       if (!email || !password || password.length < 8) {
-        return htmlResponse(authPage(origin, 'signup', undefined, 'Valid email and 8+ character password required'));
+        return htmlResponse(authPage(origin, 'signup', undefined, 'Valid email and 8+ character password required', dubHavenEnabled, next));
       }
       const result = await createAccount(env, email, password);
       if ('error' in result) {
-        return htmlResponse(authPage(origin, 'signup', undefined, result.error));
+        return htmlResponse(authPage(origin, 'signup', undefined, result.error, dubHavenEnabled, next));
       }
       await recordEvent(env, { type: 'account.created', accountId: result.account.id, email: result.account.email });
       const token = await signToken({ accountId: result.account.id, email }, env.AUTH_SECRET as string);
-      return redirectResponse(`${origin}/account`, [setCookie('dubmenu_auth', token, 60 * 60 * 24 * 7, secure)]);
+      return redirectResponse(safeRedirectUrl(env, request, next, `${origin}/account`), [setCookie('dubmenu_auth', token, 60 * 60 * 24 * 7, secure)]);
     }
 
     if (path === '/api/login' && request.method === 'POST') {
       const form = await request.formData();
       const email = String(form.get('email') || '').trim().toLowerCase();
       const password = String(form.get('password') || '');
+      const next = String(form.get('next') || '').trim();
+      const dubHavenEnabled = isDubHavenStartConfigured(env, origin);
       const account = await authenticate(env, email, password);
       if (!account) {
-        return htmlResponse(authPage(origin, 'login', undefined, 'Invalid email or password'));
+        return htmlResponse(authPage(origin, 'login', undefined, 'Invalid email or password', dubHavenEnabled, next));
       }
       const token = await signToken({ accountId: account.id, email: account.email }, env.AUTH_SECRET as string);
-      return redirectResponse(`${origin}/account`, [setCookie('dubmenu_auth', token, 60 * 60 * 24 * 7, secure)]);
+      return redirectResponse(safeRedirectUrl(env, request, next, `${origin}/account`), [setCookie('dubmenu_auth', token, 60 * 60 * 24 * 7, secure)]);
     }
 
     // Logout: POST performs the actual cookie clear. GET is intentionally a
@@ -1123,7 +1184,7 @@ export default {
         const auth = await requireAuth(request, env);
         if (!auth) {
           const next = encodeURIComponent('/tv/new');
-          const signInUrl = isDubHavenStartConfigured(env) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
+        const signInUrl = isDubHavenStartConfigured(env, url.origin) ? `${url.origin}/auth/dubhaven?next=${next}` : `${url.origin}/login?next=${next}`;
           return redirectResponse(signInUrl);
         }
         const newId = generateSessionId();
@@ -1213,7 +1274,10 @@ export default {
       const auth = await requireAuth(request, env);
       if (!auth) {
         const next = encodeURIComponent(path);
-        const signInUrl = isDubHavenStartConfigured(env) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
+        if (demoLoginEnabled(env) && url.searchParams.get('demo') === '1') {
+          return redirectResponse(`${origin}/demo-login?next=${next}`);
+        }
+        const signInUrl = isDubHavenStartConfigured(env, origin) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
         return redirectResponse(signInUrl);
       }
       const account = await getAccount(env, auth.accountId);

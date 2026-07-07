@@ -38,7 +38,8 @@ describe('menuPage', () => {
 
   it('uses premium accent placeholders', () => {
     const page = menuPage('test-session', sampleConfig, 'https://dubmenu.com');
-    expect(page).toContain('color:var(--accent)');
+    expect(page).toContain('.placeholder-icon');
+    expect(page).toContain('color:var(--text-muted)');
   });
 
   it('registers an image fallback handler on window', () => {
@@ -82,10 +83,7 @@ describe('menuPage', () => {
     expect(page).toContain('placeholder-v');
     expect(page).toContain('data-variant=');
     expect(page).toContain('getProductVariant');
-    expect(page).toContain('placeholder-quality-premium');
-    expect(page).toContain('placeholder-variant-overlay');
-    expect(page).toContain('variant-overlay-shape');
-    expect(page).toContain('getPlaceholderVariantOverlay');
+    expect(page).toContain('placeholder-icon');
   });
 
   it('uses a responsive header name that can wrap on very narrow screens', () => {

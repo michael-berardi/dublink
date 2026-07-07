@@ -62,7 +62,7 @@ describe('tvPage', () => {
   it('uses premium accent placeholders', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
     expect(page).toContain('.card-image-placeholder .placeholder-icon');
-    expect(page).toContain('color:var(--accent)');
+    expect(page).toContain('color:var(--text-muted)');
   });
 
   it('wraps category icons in a premium badge for large-screen TV', () => {
@@ -82,14 +82,24 @@ describe('tvPage', () => {
     expect(() => new Function(script)).not.toThrow();
   });
 
+  it('uses a single muted category header style, not rainbow category accents', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).not.toContain('--cat-accent');
+    expect(page).not.toContain('CAT_ACCENT');
+  });
+
   it('emits deterministic product-level placeholder variant classes', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
     expect(page).toContain('placeholder-v');
     expect(page).toContain('data-variant=');
     expect(page).toContain('getProductVariant');
-    expect(page).toContain('placeholder-quality-premium');
-    expect(page).toContain('placeholder-variant-overlay');
-    expect(page).toContain('variant-overlay-shape');
-    expect(page).toContain('getPlaceholderVariantOverlay');
+    expect(page).toContain('placeholder-icon');
+  });
+
+  it('uses full-screen category panels for the default TV grid', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('.layout-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))');
+    expect(page).toContain('.layout-grid .category-block{min-width:0;min-height:0;display:flex;flex-direction:column');
+    expect(page).toContain('function makeDesc');
   });
 });

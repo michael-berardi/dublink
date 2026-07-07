@@ -1,13 +1,12 @@
-// Premium color category icon system for DubMenu.
-// All icons are inline SVGs. Category icons use a mix of `currentColor` (for
-// strokes and small accents) and category-specific gradients so they are crisp,
-// distinctive, and theme-aware. Placeholder icons are larger, product-quality
-// fallbacks shown when a product image is missing or fails to load. No external
-// network assets are required.
+// Clean, product-realistic category icon system for DubMenu.
+// All icons are inline SVGs using only currentColor. No gradients, filters,
+// glows, or decorative overlays. Category icons are 24x24; placeholder icons are
+// 100x100 product-image fallbacks shown when a product image is missing.
 
 export const CATEGORY_LABELS: Record<string, string> = {
   flower: 'Flower',
   edibles: 'Edibles',
+  beverages: 'Beverages',
   concentrates: 'Concentrates',
   prerolls: 'Pre-Rolls',
   vapes: 'Vapes',
@@ -15,6 +14,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   tinctures: 'Tinctures',
   cbd: 'CBD',
   accessories: 'Accessories',
+  seedling: 'Clones/Plants',
   other: 'Other',
   generic: 'Product',
 };
@@ -25,64 +25,74 @@ const PLACEHOLDER_ATTRS = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 1
 
 export const CATEGORY_ICON_SVGS: Record<string, string> = {
   flower:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-flower" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#15803d"/></linearGradient></defs><path d="M12 22V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/><path d="M12 17c-3-1.5-5.5-4-6.5-7.5 3.5-0.5 6 1.5 8 4.5 2-3 4.5-5 8-4.5-1.5 3.5-4 6-8 7.5z" fill="url(#g-cat-flower)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity="0.8"/><path d="M12 13c-2.5-1.5-4-4-4-7 0-2 1.5-3.5 4-3.5s4 1.5 4 3.5c0 3-1.5 5.5-4 7z" fill="url(#g-cat-flower)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 12c-2-1.5-3.5-3.5-3.5-6 0-1.5 1-2.5 3.5-2.5s3.5 1 3.5 2.5c0 2.5-1.5 4.5-3.5 6z" fill="currentColor" opacity="0.2"/><circle cx="12" cy="7" r="1.2" fill="#14532d" opacity="0.8"/><path d="M12 9V5" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.3"/></svg>`,
+    `<svg ${SVG_ATTRS}><path d="M12 20v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 17c-4-2-6.5-5.5-6.5-9.5 0-2.5 2.5-4.5 6.5-4.5s6.5 2 6.5 4.5c0 4-2.5 7.5-6.5 9.5z" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 6c-1 2-1 4.5 0 6.5M15 6c1 2 1 4.5 0 6.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/><path d="M10.5 5c-0.5 2-0.5 4 0 6M13.5 5c0.5 2 0.5 4 0 6" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.3"/></svg>`,
   edibles:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-edibles" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#ea580c"/></linearGradient></defs><circle cx="12" cy="12" r="8" fill="url(#g-cat-edibles)" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="10" r="1.5" fill="currentColor"/><circle cx="15" cy="10" r="1.5" fill="currentColor"/><path d="M9 15c1.5 1.5 4.5 1.5 6 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/><path d="M4 8c2-2 4-2 6-1M20 8c-2-2-4-2-6-1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/></svg>`,
+    `<svg ${SVG_ATTRS}><rect x="6" y="8" width="12" height="8" rx="1.5" fill="currentColor" opacity="0.15" stroke="currentColor" stroke-width="1.5"/><path d="M6 9l-2-2M6 15l-2 2M18 9l2-2M18 15l2 2" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.5"/><path d="M10 12h4" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg>`,
+  beverages:
+    `<svg ${SVG_ATTRS}><path d="M8 3h8l1 2v14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5l1-2z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M7 6h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 4h2v2h-2z" fill="currentColor" opacity="0.3"/></svg>`,
   concentrates:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-concentrates" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset="0.5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#c026d3"/></linearGradient></defs><path d="M12 3l8.5 6.5L12 19 3.5 9.5z" fill="url(#g-cat-concentrates)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 8.5l4.5 3.5L12 15.5 7.5 12z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" opacity="0.6"/><path d="M12 8.5V15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/></svg>`,
+    `<svg ${SVG_ATTRS}><rect x="7" y="3" width="10" height="4" rx="1" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 12c1 1 3 1.5 4.5 1s3-0.5 3.5-1" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg>`,
   prerolls:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-prerolls" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#d97706"/></linearGradient></defs><path d="M4 20L20 4" stroke="url(#g-cat-prerolls)" stroke-width="4" stroke-linecap="round"/><circle cx="5" cy="19" r="3" fill="url(#g-cat-prerolls)" stroke="currentColor" stroke-width="1.5"/><path d="M6 18l-2 2M18 6l2-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/></svg>`,
+    `<svg ${SVG_ATTRS}><path d="M19 4L7 20" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M19 4l-2 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/><path d="M7 20c-1 1-2 1-2.5 0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/></svg>`,
   vapes:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-vapes" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient><linearGradient id="g-cat-vapes-tip" x1="12" y1="18" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#e5e7eb"/><stop offset="1" stop-color="#9ca3af"/></linearGradient></defs><rect x="7" y="2" width="10" height="16" rx="3" fill="url(#g-cat-vapes)" stroke="currentColor" stroke-width="1.5"/><rect x="9.5" y="18" width="5" height="4" rx="1" fill="url(#g-cat-vapes-tip)" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="9" r="1.5" fill="currentColor" opacity="0.4"/></svg>`,
+    `<svg ${SVG_ATTRS}><rect x="8" y="7" width="8" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 7V3.5c0-1 0.5-1.5 1.5-1.5h3c1 0 1.5 0.5 1.5 1.5V7" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><rect x="10" y="10" width="4" height="6" rx="0.5" fill="currentColor" opacity="0.15"/></svg>`,
   topicals:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-topicals" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0f766e"/></linearGradient><linearGradient id="g-cat-topicals-lid" x1="0" y1="0" x2="24" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f4f6"/><stop offset="1" stop-color="#d1d5db"/></linearGradient></defs><path d="M12 3c-4.5 0-8 3.5-8 8 0 3.5 2.5 6.5 6 7.5v3h4v-3c3.5-1 6-4 6-7.5 0-4.5-3.5-8-8-8z" fill="url(#g-cat-topicals)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 2h6v3H9z" fill="url(#g-cat-topicals-lid)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 7v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/></svg>`,
+    `<svg ${SVG_ATTRS}><path d="M7 5h10l-1 15a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2L7 5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 5V3h6v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 12h4" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg>`,
   tinctures:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-tinctures" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient><linearGradient id="g-cat-tinctures-liquid" x1="12" y1="10" x2="12" y2="22" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#d97706"/></linearGradient></defs><path d="M9 2h6v5H9z" fill="url(#g-cat-tinctures)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 8h8l-1 12a2.5 2.5 0 0 1-5 0L8 8z" fill="url(#g-cat-tinctures-liquid)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 12v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/><circle cx="12" cy="5" r="1" fill="currentColor"/></svg>`,
+    `<svg ${SVG_ATTRS}><path d="M9 2h6v5h-6z" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M11 2V1h2v1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 8h8l-1 12a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2L8 8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 10v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/><circle cx="12" cy="18" r="1" fill="currentColor" opacity="0.3"/></svg>`,
   cbd:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-cbd" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a3e635"/><stop offset="1" stop-color="#65a30d"/></linearGradient></defs><path d="M12 22c0-4-3-7-6-8 3-1 6-4 6-8 0 4 3 7 6 8-3 1-6 4-6 8z" fill="url(#g-cat-cbd)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 6c-1.5 1.5-2 3-2 5s1 4 2 5c1.5-1 2-3 2-5s-1-4-2-5z" fill="currentColor" opacity="0.25"/><path d="M12 9v5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/></svg>`,
+    `<svg ${SVG_ATTRS}><path d="M12 21c0-3-1.5-5.5-4-7.5 2.5-1 4-3.5 4-6.5 0 3 1.5 5.5 4 6.5-2.5 2-4 4.5-4 7.5z" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 9c-1 1.5-1 3 0 4.5M16 9c1 1.5 1 3 0 4.5" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg>`,
   accessories:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-accessories" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="3" fill="url(#g-cat-accessories)" stroke="currentColor" stroke-width="1.5"/><path d="M12 5v2M12 17v2M5 12h2M17 12h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    `<svg ${SVG_ATTRS}><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 8l8 8M16 8l-8 8" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.4"/></svg>`,
+  seedling:
+    `<svg ${SVG_ATTRS}><path d="M12 20V10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 10c-3 0-5-2-5-5 2.5 0 4 1.5 5 4 1-2.5 2.5-4 5-4 0 3-2 5-5 5z" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M5 21h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   other:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-other" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9ca3af"/><stop offset="1" stop-color="#4b5563"/></linearGradient></defs><circle cx="6.5" cy="12" r="2.5" fill="url(#g-cat-other)" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2.5" fill="url(#g-cat-other)" stroke="currentColor" stroke-width="1.5"/><circle cx="17.5" cy="12" r="2.5" fill="url(#g-cat-other)" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    `<svg ${SVG_ATTRS}><rect x="5" y="7" width="14" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M5 10h14M12 7v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
   generic:
-    `<svg ${SVG_ATTRS}><defs><linearGradient id="g-cat-generic" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#0f766e"/></linearGradient></defs><path d="M12 21c0-4.5-3.5-7.5-6-8.5 3-1 6-4 6-8.5 0 4.5 3 7.5 6 8.5-3 1-6 4-6 8.5z" fill="url(#g-cat-generic)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M12 11V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/></svg>`,
+    `<svg ${SVG_ATTRS}><rect x="6" y="6" width="12" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="6" y="10" width="12" height="4" fill="currentColor" opacity="0.15"/><path d="M9 9h6" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.5"/></svg>`,
 };
 
 export const PLACEHOLDER_ICON_SVGS: Record<string, string> = {
   flower:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-flower" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#166534"/></linearGradient><radialGradient id="g-ph-flower-bg" cx="50" cy="50" r="50" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#14532d"/><stop offset="1" stop-color="#022c22"/></radialGradient><linearGradient id="g-ph-flower-stem" x1="50" y1="55" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#15803d"/><stop offset="1" stop-color="#064e3b"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="url(#g-ph-flower-bg)"/><path d="M50 90V58" stroke="url(#g-ph-flower-stem)" stroke-width="4" stroke-linecap="round" opacity="0.6"/><path d="M50 90V58" stroke="currentColor" stroke-width="4" stroke-linecap="round" opacity="0.15"/><path d="M50 78c-12-5-22-14-26-26 8-1 16 2 22 8 6-6 14-9 22-8-4 12-14 21-26 26z" fill="#166534" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.5"/><path d="M50 74c-15-8-26-22-28-38 10-2 22 4 28 16 6-12 18-18 28-16-2 16-13 30-28 38z" fill="url(#g-ph-flower)" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M50 60c-12-10-21-24-23-40 10-1 18 6 23 18 5-12 13-19 23-18-2 16-11 30-23 40z" fill="url(#g-ph-flower)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M50 50c-10-9-17-21-18-36 8-1 14 5 18 14 4-9 10-15 18-14-1 15-8 27-18 36z" fill="url(#g-ph-flower)" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.9"/><ellipse cx="50" cy="50" rx="7" ry="9" fill="#14532d" stroke="currentColor" stroke-width="1.5" opacity="0.95"/><path d="M50 46v8M46 50h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.4"/><path d="M50 58c-7-8-11-18-11-29M50 58c7-8 11-18 11-29" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.15"/><path d="M50 74c-10-6-18-15-22-27M50 74c10-6 18-15 22-27" stroke="currentColor" stroke-width="1" stroke-linecap="round" opacity="0.12"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M50 88V73" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/><path d="M50 73c-14-7-24-20-28-34 9-2 18 3 24 11 6-8 15-13 24-11-4 14-14 27-28 34z" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M38 55l4-6 6 6 6-6 4 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/></svg>`,
   edibles:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><radialGradient id="g-ph-edibles" cx="50" cy="40" r="45" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#ea580c"/></radialGradient><linearGradient id="g-ph-edibles-shine" x1="35" y1="30" x2="65" y2="60" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.4"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#431407"/><path d="M25 35c0-8 6-14 14-14h22c8 0 14 6 14 14v30c0 8-6 14-14 14H39c-8 0-14-6-14-14z" fill="url(#g-ph-edibles)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="28" r="5" fill="url(#g-ph-edibles)" stroke="currentColor" stroke-width="1.5"/><circle cx="68" cy="28" r="5" fill="url(#g-ph-edibles)" stroke="currentColor" stroke-width="1.5"/><circle cx="40" cy="48" r="4" fill="#431407" opacity="0.6"/><circle cx="60" cy="48" r="4" fill="#431407" opacity="0.6"/><path d="M42 62c6 4 16 4 22 0" stroke="#431407" stroke-width="2" stroke-linecap="round"/><path d="M35 38c5 5 15 5 20 0" fill="url(#g-ph-edibles-shine)"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><rect x="28" y="34" width="44" height="32" rx="3" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="2"/><path d="M28 40l-6-6M28 60l-6 6M72 40l6-6M72 60l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.5"/><path d="M42 50h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/></svg>`,
+  beverages:
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M32 16h36l5 8v50a6 6 0 0 1-6 6H38a6 6 0 0 1-6-6V24l5-8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M30 30h40" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M46 18h8v6h-8z" fill="currentColor" opacity="0.3"/></svg>`,
   concentrates:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-concentrates" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset="0.5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#c026d3"/></linearGradient><linearGradient id="g-ph-concentrates-shine" x1="30" y1="30" x2="70" y2="70" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#0f172a"/><path d="M50 8L88 42L50 92L12 42z" fill="url(#g-ph-concentrates)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M50 8L88 42L50 92L12 42z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round" opacity="0.3"/><path d="M50 8v84M12 42h76" stroke="currentColor" stroke-width="1" opacity="0.2"/><path d="M50 35L30 42L50 55L70 42z" fill="url(#g-ph-concentrates-shine)"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><rect x="32" y="14" width="36" height="14" rx="2" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="2"/><path d="M28 30h44l-4 40a4 4 0 0 1-4 4H36a4 4 0 0 1-4-4L28 30z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M36 48c3 3 8 4 12 4s9-1 12-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/></svg>`,
   prerolls:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-prerolls" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fde68a"/><stop offset="0.5" stop-color="#d97706"/><stop offset="1" stop-color="#92400e"/></linearGradient><linearGradient id="g-ph-prerolls-filter" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fef3c7"/><stop offset="1" stop-color="#d97706"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#2a1810"/><path d="M28 18h44L58 88H42L28 18z" fill="url(#g-ph-prerolls)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="30" y="18" width="40" height="14" rx="2" fill="url(#g-ph-prerolls-filter)" stroke="currentColor" stroke-width="2"/><path d="M42 44h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/><path d="M38 60h24" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M72 22L26 78" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M72 22l-7 5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/><path d="M26 78c-3 3-6 3-8 1" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.5"/></svg>`,
   vapes:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-vapes" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#1e40af"/></linearGradient><linearGradient id="g-ph-vapes-tip" x1="50" y1="0" x2="50" y2="30" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#e5e7eb"/><stop offset="1" stop-color="#9ca3af"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#0f172a"/><rect x="32" y="12" width="36" height="76" rx="12" fill="url(#g-ph-vapes)" stroke="currentColor" stroke-width="2"/><rect x="38" y="6" width="24" height="12" rx="3" fill="url(#g-ph-vapes-tip)" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="38" r="8" fill="#e5e7eb" opacity="0.3"/><rect x="42" y="62" width="16" height="14" rx="2" fill="currentColor" opacity="0.2"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><rect x="34" y="28" width="32" height="54" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M36 28V16c0-2 1-3 3-3h12c2 0 3 1 3 3v12" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="40" y="40" width="20" height="26" rx="3" fill="currentColor" opacity="0.12"/></svg>`,
   topicals:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-topicals" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0f766e"/></linearGradient><linearGradient id="g-ph-topicals-lid" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#f3f4f6"/><stop offset="1" stop-color="#d1d5db"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#0c2e2a"/><path d="M50 8C28 8 10 26 10 48c0 16 10 32 24 38v4h32v-4c14-6 24-22 24-38C90 26 72 8 50 8z" fill="url(#g-ph-topicals)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="22" y="16" width="56" height="12" rx="2" fill="url(#g-ph-topicals-lid)" stroke="currentColor" stroke-width="2"/><path d="M50 40v30" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.2"/><circle cx="35" cy="55" r="5" fill="#ffffff" opacity="0.2"/><circle cx="65" cy="65" r="5" fill="#ffffff" opacity="0.2"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M28 22h44l-5 50a6 6 0 0 1-6 6H38a6 6 0 0 1-6-6L28 22z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M24 22h52" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M36 22V16h28v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 50h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/></svg>`,
   tinctures:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-tinctures" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#5b21b6"/></linearGradient><linearGradient id="g-ph-tinctures-liquid" x1="50" y1="30" x2="50" y2="90" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#1e1b4b"/><rect x="32" y="8" width="36" height="16" rx="2" fill="url(#g-ph-tinctures)" stroke="currentColor" stroke-width="2"/><path d="M28 28h44L62 88H38L28 28z" fill="url(#g-ph-tinctures-liquid)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="42" y="20" width="16" height="28" rx="2" fill="#ffffff" opacity="0.15"/><circle cx="50" cy="70" r="4" fill="#ffffff" opacity="0.3"/><path d="M50 24v12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M38 8h24v20H38z" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M44 8V4h12v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 30h36l-4 46a4 4 0 0 1-4 4H40a4 4 0 0 1-4-4L32 30z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M50 34v22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/><circle cx="50" cy="68" r="5" fill="currentColor" opacity="0.25"/></svg>`,
   cbd:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-cbd" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#a3e635"/><stop offset="1" stop-color="#3f6212"/></linearGradient><linearGradient id="g-ph-cbd-drop" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#0e7490"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#1a2e05"/><path d="M50 88c0-12-8-22-18-28 10-4 18-14 18-28 0 14 8 24 18 28-10 6-18 16-18 28z" fill="url(#g-ph-cbd)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M50 40c-8-6-14-16-16-26 6-1 12 4 16 12 4-8 10-13 16-12-2 10-8 20-16 26z" fill="url(#g-ph-cbd)" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/><path d="M50 45v30" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.2"/><path d="M50 92c-3 0-6-4-6-9 0-5 6-14 6-14s6 9 6 14c0 5-3 9-6 9z" fill="url(#g-ph-cbd-drop)" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M50 86c0-12-6-22-16-30 10-3 16-10 16-20 0 10 6 17 16 20-10 8-16 18-16 30z" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M34 38c-2 4-2 8 0 12M66 38c2 4 2 8 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/></svg>`,
   accessories:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-accessories" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#b45309"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#1f2937"/><circle cx="50" cy="50" r="28" fill="url(#g-ph-accessories)" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="50" r="12" fill="#1f2937" stroke="currentColor" stroke-width="2"/><path d="M50 12v8M50 80v8M12 50h8M80 50h8M22 22l6 6M72 72l6 6M78 22l-6 6M28 72l-6 6" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><circle cx="50" cy="50" r="24" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="50" cy="50" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M30 30l40 40M70 30L30 70" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/></svg>`,
+  seedling:
+    `<svg ${PLACEHOLDER_ATTRS}><path d="M50 85V45" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/><path d="M50 45c-12 0-20-8-20-20 10 0 16 6 20 16 4-10 10-16 20-16 0 12-8 20-20 20z" fill="currentColor" opacity="0.22" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M15 88h70" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   other:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-other" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#9ca3af"/><stop offset="1" stop-color="#374151"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#111827"/><circle cx="35" cy="50" r="18" fill="url(#g-ph-other)" stroke="currentColor" stroke-width="2" opacity="0.9"/><circle cx="50" cy="50" r="18" fill="url(#g-ph-other)" stroke="currentColor" stroke-width="2" opacity="0.9"/><circle cx="65" cy="50" r="18" fill="url(#g-ph-other)" stroke="currentColor" stroke-width="2" opacity="0.9"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><rect x="25" y="30" width="50" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M25 40h50M50 30v40" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   generic:
-    `<svg ${PLACEHOLDER_ATTRS}><defs><linearGradient id="g-ph-generic" x1="50" y1="0" x2="50" y2="100" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#064e3b"/></linearGradient></defs><circle cx="50" cy="50" r="48" fill="#022c22"/><path d="M50 85V50" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.2"/><path d="M50 78c-14-8-26-22-28-40 10-2 22 6 28 18 6-12 18-20 28-18-2 18-14 32-28 40z" fill="url(#g-ph-generic)" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M50 50c-12-10-20-24-20-38 10-1 18 8 20 20 2-12 10-21 20-20 0 14-8 28-20 38z" fill="url(#g-ph-generic)" stroke="currentColor" stroke-width="2" stroke-linejoin="round" opacity="0.85"/></svg>`,
+    `<svg ${PLACEHOLDER_ATTRS}><rect x="28" y="28" width="44" height="44" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><rect x="28" y="44" width="44" height="14" fill="currentColor" opacity="0.15"/><path d="M40 38h20" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.5"/></svg>`,
 };
 
 const CATEGORY_NEEDLES: { type: string; needles: string[] }[] = [
   { type: 'cbd', needles: ['cbd'] },
   { type: 'flower', needles: ['flower', 'bud', 'strain', 'whole flower', 'ground flower', 'smalls', 'popcorn'] },
-  { type: 'edibles', needles: ['edible', 'gummy', 'gummies', 'candy', 'chocolate', 'baked', 'munchie', 'chew', 'cookie', 'brownie', 'beverage', 'drink', 'soda', 'mint', 'snack'] },
+  { type: 'beverages', needles: ['beverage', 'drink', 'soda', 'seltzer', 'tonic', 'refreshment'] },
+  { type: 'edibles', needles: ['edible', 'gummy', 'gummies', 'candy', 'chocolate', 'baked', 'munchie', 'chew', 'cookie', 'brownie', 'mint', 'snack'] },
   { type: 'concentrates', needles: ['concentrate', 'extract', 'wax', 'shatter', 'resin', 'rosin', 'oil', 'dab', 'sauce', 'badder', 'crumble', 'live', 'diamond', 'distillate', 'kief', 'bubble hash'] },
   { type: 'prerolls', needles: ['pre-roll', 'preroll', 'pre roll', 'joint', 'cone', 'blunt'] },
   { type: 'vapes', needles: ['vape', 'vaporizer', 'cartridge', 'cart', 'disposable', 'aio', '510', 'pen'] },
   { type: 'topicals', needles: ['topical', 'cream', 'balm', 'lotion', 'salve', 'transdermal', 'patch'] },
   { type: 'tinctures', needles: ['tincture', 'sublingual', 'drop', 'spray', 'elixir'] },
   { type: 'accessories', needles: ['accessor', 'battery', 'paper', 'grinder', 'pipe', 'bong', 'rig', 'tool', 'gear', 'lighter', 'apparel'] },
+  { type: 'seedling', needles: ['seed', 'clone', 'seedling', 'cutting', 'root', 'clone', 'plant start'] },
 ];
 
 export function getCategoryType(name: string): string {
@@ -108,9 +118,9 @@ export const GET_CATEGORY_TYPE_JS = `function getCategoryType(name){
   return 'other';
 }`;
 
-// Deterministic product-level visual variant for placeholder icons. Keeps the
-// same category shape but shifts color/rotation subtly so adjacent products in
-// one category do not look identical. Returns 0-3.
+// Deterministic product-level visual variant for placeholder icons. Kept for
+// backward compatibility, but the new placeholders do not apply decorative
+// overlays; variants only affect subtle CSS transforms if the consumer chooses.
 export function getProductVariant(id: string, name: string): number {
   const s = String(id || '') + ':' + String(name || '');
   let h = 0;
@@ -129,65 +139,14 @@ export const GET_PRODUCT_VARIANT_JS = `function getProductVariant(id,name){
   return Math.abs(h)%4;
 }`;
 
-// Category accent colors used for the placeholder SVG and its embedded
-// variant decorations so each product is visually distinct while keeping
-// category identity. These match the existing placeholder gradients.
-export const PLACEHOLDER_OVERLAY_COLORS: Record<string, string> = {
-  flower: '#4ade80',
-  edibles: '#fbbf24',
-  concentrates: '#a855f7',
-  prerolls: '#d97706',
-  vapes: '#60a5fa',
-  topicals: '#2dd4bf',
-  tinctures: '#a78bfa',
-  cbd: '#a3e635',
-  accessories: '#fbbf24',
-  other: '#9ca3af',
-  generic: '#34d399',
-};
-
-export const GET_PLACEHOLDER_OVERLAY_COLORS_JS = `var PLACEHOLDER_OVERLAY_COLORS=${JSON.stringify(PLACEHOLDER_OVERLAY_COLORS)};`;
-
-// Theme-aware overlay color. Overlays are rendered with currentColor so they
-// inherit the surrounding accent or category color and work in every theme.
-export function getPlaceholderOverlayColor(_type: string): string {
-  return 'currentColor';
-}
-
-export const GET_PLACEHOLDER_OVERLAY_COLOR_JS = `function getPlaceholderOverlayColor(type){
-  return 'currentColor';
-}`;
-
-// Premium variant overlays for product-level visual distinction. Each overlay
-// is a full 100x100 SVG that sits on top of the category placeholder icon and
-// uses currentColor so it adapts to any theme. The four silhouettes are
-// deliberately different (crest, sash, compass, frame) so adjacent products in
-// the same category are immediately distinguishable in screenshots.
-export const PLACEHOLDER_VARIANT_OVERLAYS: Record<number, string> = {
-  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M50 10 L86 24 L86 54 C86 71 50 92 50 92 C50 92 14 71 14 54 L14 24 Z" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linejoin="round" opacity="0.9"/><path d="M24 46 L76 46" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/><circle cx="50" cy="32" r="7" fill="currentColor" opacity="0.9"/></svg>`,
-  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M-8 18 L38 64 L108 -6" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round" opacity="0.82"/><circle cx="52" cy="40" r="18" fill="none" stroke="currentColor" stroke-width="4" opacity="0.95"/><circle cx="52" cy="40" r="7" fill="currentColor" opacity="0.9"/></svg>`,
-  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" stroke-width="3" opacity="0.9"/><path d="M50 6 L57 38 L92 38 L63 58 L73 92 L50 70 L27 92 L37 58 L8 38 L43 38 Z" fill="currentColor" opacity="0.85"/><circle cx="50" cy="50" r="9" fill="currentColor" opacity="0.35"/></svg>`,
-  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" class="variant-overlay-shape" role="img" aria-hidden="true"><path d="M10 20 L10 10 L20 10 M80 10 L90 10 L90 20 M90 80 L90 90 L80 90 M20 90 L10 90 L10 80" fill="none" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/><circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" stroke-width="3.5" opacity="0.85"/><path d="M34 50 L66 50 M50 34 L50 66" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" opacity="0.85"/></svg>`,
-};
-
-export const GET_PLACEHOLDER_VARIANT_OVERLAY_JS = `var PLACEHOLDER_VARIANT_OVERLAYS=${JSON.stringify(PLACEHOLDER_VARIANT_OVERLAYS)};
-function getPlaceholderVariantOverlay(v){
-  return PLACEHOLDER_VARIANT_OVERLAYS[v] || PLACEHOLDER_VARIANT_OVERLAYS[0];
-}`;
-
-export function getPlaceholderVariantOverlay(variant: number): string {
-  return PLACEHOLDER_VARIANT_OVERLAYS[variant] || PLACEHOLDER_VARIANT_OVERLAYS[0];
-}
-
+// Returns the clean placeholder SVG for a product category. No inline colors,
+// gradients, or overlays; the SVG uses currentColor so the surrounding CSS
+// controls the icon color.
 export function getPlaceholderIconSvg(type: string, _variant: number): string {
-  const base = PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
-  const color = PLACEHOLDER_OVERLAY_COLORS[type] || PLACEHOLDER_OVERLAY_COLORS.generic;
-  return base.replace('class="placeholder-icon"', `class="placeholder-icon" style="color:${color}"`);
+  return PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
 }
 
 export const GET_PLACEHOLDER_ICON_SVG_JS = `function getPlaceholderIconSvg(type,v){
-  var base=PLACEHOLDER_ICON_SVGS[type]||PLACEHOLDER_ICON_SVGS.generic;
-  var colors=${JSON.stringify(PLACEHOLDER_OVERLAY_COLORS)};
-  var color=colors[type]||colors.generic;
-  return base.replace('class="placeholder-icon"','class="placeholder-icon" style="color:'+color+'"');
+  var PLACEHOLDER_ICON_SVGS=${JSON.stringify(PLACEHOLDER_ICON_SVGS)};
+  return PLACEHOLDER_ICON_SVGS[type]||PLACEHOLDER_ICON_SVGS.generic;
 }`;

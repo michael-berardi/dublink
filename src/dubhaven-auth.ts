@@ -54,8 +54,22 @@ export function getDubHavenAuthUrl(env: DubHavenEnv): string {
   return env.DUBHAVEN_AUTH_URL?.trim() || DUBHAVEN_AUTH_URL_DEFAULT;
 }
 
-export function isDubHavenStartConfigured(env: DubHavenEnv): boolean {
-  return Boolean(getDubHavenAuthUrl(env));
+export function isDubHavenStartConfigured(env: DubHavenEnv, origin?: string): boolean {
+  const baseConfigured = Boolean(getDubHavenAuthUrl(env));
+  if (!baseConfigured) return false;
+  if (!origin) return baseConfigured;
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+    // DubHaven's OAuth callback allowlist only covers production domains; on
+    // localhost/loopback the provider would reject the callback with
+    // "Invalid redirect URL for product". Fall back to local email/password auth.
+    if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') return false;
+  } catch {
+    // Invalid origin string; treat as unconfigured to be safe.
+    return false;
+  }
+  return baseConfigured;
 }
 
 export function isDubHavenCallbackConfigured(env: DubHavenEnv): boolean {
@@ -63,7 +77,7 @@ export function isDubHavenCallbackConfigured(env: DubHavenEnv): boolean {
 }
 
 export function buildDubHavenAuthUrl(env: DubHavenEnv, origin: string, redirectAfter?: string): string {
-  if (!isDubHavenStartConfigured(env)) {
+  if (!isDubHavenStartConfigured(env, origin)) {
     throw new Error('DubHaven auth is not configured');
   }
   const callbackUrl = new URL('/auth/dubhaven/callback', origin);

@@ -1,4 +1,4 @@
-export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: any, error?: string, dubHavenEnabled: boolean = false): string {
+export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: any, error?: string, dubHavenEnabled: boolean = false, next?: string): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -41,18 +41,19 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
       <div class="card-title">${isLogin ? 'Log In' : 'Create Account'}</div>
       ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
       ${dubHavenEnabled ? `
-      <a href="${safeOrigin}/auth/dubhaven" class="btn btn-google" style="width:100%;margin-bottom:1rem;">
+      <a href="${safeOrigin}/auth/dubhaven${next ? '?next=' + encodeURIComponent(next) : ''}" class="btn btn-google" style="width:100%;margin-bottom:1rem;">
         Sign in with DubHaven
       </a>
       <div style="text-align:center;color:var(--muted);font-size:0.875rem;margin-bottom:1rem;">or use email</div>
       ` : ''}
       <form method="POST" action="${safeOrigin}/api/${isLogin ? 'login' : 'signup'}">
+        ${next ? `<input type="hidden" name="next" value="${escapeHtml(next)}">` : ''}
         <div class="field"><label>Email</label><input type="email" name="email" required placeholder="you@example.com"></div>
         <div class="field"><label>Password</label><input type="password" name="password" required minlength="8" placeholder="••••••••"></div>
         <button type="submit" class="btn btn-primary" style="width:100%;">${isLogin ? 'Log In' : 'Start Free Trial'}</button>
       </form>
       <div class="switch-link">
-        ${isLogin ? `Don't have an account? <a href="${safeOrigin}/signup">Start free trial</a>` : `Already have an account? <a href="${safeOrigin}/login">Log in</a>`}
+        ${isLogin ? `Don't have an account? <a href="${safeOrigin}/signup${next ? '?next=' + encodeURIComponent(next) : ''}">Start free trial</a>` : `Already have an account? <a href="${safeOrigin}/login${next ? '?next=' + encodeURIComponent(next) : ''}">Log in</a>`}
       </div>
     </div>
   `;

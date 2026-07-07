@@ -431,3 +431,29 @@ export function generateSessionId(): string {
   }
   return result;
 }
+
+export function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  if (aBytes.length !== bBytes.length) return false;
+  return crypto.subtle.timingSafeEqual(aBytes, bBytes);
+}
+
+export async function ensureDemoAccount(env: Env, email: string): Promise<Account> {
+  const accountId = accountIdFromEmail(email);
+  const existing = await getAccount(env, accountId);
+  const trialEndsAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  if (existing) {
+    await updateAccountStripe(env, existing.id, { subscriptionStatus: 'trialing', trialEndsAt });
+    const refreshed = await getAccount(env, existing.id);
+    return refreshed as Account;
+  }
+  const password = generateSessionId() + generateSessionId();
+  const result = await createAccount(env, email, password);
+  if ('error' in result) throw new Error(result.error);
+  await updateAccountStripe(env, result.account.id, { subscriptionStatus: 'trialing', trialEndsAt });
+  return result.account;
+}
+

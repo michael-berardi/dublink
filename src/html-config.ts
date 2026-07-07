@@ -7,7 +7,7 @@ export function configPage(sessionId: string, origin: string): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <title>DubMenu — Configure</title>
+  <title>DubMenu — Remote Control</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
     :root{--bg:#000;--surface:#1c1c1e;--surface2:#2c2c2e;--border:#38383a;--text:#fff;--muted:#a1a1a6;--primary:#10b981;--danger:#ef4444;}
@@ -162,9 +162,9 @@ export function configPage(sessionId: string, origin: string): string {
     @media(min-width:1100px){
       body{max-width:none;margin:0;height:100vh;overflow:hidden;}
       .desktop-layout{display:flex;flex-direction:row;height:100vh;width:100vw;}
-      .config-column{flex:0 0 520px;max-width:560px;height:100vh;overflow-y:auto;padding:1rem;}
+      .config-column{flex:1;min-width:0;max-width:680px;height:100vh;overflow-y:auto;padding:1rem;}
       .status-bar{position:sticky;top:0.5rem;margin-top:0;}
-      #simulatorPanel{flex:1;display:flex;flex-direction:column;min-width:0;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
+      #simulatorPanel{flex:0 0 420px;display:flex;flex-direction:column;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
       .sim-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-shrink:0;}
       .sim-header h2{font-size:1.25rem;font-weight:700;}
       .sim-header-actions{display:flex;gap:0.5rem;}
@@ -193,6 +193,18 @@ export function configPage(sessionId: string, origin: string): string {
     @media(max-width:1099px){
       #simulatorPanel{display:none;}
     }
+
+/* Mobile preview: on narrow screens the settings page is primary. A
+   compact floating button opens the live TV preview in a modal so it can
+   be opened and closed without dominating the operator view. */
+.mobile-preview-fab{position:fixed;bottom:1rem;right:1rem;z-index:200;display:flex;align-items:center;gap:0.375rem;padding:0.625rem 1rem;border-radius:9999px;background:var(--primary);color:#000;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.4);}
+@media(min-width:1100px){.mobile-preview-fab{display:none;}}
+.mobile-preview-panel{max-width:900px;}
+.mobile-preview-body{padding:0;overflow:hidden;}
+.mobile-preview-modal-frame{position:relative;width:100%;height:480px;background:#000;border-radius:0 0 0.75rem 0.75rem;overflow:hidden;border-top:1px solid var(--border);}
+.mobile-preview-modal-frame iframe{position:absolute;top:0;left:0;width:1920px;height:1080px;border:none;transform-origin:top left;pointer-events:none;}
+@media(max-width:600px){.mobile-preview-modal-frame{height:320px;}}
+.mobile-preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.9375rem;}
   </style>
 </head>
 <body>
@@ -210,14 +222,22 @@ export function configPage(sessionId: string, origin: string): string {
 <main id="mainContent">
 
 <div class="header">
-  <h1>DubMenu</h1>
-  <div class="sub"><a id="tvDisplayLink" href="https://tv.dubmenu.com/tv/${sessionId}" target="_blank">Open TV Display &rarr;</a></div>
+  <h1>DubMenu Remote Control</h1>
+  <div class="sub">This is your operator panel. Customers see the TV menu, not this page.</div>
+  <div class="sub" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
+    <a id="tvDisplayLink" href="https://tv.dubmenu.com/tv/${sessionId}" target="_blank">Open TV Display on TV &rarr;</a>
+    <button class="btn btn-sm btn-secondary" type="button" onclick="copyTvUrl()">Copy TV URL</button>
+  </div>
 </div>
 
 <div class="screenset-info" id="screensetInfo">
   <h3>Screen Set (<span id="screensetCount">1</span> TV<span id="screensetPlural">s</span>)</h3>
   <div class="screenset-list" id="screensetList"></div>
 </div>
+
+<button class="mobile-preview-fab" type="button" onclick="openMobilePreview()" aria-label="Open TV preview">
+  <span aria-hidden="true">&#9654;</span> Preview TV
+</button>
 
 <div class="card">
   <h2 class="card-title">Branding</h2>
@@ -374,12 +394,12 @@ export function configPage(sessionId: string, origin: string): string {
 
 </div><!-- /config-column -->
 
-<aside id="simulatorPanel" aria-label="TV simulator">
+<aside id="simulatorPanel" aria-label="TV preview">
   <div class="sim-header">
-    <h2>TV Simulator</h2>
+    <h2>TV Preview</h2>
     <div class="sim-header-actions">
       <button class="btn btn-sm btn-secondary" type="button" onclick="copyAllTvUrls()">Copy TV URLs</button>
-      <button class="btn btn-sm btn-primary" type="button" onclick="openSelectedDisplay()">Open Display</button>
+      <button class="btn btn-sm btn-primary" type="button" onclick="openSelectedDisplay()">Open on TV</button>
     </div>
   </div>
   <div class="sim-controls">
@@ -459,6 +479,20 @@ export function configPage(sessionId: string, origin: string): string {
   </div>
 </div>
 
+<div class="modal-overlay" id="mobilePreviewModal" role="dialog" aria-modal="true" aria-labelledby="mobilePreviewTitle">
+  <div class="modal-panel mobile-preview-panel">
+    <div class="modal-header">
+      <h2 class="modal-title" id="mobilePreviewTitle">TV Preview</h2>
+      <button class="modal-close" type="button" id="mobilePreviewClose" aria-label="Close TV preview">&times;<span class="sr-only">Close</span></button>
+    </div>
+    <div class="modal-body mobile-preview-body">
+      <div class="mobile-preview-modal-frame" id="mobilePreviewModalFrame" role="img" aria-label="Live TV preview">
+        <div class="mobile-preview-placeholder">Loading preview...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
 <script>
@@ -471,7 +505,7 @@ function connect(){
   const proto=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(proto+'//'+location.host+'/ws/'+SESSION_ID+'?role=phone');
   ws.onopen=function(){reconnectAttempts=0;setStatus('connecting');ws.send(JSON.stringify({type:'join',payload:{role:'phone'}}));};
-  ws.onmessage=function(ev){const m=JSON.parse(ev.data);if(m.type==='ping'){ws.send(JSON.stringify({type:'pong'}));return;}if(m.type==='config'){config=m.payload;setStatus('connected');render();}};
+  ws.onmessage=function(ev){const m=JSON.parse(ev.data);if(m.type==='ping'){ws.send(JSON.stringify({type:'pong'}));return;}if(m.type==='config'){config=m.payload;setStatus('connected');render();return;}if(m.type==='error'){showToast(m.payload||'Update failed');return;}};
   ws.onclose=function(){setStatus('disconnected');if(reconnectAttempts<10){reconnectAttempts++;reconnectTimer=setTimeout(connect,2000*reconnectAttempts);}};
   ws.onerror=function(){ws.close();};
 }
@@ -1253,7 +1287,7 @@ function initImageLibrary(){
   document.getElementById('imageLibraryUploadInput').addEventListener('change',function(){handleLibraryUpload(this);});
 }
 
-// ---- Desktop TV Simulator ----
+// ---- Desktop TV Preview ----
 // Reuses the real TV renderer (/tv/<session>) inside an iframe so the
 // preview always matches what a physical TV would show. Display count,
 // selected display, and per-display theme/layout overrides are passed as URL
@@ -1408,7 +1442,7 @@ function scaleFrames(){
 var simScaleTimer=null;
 function debounceScaleFrames(){
   if(simScaleTimer) clearTimeout(simScaleTimer);
-  simScaleTimer=setTimeout(scaleFrames,100);
+  simScaleTimer=setTimeout(function(){scaleFrames();scaleMobilePreview();},100);
 }
 
 function getSimTvUrl(displayNum,embed){
@@ -1429,6 +1463,11 @@ function copyAllTvUrls(){
   try{navigator.clipboard.writeText(urls.join('\\n'));showToast('Copied '+urls.length+' TV URLs');}catch(e){showToast('Copy failed');}
 }
 
+function copyTvUrl(){
+  var url=document.getElementById('tvDisplayLink').href;
+  try{navigator.clipboard.writeText(url);showToast('Copied TV URL');}catch(e){showToast('Copy failed');}
+}
+
 function rotateSimDisplay(){
   setSimSelectedDisplay((simState.selectedDisplay % simState.displayCount)+1);
 }
@@ -1444,6 +1483,7 @@ function sendToConnectedTv(){
 
 function updateSimulator(){
   renderSimulatorPreview();
+  renderMobilePreview();
 }
 
 function syncSimulatorFromConfig(){
@@ -1457,10 +1497,78 @@ function syncSimulatorFromConfig(){
   }
 }
 
+// ---- Mobile TV Preview ----
+// On narrow screens the settings page is primary. The preview loads only
+// inside a modal dialog so it does not dominate the operator view.
+var mobilePreviewLastFocus=null;
+
+function initMobilePreview(){
+  var modal=document.getElementById('mobilePreviewModal');
+  if(!modal)return;
+  document.getElementById('mobilePreviewClose').addEventListener('click',closeMobilePreview);
+  modal.addEventListener('click',function(e){if(e.target===modal)closeMobilePreview();});
+}
+
+function openMobilePreview(){
+  var modal=document.getElementById('mobilePreviewModal');
+  if(!modal)return;
+  mobilePreviewLastFocus=document.activeElement;
+  modal.classList.add('open');
+  document.addEventListener('keydown',mobilePreviewKeydown,true);
+  renderMobilePreview();
+  setTimeout(function(){var c=document.getElementById('mobilePreviewClose');if(c)c.focus();},0);
+}
+
+function closeMobilePreview(){
+  var modal=document.getElementById('mobilePreviewModal');
+  if(!modal)return;
+  modal.classList.remove('open');
+  document.removeEventListener('keydown',mobilePreviewKeydown,true);
+  if(mobilePreviewLastFocus&&mobilePreviewLastFocus.focus){mobilePreviewLastFocus.focus();}
+  mobilePreviewLastFocus=null;
+}
+
+function mobilePreviewKeydown(e){
+  var modal=document.getElementById('mobilePreviewModal');
+  if(!modal||!modal.classList.contains('open'))return;
+  if(e.key==='Escape'){e.preventDefault();closeMobilePreview();return;}
+  if(e.key==='Tab'){
+    var focusable=modal.querySelectorAll('button[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])');
+    if(!focusable.length)return;
+    var first=focusable[0],last=focusable[focusable.length-1];
+    if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
+    else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
+  }
+}
+
+function renderMobilePreview(){
+  var modal=document.getElementById('mobilePreviewModal');
+  if(!modal||!modal.classList.contains('open'))return;
+  var container=document.getElementById('mobilePreviewModalFrame');
+  if(!container)return;
+  container.innerHTML='<iframe id="mobilePreviewFrame" title="TV preview" allowfullscreen></iframe>';
+  var frame=document.getElementById('mobilePreviewFrame');
+  if(!frame)return;
+  var url='/tv/'+SESSION_ID+'?embed=1&display=1&displays=1';
+  frame.src=location.origin+url;
+  scaleMobilePreview();
+}
+
+function scaleMobilePreview(){
+  var frame=document.getElementById('mobilePreviewFrame');
+  var container=document.getElementById('mobilePreviewModalFrame');
+  if(!frame||!container)return;
+  var scale=Math.min(container.clientWidth/1920,container.clientHeight/1080,1);
+  if(!(scale>0))scale=1;
+  frame.style.width='1920px';
+  frame.style.height='1080px';
+  frame.style.transform='scale('+scale+')';
+}
+
 // End simulator
 
 connect();
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){initImageLibrary();initThemeRadios();initSimulator();});}else{initImageLibrary();initThemeRadios();initSimulator();}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){initImageLibrary();initThemeRadios();initSimulator();initMobilePreview();});}else{initImageLibrary();initThemeRadios();initSimulator();initMobilePreview();}
 </script>
 </body>
 </html>`;

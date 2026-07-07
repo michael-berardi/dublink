@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, getProductVariant, GET_PRODUCT_VARIANT_JS, getPlaceholderIconSvg, GET_PLACEHOLDER_ICON_SVG_JS, getPlaceholderVariantOverlay, PLACEHOLDER_VARIANT_OVERLAYS, PLACEHOLDER_OVERLAY_COLORS, GET_PLACEHOLDER_OVERLAY_COLORS_JS, GET_PLACEHOLDER_VARIANT_OVERLAY_JS } from '../src/category-icons';
+import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, getProductVariant, GET_PRODUCT_VARIANT_JS, getPlaceholderIconSvg, GET_PLACEHOLDER_ICON_SVG_JS } from '../src/category-icons';
 
 describe('getCategoryType', () => {
   it('classifies canonical category names and synonyms', () => {
@@ -13,6 +13,8 @@ describe('getCategoryType', () => {
     expect(getCategoryType('CBD Tincture')).toBe('cbd');
     expect(getCategoryType('Topicals')).toBe('topicals');
     expect(getCategoryType('Accessories')).toBe('accessories');
+    expect(getCategoryType('Beverages')).toBe('beverages');
+    expect(getCategoryType('Drinks')).toBe('beverages');
   });
 
   it('falls back to other for unknown names', () => {
@@ -35,6 +37,7 @@ describe('GET_CATEGORY_TYPE_JS', () => {
     const fn = new Function(GET_CATEGORY_TYPE_JS + '; return getCategoryType;')();
     expect(fn('Vape Carts')).toBe('vapes');
     expect(fn('Live Resin')).toBe('concentrates');
+    expect(fn('Soda')).toBe('beverages');
     expect(fn('Unknown')).toBe('other');
   });
 });
@@ -62,6 +65,7 @@ describe('icon SVGs', () => {
     const keys = Object.keys(CATEGORY_ICON_SVGS);
     expect(keys).toContain('flower');
     expect(keys).toContain('edibles');
+    expect(keys).toContain('beverages');
     expect(keys).toContain('concentrates');
     expect(keys).toContain('prerolls');
     expect(keys).toContain('vapes');
@@ -69,8 +73,84 @@ describe('icon SVGs', () => {
     expect(keys).toContain('tinctures');
     expect(keys).toContain('cbd');
     expect(keys).toContain('accessories');
+    expect(keys).toContain('seedling');
     expect(keys).toContain('other');
     expect(keys).toContain('generic');
+  });
+
+  it('rejects gradient, filter, and glow-style artifacts', () => {
+    const artifacts = ['linearGradient', 'radialGradient', 'filter', 'drop-shadow', 'box-shadow'];
+    for (const [key, svg] of Object.entries(CATEGORY_ICON_SVGS)) {
+      for (const artifact of artifacts) {
+        expect(svg, `${key} category icon should not contain ${artifact}`).not.toContain(artifact);
+      }
+    }
+    for (const [key, svg] of Object.entries(PLACEHOLDER_ICON_SVGS)) {
+      for (const artifact of artifacts) {
+        expect(svg, `${key} placeholder icon should not contain ${artifact}`).not.toContain(artifact);
+      }
+    }
+  });
+
+  it('rejects inline style attributes and explicit color values', () => {
+    // Only currentColor should drive color; no inline styles or hex/rgb fills.
+    for (const [key, svg] of Object.entries(CATEGORY_ICON_SVGS)) {
+      expect(svg, `${key} category icon`).not.toMatch(/style\s*=/);
+      expect(svg, `${key} category icon`).not.toMatch(/fill\s*=\s*"#[0-9a-fA-F]{3,6}"/);
+      expect(svg, `${key} category icon`).not.toMatch(/stroke\s*=\s*"#[0-9a-fA-F]{3,6}"/);
+      expect(svg, `${key} category icon`).not.toMatch(/fill\s*=\s*"rgb\(/);
+      expect(svg, `${key} category icon`).not.toMatch(/stroke\s*=\s*"rgb\(/);
+    }
+    for (const [key, svg] of Object.entries(PLACEHOLDER_ICON_SVGS)) {
+      // Placeholder wrappers carry the required class attribute, but no inline styles.
+      expect(svg, `${key} placeholder icon`).not.toMatch(/style\s*=/);
+      expect(svg, `${key} placeholder icon`).not.toMatch(/fill\s*=\s*"#[0-9a-fA-F]{3,6}"/);
+      expect(svg, `${key} placeholder icon`).not.toMatch(/stroke\s*=\s*"#[0-9a-fA-F]{3,6}"/);
+      expect(svg, `${key} placeholder icon`).not.toMatch(/fill\s*=\s*"rgb\(/);
+      expect(svg, `${key} placeholder icon`).not.toMatch(/stroke\s*=\s*"rgb\(/);
+    }
+  });
+
+  it('keeps stroke widths within a consistent, premium range', () => {
+    for (const [key, svg] of Object.entries(CATEGORY_ICON_SVGS)) {
+      const matches = svg.matchAll(/stroke-width="([0-9.]+)"/g);
+      for (const m of matches) {
+        const w = parseFloat(m[1]);
+        expect(w, `${key} category icon stroke-width`).toBeGreaterThanOrEqual(1);
+        expect(w, `${key} category icon stroke-width`).toBeLessThanOrEqual(2.5);
+      }
+    }
+    for (const [key, svg] of Object.entries(PLACEHOLDER_ICON_SVGS)) {
+      const matches = svg.matchAll(/stroke-width="([0-9.]+)"/g);
+      for (const m of matches) {
+        const w = parseFloat(m[1]);
+        expect(w, `${key} placeholder icon stroke-width`).toBeGreaterThanOrEqual(1.5);
+        expect(w, `${key} placeholder icon stroke-width`).toBeLessThanOrEqual(7);
+      }
+    }
+  });
+
+  it('keeps only product-realistic icon shapes for important categories', () => {
+    // Each icon must have enough path/rect/circle geometry to be recognizable.
+    for (const key of Object.keys(CATEGORY_LABELS)) {
+      const svg = CATEGORY_ICON_SVGS[key];
+      expect(svg, `${key} category icon`).toBeTruthy();
+      expect(svg, `${key} category icon`).toMatch(/<path|<rect|<circle|<ellipse/);
+      expect(svg, `${key} category icon`).toContain('</svg>');
+    }
+    for (const key of Object.keys(CATEGORY_LABELS)) {
+      const svg = PLACEHOLDER_ICON_SVGS[key] || PLACEHOLDER_ICON_SVGS.generic;
+      expect(svg, `${key} placeholder icon`).toBeTruthy();
+      expect(svg, `${key} placeholder icon`).toMatch(/<path|<rect|<circle|<ellipse/);
+      expect(svg, `${key} placeholder icon`).toContain('</svg>');
+    }
+  });
+
+  it('avoids smiley-face or mascot geometry in edibles icon', () => {
+    const svg = CATEGORY_ICON_SVGS.edibles;
+    const circleCount = (svg.match(/<circle/g) || []).length;
+    // Smiley faces rely on paired eye circles; product-realistic edibles uses at most one highlight.
+    expect(circleCount).toBeLessThanOrEqual(1);
   });
 });
 
@@ -113,65 +193,19 @@ describe('GET_PRODUCT_VARIANT_JS', () => {
   });
 });
 
-describe('placeholder variant overlays', () => {
-  it('provides a distinct overlay for every variant 0-3', () => {
-    const shapes = new Set<string>();
-    for (let v = 0; v < 4; v++) {
-      const overlay = getPlaceholderVariantOverlay(v);
-      expect(overlay, `variant ${v}`).toContain('<svg');
-      expect(overlay, `variant ${v}`).toContain('</svg>');
-      expect(overlay, `variant ${v}`).toContain('variant-overlay-shape');
-      shapes.add(overlay);
-    }
-    expect(shapes.size).toBe(4);
-  });
-
-  it('overlays use currentColor for category-aware coloring', () => {
-    for (const [v, overlay] of Object.entries(PLACEHOLDER_VARIANT_OVERLAYS)) {
-      if (!overlay) continue;
-      expect(overlay, `variant ${v}`).toContain('currentColor');
-    }
-  });
-
-  it('returns variant 0 as the fallback for invalid variants', () => {
-    const v0 = getPlaceholderVariantOverlay(0);
-    expect(getPlaceholderVariantOverlay(99)).toBe(v0);
-    expect(getPlaceholderVariantOverlay(-1)).toBe(v0);
-  });
-});
-
-describe('GET_PLACEHOLDER_VARIANT_OVERLAY_JS', () => {
-  it('injects a runnable browser variable matching the server map', () => {
-    expect(GET_PLACEHOLDER_VARIANT_OVERLAY_JS).toContain('PLACEHOLDER_VARIANT_OVERLAYS');
-    const ctx = new Function(GET_PLACEHOLDER_VARIANT_OVERLAY_JS + '; return PLACEHOLDER_VARIANT_OVERLAYS;')();
-    expect(ctx[0]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[0]);
-    expect(ctx[1]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[1]);
-    expect(ctx[2]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[2]);
-    expect(ctx[3]).toBe(PLACEHOLDER_VARIANT_OVERLAYS[3]);
-  });
-});
-
-describe('GET_PLACEHOLDER_OVERLAY_COLORS_JS', () => {
-  it('injects a runnable browser map of category accent colors', () => {
-    expect(GET_PLACEHOLDER_OVERLAY_COLORS_JS).toContain('PLACEHOLDER_OVERLAY_COLORS');
-    const ctx = new Function(GET_PLACEHOLDER_OVERLAY_COLORS_JS + '; return PLACEHOLDER_OVERLAY_COLORS;')();
-    expect(ctx.flower).toBe(PLACEHOLDER_OVERLAY_COLORS.flower);
-    expect(ctx.edibles).toBe(PLACEHOLDER_OVERLAY_COLORS.edibles);
-    expect(ctx.flower).toMatch(/^#[0-9a-f]{6}$/i);
-  });
-});
-
 describe('getPlaceholderIconSvg', () => {
-  it('embeds the category color into the placeholder SVG', () => {
+  it('returns a clean currentColor placeholder SVG without inline color styles', () => {
     const svg = getPlaceholderIconSvg('flower', 1);
     expect(svg).toContain('class="placeholder-icon"');
-    expect(svg).toContain('style="color:#4ade80"');
+    expect(svg).not.toContain('style="color:');
+    expect(svg).not.toContain('linearGradient');
+    expect(svg).toContain('currentColor');
   });
 
   it('returns the bare category icon for variant 0', () => {
     const svg = getPlaceholderIconSvg('edibles', 0);
     expect(svg).toContain('class="placeholder-icon"');
-    expect(svg).toContain('style="color:#fbbf24"');
+    expect(svg).not.toContain('style="color:');
     expect(svg).not.toContain('variant-decor');
   });
 
@@ -181,7 +215,8 @@ describe('getPlaceholderIconSvg', () => {
 
   it('falls back to generic for unknown categories', () => {
     const svg = getPlaceholderIconSvg('unknown', 3);
-    expect(svg).toContain('style="color:#34d399"');
+    expect(svg).toContain('class="placeholder-icon"');
+    expect(svg).toContain('currentColor');
   });
 });
 

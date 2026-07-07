@@ -122,10 +122,29 @@ describe('dubhaven auth url builder', () => {
     expect(redirect.searchParams.get('next')).toBe('/config/abc');
   });
 
+  it('refuses to build a DubHaven SSO URL for localhost origins', () => {
+    const env = makeEnv();
+    expect(() => buildDubHavenAuthUrl(env, 'http://127.0.0.1:8792', '/config/abc')).toThrow('DubHaven auth is not configured');
+    expect(() => buildDubHavenAuthUrl(env, 'http://localhost:8787', '/config/abc')).toThrow('DubHaven auth is not configured');
+  });
+
   it('is configured when DubHaven URL defaults and callback secret is present', () => {
     const env = makeEnv();
     expect(isDubHavenStartConfigured(env)).toBe(true);
     expect(isDubHavenCallbackConfigured(env)).toBe(true);
+  });
+
+  it('is not start-configured for local origins even with default URL', () => {
+    const env = makeEnv();
+    expect(isDubHavenStartConfigured(env, 'http://127.0.0.1:8792')).toBe(false);
+    expect(isDubHavenStartConfigured(env, 'http://localhost:8787')).toBe(false);
+    expect(isDubHavenStartConfigured(env, 'http://0.0.0.0:3000')).toBe(false);
+  });
+
+  it('is start-configured for non-local origins with default URL', () => {
+    const env = makeEnv();
+    expect(isDubHavenStartConfigured(env, 'https://dubmenu.com')).toBe(true);
+    expect(isDubHavenStartConfigured(env, 'https://www.dubmenu.com')).toBe(true);
   });
 
   it('is not callback-configured when account secret is missing', () => {
@@ -192,12 +211,59 @@ describe('dubhaven auth routes', () => {
     expect(location).toContain(encodeURIComponent('/auth/dubhaven/callback'));
   });
 
-  it('/config/:id unauthenticated redirects to DubHaven SSO preserving next', async () => {
-    const res = await SELF.fetch('https://dubmenu.com/config/testsession123', { redirect: 'manual' });
+  it('localhost falls back to local login from /auth/dubhaven preserving next', async () => {
+    const res = await SELF.fetch('http://127.0.0.1:8792/auth/dubhaven?next=%2Fconfig%2Fdemo', { redirect: 'manual' });
     expect(res.status).toBe(302);
     const location = res.headers.get('location') || '';
-    expect(location).toContain('/auth/dubhaven');
-    expect(location).toContain('next=%2Fconfig%2Ftestsession123');
+    expect(location).toBe('http://127.0.0.1:8792/login?next=%2Fconfig%2Fdemo');
+    expect(location).not.toContain('dubhaven.com');
+  });
+
+  it('localhost /config/:id unauthenticated falls back to /login preserving next', async () => {
+    const res = await SELF.fetch('http://127.0.0.1:8792/config/demo', { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    const location = res.headers.get('location') || '';
+    expect(location).toBe('http://127.0.0.1:8792/login?next=%2Fconfig%2Fdemo');
+    expect(location).not.toContain('dubhaven.com');
+    expect(location).not.toContain('/auth/dubhaven');
+  });
+
+  it('unauthenticated GET http://127.0.0.1/config/demo never reaches DubHaven and preserves next=/config/demo', async () => {
+    // Following the redirect chain must land on the local login page and keep
+    // the intended destination in the form. It must never reach the DubHaven
+    // SSO endpoint, which would reject the localhost callback with
+    // "Invalid redirect URL for product".
+    const res = await SELF.fetch('http://127.0.0.1:8792/config/demo');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Log In');
+    expect(html).toContain('/api/login');
+    expect(html).toContain('<input type="hidden" name="next" value="/config/demo">');
+    expect(html).not.toContain('dubhaven.com');
+    expect(html).not.toContain('Invalid redirect URL for product');
+  });
+
+  it('localhost /tv/new unauthenticated falls back to /login preserving next', async () => {
+    const res = await SELF.fetch('http://127.0.0.1:8792/tv/new', { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    const location = res.headers.get('location') || '';
+    expect(location).toBe('http://127.0.0.1:8792/login?next=%2Ftv%2Fnew');
+  });
+
+  it('localhost /account unauthenticated falls back to /login (no DubHaven redirect)', async () => {
+    const res = await SELF.fetch('http://127.0.0.1:8792/account', { redirect: 'manual' });
+    expect(res.status).toBe(302);
+    const location = res.headers.get('location') || '';
+    expect(location).toBe('http://127.0.0.1:8792/login');
+  });
+
+  it('localhost /login does not render the DubHaven SSO button', async () => {
+    const res = await SELF.fetch('http://127.0.0.1:8792/login');
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).not.toContain('/auth/dubhaven');
+    expect(html).not.toContain('Sign in with DubHaven');
+    expect(html).toContain('/api/login');
   });
 });
 

@@ -481,7 +481,12 @@ export class SessionDurableObject implements DurableObject {
         this.broadcast({ type: 'peer_connected', payload: { role: conn.role } }, connId);
         const hasTv = Array.from(this.connections.values()).some(c => c.role === 'tv');
         const hasPhone = Array.from(this.connections.values()).some(c => c.role === 'phone');
-        if (hasTv && hasPhone) this.broadcast({ type: 'paired' });
+        if (hasTv && hasPhone) {
+          this.broadcast({ type: 'paired' });
+          // Push the current menu to every connected screen so the TV shows the
+          // latest menu as soon as the phone pairs, without waiting for an edit.
+          this.broadcast({ type: 'config', payload: this.config });
+        }
         break;
       }
 
@@ -491,7 +496,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'config_update': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidConfigUpdate(payload)) return;
         const sanitizedPayload = { ...payload };
@@ -508,7 +513,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'config_replace': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || !this.isValidImportedCategories(payload.categories)) return;
         this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories) };
@@ -518,7 +523,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_add': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidCategoryAdd(payload)) return;
         const newCategory = {
@@ -535,7 +540,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_update': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidCategoryUpdate(payload)) return;
 
@@ -556,7 +561,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'category_remove': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || typeof payload.categoryId !== 'string') return;
 
@@ -569,7 +574,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_add': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidProductAdd(payload)) return;
 
@@ -603,7 +608,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_update': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidProductUpdate(payload)) return;
 
@@ -665,7 +670,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_remove': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || 
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
@@ -680,7 +685,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_toggle_stock': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || 
             typeof payload.categoryId !== 'string' || typeof payload.productId !== 'string') return;
@@ -698,7 +703,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'product_move': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' ||
             typeof payload.fromCategoryId !== 'string' ||
@@ -720,7 +725,7 @@ export class SessionDurableObject implements DurableObject {
       }
 
       case 'reorder': {
-        if (!(await this.canModifyConfig(conn))) return;
+        if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!this.isValidReorder(payload)) return;
 
@@ -915,6 +920,12 @@ export class SessionDurableObject implements DurableObject {
     if (typeof value !== 'string') return undefined;
     const v = value.trim().toUpperCase();
     return /^[A-Z]{2}$/.test(v) ? v : undefined;
+  }
+
+  private async requireModifyPermission(conn: WSConnection, server: WebSocket): Promise<boolean> {
+    if (await this.canModifyConfig(conn)) return true;
+    server.send(JSON.stringify({ type: 'error', payload: 'Unable to update config. Check ownership and subscription status.' }));
+    return false;
   }
 
   private async canModifyConfig(conn: WSConnection): Promise<boolean> {
