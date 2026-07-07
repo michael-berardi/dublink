@@ -1026,7 +1026,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function makeSub(p){
     var parts = [];
-    if(current.showStrain !== false && p.strain) parts.push(strainBadge(p));
+    if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.sku) parts.push('SKU ' + escapeHtml(p.sku));
     if(p.weight) parts.push(escapeHtml(p.weight));
     if(p.thc || p.cbd){
@@ -1035,12 +1035,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       if(p.cbd) cannabinoids.push('CBD ' + escapeHtml(p.cbd));
       if(cannabinoids.length) parts.push(cannabinoids.join(' / '));
     }
-    if(current.showBrand !== false && p.brand) parts.push(escapeHtml(p.brand));
+    if(config.showBrand !== false && p.brand) parts.push(escapeHtml(p.brand));
     return parts.join(' \u00B7 ');
   }
 
   function makePrice(p){
-    if(p && current.showPromos === false){
+    if(p && config.showPromos === false){
       return '$' + (typeof p.price === 'number' ? p.price.toFixed(2).replace(/\\.00$/, '') : escapeHtml(p.price || ''));
     }
     if(p && p.isPromo && (!p.price || p.price <= 0)) return '<span class="promo-price">' + escapeHtml(p.specialLabel || 'Promo') + '</span>';
@@ -1076,11 +1076,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function makeGridMeta(p){
     var parts = [];
-    if(current.showStrain !== false && p.strain) parts.push(strainBadge(p));
+    if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.weight) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
     if(p.thc) parts.push('<span>THC ' + escapeHtml(p.thc) + '</span>');
     if(p.cbd) parts.push('<span>CBD ' + escapeHtml(p.cbd) + '</span>');
-    if(current.showBrand !== false && p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
+    if(config.showBrand !== false && p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
     return parts.join('');
   }
 
@@ -1094,7 +1094,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       grid.className = 'grid-products';
       grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
-        var hasImage = !!(p.image && current.showImages !== false);
+        var hasImage = !!(p.image && config.showImages !== false);
         var visual = imgMarkup(p, true);
         var card = document.createElement('div');
         card.className = 'product-card has-image' + gridStrainClass(p) + (p.inStock === false ? ' out-of-stock' : '');
