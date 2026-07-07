@@ -218,8 +218,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var(--bg);}
   .promo-bar{width:100%;padding:0.7rem 2rem;text-align:center;font-weight:900;font-size:clamp(1rem,1.4vw,1.35rem);letter-spacing:0.08em;flex-shrink:0;z-index:10;display:none;text-transform:uppercase;overflow-wrap:break-word;word-wrap:break-word;min-width:0;box-shadow:0 8px 28px rgba(0,0,0,0.22);}
   .promo-bar.active{display:block;}
-  .menu-header{display:flex;justify-content:space-between;align-items:center;padding:0.85rem 2.25rem;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(0,0,0,0.08)),var(--bg);z-index:9;box-shadow:0 12px 32px rgba(0,0,0,0.22);}
-  .header-left{display:flex;align-items:center;gap:1rem;min-width:0;}
+  .menu-header{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:0.85rem 2.25rem;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(0,0,0,0.08)),var(--bg);z-index:9;box-shadow:0 12px 32px rgba(0,0,0,0.22);}
+  .header-left{display:flex;align-items:center;gap:1rem;min-width:0;flex:1 1 auto;}
+  .header-right{display:flex;align-items:center;gap:0.75rem;flex:0 0 auto;}
   .header-logo{max-height:52px;max-width:200px;object-fit:contain;display:none;}
   .header-logo.show{display:block;}
   .dispensary-name{font-size:clamp(2rem,3vw,3rem);font-weight:950;letter-spacing:-0.035em;line-height:1.05;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 32px var(--accent-glow);}
@@ -326,7 +327,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .tv-info{position:fixed;bottom:1rem;left:1rem;display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.9rem;border-radius:1.5rem;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);border:1px solid var(--border);font-size:0.7rem;font-weight:700;letter-spacing:0.04em;z-index:200;opacity:0;transition:opacity 1s ease;pointer-events:none;text-transform:uppercase;}
   .tv-info.visible{opacity:0.85;}
-  .demo-pill{position:fixed;top:1rem;left:1rem;display:none;padding:0.38rem 0.75rem;border-radius:999px;background:rgba(250,204,21,0.16);border:1px solid rgba(250,204,21,0.34);color:#fde68a;font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;z-index:210;pointer-events:none;backdrop-filter:blur(10px);}
+  .demo-pill{display:none;padding:0.38rem 0.75rem;border-radius:999px;background:rgba(250,204,21,0.16);border:1px solid rgba(250,204,21,0.34);color:#fde68a;font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(10px);white-space:nowrap;}
   .demo-pill.visible{display:block;}
 
   .price-tiers{display:flex;flex-wrap:wrap;gap:0.45rem 0.55rem;margin-top:auto;align-items:stretch;}
@@ -420,9 +421,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     html,body{overflow:auto;height:auto;min-height:100vh;}
     .phase{position:relative;inset:auto;height:auto;min-height:100vh;}
     #menu{width:100% !important;height:auto !important;transform:none !important;margin:0 !important;}
-    .menu-header{padding:0.75rem 1rem;position:sticky;top:0;}
+    .menu-header{padding:0.75rem 1rem;position:sticky;top:0;gap:0.6rem;}
     .header-logo{max-height:36px;max-width:120px;}
     .dispensary-name{font-size:1.4rem;}
+    .demo-pill{font-size:0.58rem;padding:0.28rem 0.5rem;letter-spacing:0.06em;}
     .menu-content{padding:1rem;overflow-y:auto;max-height:none;}
     .menu-footer{padding:0.5rem 1rem;font-size:0.7rem;}
     .promo-bar{font-size:0.85rem;padding:0.4rem 1rem;}
@@ -531,6 +533,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       <img id="header-logo" class="header-logo" alt="">
       <div class="dispensary-name" id="dispensary-name">Loading...</div>
     </div>
+    <div class="header-right">
+      <div class="demo-pill" id="demo-pill">Demo data</div>
+    </div>
   </header>
   <div class="menu-content" id="menu-content"></div>
   <footer class="menu-footer">
@@ -551,7 +556,6 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 </div>
 
 <div class="tv-info" id="tv-info"></div>
-<div class="demo-pill" id="demo-pill">Demo data</div>
 
 <script>
 (function(){
