@@ -61,9 +61,9 @@ async function createPopulatedSession(): Promise<{ sessionId: string; cookie: st
   await activateTrial(cookie);
   const sessionId = `MANUAL-${unique()}`;
   await claimSession(sessionId, cookie);
-  const csv = `name,price,category
-SAM SYNC TEST A,20.00,Flower
-SAM SYNC TEST B,25.00,Edibles`;
+  const csv = `name,price,category,description,strain
+SAM SYNC TEST A,20.00,Flower,Bright test description,hybrid
+SAM SYNC TEST B,25.00,Edibles,Chewy test description,indica`;
   await importCSV(sessionId, cookie, csv);
   return { sessionId, cookie };
 }
@@ -149,7 +149,7 @@ describe('manual products render in TV path', () => {
     const client = res.webSocket;
     if (!client) throw new Error('expected WebSocket');
 
-    const msg = await new Promise<{ type: string; payload?: { categories?: { products?: { name: string }[] }[] } }>((resolve, reject) => {
+    const msg = await new Promise<{ type: string; payload?: { categories?: { products?: { name: string; description?: string; specialLabel?: string }[] }[] } }>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('websocket timeout')), 5000);
       client.addEventListener('message', (ev) => {
         clearTimeout(timer);
@@ -159,9 +159,9 @@ describe('manual products render in TV path', () => {
     });
 
     expect(msg.type).toBe('config');
-    const names = (msg.payload?.categories || []).flatMap((c: { products?: { name: string }[] }) =>
-      (c.products || []).map((p: { name: string }) => p.name)
-    );
+    const products = (msg.payload?.categories || []).flatMap((c: { products?: { name: string; description?: string; specialLabel?: string }[] }) => c.products || []);
+    const names = products.map((p) => p.name);
+    expect(products.find((p) => p.name === 'SAM SYNC TEST A')?.description).toBe('Bright test description');
     expect(names).toContain('SAM SYNC TEST A');
     expect(names).toContain('SAM SYNC TEST B');
 

@@ -413,20 +413,18 @@ export default {
       }
     }
 
-    // TV subdomain (tv.dubmenu.com) is loaded on a dispensary TV and must go
-    // straight into the TV pairing experience (QR code / access code). It must
-    // never show marketing or the full site. Functional paths (/tv/*, /ws/*,
-    // /status/*, /api/*, /print/*, /config/*) still pass through so a paired
-    // phone or a specific TV URL keeps working.
+    // TV subdomain (tv.dubmenu.com) is the universal entrypoint shown on a
+    // dispensary TV. Root loads a fresh pairable display session with only the
+    // "scan with your phone to configure your menu" intro; demos stay explicit
+    // under /tv/demo and marketing pages stay on the app host.
     if (isTvHost) {
       const TV_ALLOWED_PREFIXES = ['/tv/', '/ws/', '/status/', '/api/', '/print/', '/config/', '/menu/', '/login', '/signup', '/robots.txt', '/sitemap.xml'];
       const isTvFunctional = path === '/' || TV_ALLOWED_PREFIXES.some((p) => path === p || path.startsWith(p));
       if (!isTvFunctional) {
-        // Any marketing/non-TV route on the TV host → straight to TV pairing.
-        return redirectResponse(`${url.origin}/tv/demo`);
+        return redirectResponse(`${url.origin}/`);
       }
       if (path === '/') {
-        return htmlResponse(tvPage('demo', url.origin, { noAgeGate: true, demo: true }));
+        return htmlResponse(tvPage(generateSessionId(), url.origin, { noAgeGate: true }));
       }
     }
 
@@ -1008,6 +1006,10 @@ export default {
           showBrand: formatted.layout.showBrand,
           showStrain: formatted.layout.showStrain,
           theme: formatted.layout.theme,
+          template: formatted.brandStyle.template,
+          primaryColor: formatted.brandStyle.primaryColor,
+          secondaryColor: formatted.brandStyle.secondaryColor,
+          showLogo: true,
           tvDemo: raw.demo === true,
         };
 

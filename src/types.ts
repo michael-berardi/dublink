@@ -18,6 +18,7 @@ export interface Product {
   inStock: boolean;
   strain?: 'indica' | 'sativa' | 'hybrid';
   isPromo?: boolean; // Flag for promotional items
+  specialLabel?: string;
   isNew?: boolean;
   lowStock?: boolean;
   priceTiers?: PriceTier[]; // Tiered pricing, e.g. [{label:"1g",price:"$12"},{label:"8th",price:"$40"}]. Renderer prefers priceTiers when non-empty.
@@ -81,7 +82,7 @@ export interface MenuConfig {
   currency: string;
   customFont?: string; // e.g., "Inter", "Roboto", etc.
   categories: Category[];
-  layout: 'auto' | 'grid' | 'list' | 'cards' | 'compact' | 'poster' | 'cinematic' | 'showcase' | 'editorial' | 'sparse';
+  layout: 'auto' | 'grid' | 'list' | 'pricewall' | 'cards' | 'compact' | 'poster' | 'cinematic' | 'showcase' | 'editorial' | 'sparse';
   layoutMode: 'auto' | 'columns' | 'pricelist' | 'compact' | 'grid';
   fontSize: 'small' | 'medium' | 'large';
   theme: 'dark' | 'light';

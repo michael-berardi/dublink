@@ -44,6 +44,9 @@ const MAGIC_SIGNATURES: readonly MagicSignature[] = [
 ];
 
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
+const IMPORT_IMAGE_FETCH_TIMEOUT_MS = 4500;
+const IMPORT_IMAGE_CONCURRENCY = 8;
+
 
 // Restrictive CSP applied to every served image. `default-src 'none'` blocks
 // all resource loading, scripting, framing, and connections. img-src 'self'
@@ -76,6 +79,21 @@ function isDubMenuUploadUrl(value: string, appUrl?: string): boolean {
   }
 }
 
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
 async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; detected: MagicSignature; size: number } | null> {
   let url: URL;
   try {
@@ -84,9 +102,12 @@ async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; dete
     return null;
   }
   if (url.protocol !== 'https:') return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), IMPORT_IMAGE_FETCH_TIMEOUT_MS);
   try {
     const res = await fetch(url.toString(), {
       headers: { Accept: 'image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1' },
+      signal: controller.signal,
     });
     if (!res.ok) return null;
     const buffer = await res.arrayBuffer();
@@ -96,6 +117,8 @@ async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; dete
     return { body: new Blob([buffer], { type: detected.contentType }), detected, size: buffer.byteLength };
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -164,6 +187,7 @@ function sanitizeFilename(name: string): string {
 export async function bundleImportedImages(
   config: {
     logo?: unknown;
+    showImages?: unknown;
     categories?: Array<{ products?: Array<{ image?: unknown }> }>;
     specials?: Array<{ image?: unknown }>;
     [key: string]: unknown;
@@ -186,22 +210,27 @@ export async function bundleImportedImages(
   if (logo) config.logo = logo;
   else if (typeof config.logo === 'string' && config.logo.startsWith('http')) delete config.logo;
 
+  const shouldBundleProductImages = config.showImages !== false;
   const categories = Array.isArray(config.categories) ? config.categories : [];
   for (const category of categories) {
     const products = Array.isArray(category.products) ? category.products : [];
-    for (const product of products) {
+    await mapWithConcurrency(products, IMPORT_IMAGE_CONCURRENCY, async (product) => {
+      if (!shouldBundleProductImages) {
+        if (typeof product.image === 'string' && product.image.startsWith('http')) delete product.image;
+        return;
+      }
       const bundled = await rewrite(product.image, 'product');
       if (bundled) product.image = bundled;
       else if (typeof product.image === 'string' && product.image.startsWith('http')) delete product.image;
-    }
+    });
   }
 
   const specials = Array.isArray(config.specials) ? config.specials : [];
-  for (const special of specials) {
+  await mapWithConcurrency(specials, IMPORT_IMAGE_CONCURRENCY, async (special) => {
     const bundled = await rewrite(special.image, 'special');
     if (bundled) special.image = bundled;
     else if (typeof special.image === 'string' && special.image.startsWith('http')) delete special.image;
-  }
+  });
 
   return { config, warnings };
 }

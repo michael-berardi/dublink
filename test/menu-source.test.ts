@@ -57,6 +57,29 @@ describe('detectMenuSource', () => {
     expect(s.type).toBe('invalid');
     expect(s.error).toBeTruthy();
   });
+
+  it('detects modern Dutchie /stores/:slug URLs', () => {
+    const s = detectMenuSource('https://dutchie.com/stores/nature-med-gladstone');
+    expect(s.type).toBe('dutchie-regular');
+    expect(s.slug).toBe('nature-med-gladstone');
+  });
+
+  it('does not misdetect reserved Dutchie paths as a store slug', () => {
+    const reserved = [
+      'https://dutchie.com/stores',
+      'https://dutchie.com/stores/',
+      'https://dutchie.com/api/v1/dispensaries',
+      'https://dutchie.com/help',
+      'https://dutchie.com/business',
+      'https://dutchie.com/us/dispensaries',
+    ];
+    for (const url of reserved) {
+      const s = detectMenuSource(url);
+      expect(s.type).toBe('dutchie-regular');
+      expect(s.slug).toBeFalsy();
+      expect(s.error).toBeTruthy();
+    }
+  });
 });
 
 describe('extractDutchieSlugFromHtml', () => {
@@ -72,6 +95,12 @@ describe('extractDutchieSlugFromHtml', () => {
 
   it('returns null when no Dutchie link is present', () => {
     expect(extractDutchieSlugFromHtml('<html><body>No menu here</body></html>')).toBeNull();
+  });
+
+  it('ignores reserved Dutchie slugs in HTML links', () => {
+    expect(extractDutchieSlugFromHtml('<a href="https://dutchie.com/stores">Stores directory</a>')).toBeNull();
+    expect(extractDutchieSlugFromHtml('<a href="https://dutchie.com/help">Help center</a>')).toBeNull();
+    expect(extractDutchieSlugFromHtml('<a href="https://dutchie.com/api/v2/embedded-menu/69ab2eec51d4a55999d225a5.js"></a>')).toBe('simply-green');
   });
 });
 
@@ -136,6 +165,8 @@ describe('resolveMenuSource', () => {
     expect(result.productCount).toBeGreaterThan(0);
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.dispensaryName).toBe('Simply Green');
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
     // API key is never printed; only the error message is surfaced.
     expect(mockFetch.mock.calls[0][1].headers['x-api-key']).toBe('test-key');
   });
@@ -157,6 +188,8 @@ describe('resolveMenuSource', () => {
     expect(result.productCount).toBeGreaterThan(0);
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.dispensaryName).toBe('Simply Green');
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
 
     // The direct-fetch path (dutchie.com/embedded-menu/<slug>) must never be called; the demo fallback is the last resort.
     const calledUrls = mockFetch.mock.calls.map((call) => String(call[0]));
@@ -232,6 +265,8 @@ describe('resolveMenuSource', () => {
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(result.source).toBe('dutchie-slug:demo');
+    expect(result.dispensaryName).toBe('Simply Green');
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
   });
 
   it('falls back to demo sample menu when the public API returns only unpriced products', async () => {
@@ -257,6 +292,8 @@ describe('resolveMenuSource', () => {
     expect(result.demo).toBe(true);
     expect(result.productCount).toBeGreaterThan(0);
     expect(result.categories.length).toBeGreaterThan(0);
+    expect(result.dispensaryName).toBe('Simply Green');
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
   });
 
   it('falls back to demo menu for a generic website that has no products', async () => {
@@ -270,6 +307,8 @@ describe('resolveMenuSource', () => {
     expect(result.productCount).toBeGreaterThan(0);
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.dispensaryName).toBe('Simply Green');
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
   });
 
   it('falls back to a Simply Green demo menu when live Dutchie data is unavailable', async () => {
@@ -289,6 +328,7 @@ describe('resolveMenuSource', () => {
     expect(result.productCount).toBeGreaterThan(0);
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
+    expect(result.categories.flatMap((cat) => cat.products).some((product) => product.image?.startsWith('data:image/webp;base64,'))).toBe(true);
   });
 
   it('imports a Dutchie slug via the public GraphQL API when no private API key is configured', async () => {

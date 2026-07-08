@@ -10,12 +10,55 @@ export interface SmartLayout {
   theme: 'dark' | 'light';
 }
 
+type ImportedTemplate = 'default' | 'minimal' | 'neon' | 'light' | 'sunset' | 'forest' | 'royal' | 'gold' | 'ocean' | 'crimson' | 'bone' | 'vapor';
+
+export interface ImportedBrandStyle {
+  template: ImportedTemplate;
+  primaryColor: string;
+  secondaryColor: string;
+}
+
+const BRAND_STYLES: Record<ImportedTemplate, ImportedBrandStyle> = {
+  default: { template: 'default', primaryColor: '#10b981', secondaryColor: '#065f46' },
+  minimal: { template: 'minimal', primaryColor: '#ffffff', secondaryColor: '#a1a1aa' },
+  neon: { template: 'neon', primaryColor: '#00ff88', secondaryColor: '#00cc66' },
+  light: { template: 'light', primaryColor: '#0f766e', secondaryColor: '#99f6e4' },
+  sunset: { template: 'sunset', primaryColor: '#f97316', secondaryColor: '#7c2d12' },
+  forest: { template: 'forest', primaryColor: '#22c55e', secondaryColor: '#14532d' },
+  royal: { template: 'royal', primaryColor: '#818cf8', secondaryColor: '#312e81' },
+  gold: { template: 'gold', primaryColor: '#fbbf24', secondaryColor: '#78350f' },
+  ocean: { template: 'ocean', primaryColor: '#06b6d4', secondaryColor: '#164e63' },
+  crimson: { template: 'crimson', primaryColor: '#fb7185', secondaryColor: '#881337' },
+  bone: { template: 'bone', primaryColor: '#d6d3d1', secondaryColor: '#57534e' },
+  vapor: { template: 'vapor', primaryColor: '#e879f9', secondaryColor: '#701a75' },
+};
+
+const BRAND_STYLE_RULES: Array<{ template: ImportedTemplate; pattern: RegExp }> = [
+  { template: 'gold', pattern: /\b(high society|gold|golden|lux|luxury|premium|elite|select|reserve|crown|king|queen)\b/i },
+  { template: 'royal', pattern: /\b(liberty|royal|capital|capitol|republic|state|empire|heritage|legacy)\b/i },
+  { template: 'forest', pattern: /\b(forest|green|leaf|garden|tree|earth|organic|nature|harvest|botanical|grove|pine)\b/i },
+  { template: 'vapor', pattern: /\b(vibe|vapor|vape|cloud|electric|future|cosmic|galaxy)\b/i },
+  { template: 'ocean', pattern: /\b(ocean|coast|bay|blue|wave|harbor|shore|reef|tide)\b/i },
+  { template: 'sunset', pattern: /\b(sun|sunset|desert|orange|fire|ember|blaze|flame)\b/i },
+  { template: 'crimson', pattern: /\b(red|ruby|crimson|rose|scarlet|cherry)\b/i },
+  { template: 'bone', pattern: /\b(white|bone|ivory|cream|clean|minimal|clinic|medical|apothecary)\b/i },
+  { template: 'neon', pattern: /\b(neon|night|after dark|club|glow)\b/i },
+];
+
+export function inferImportedBrandStyle(dispensaryName: string, logo?: string): ImportedBrandStyle {
+  const source = `${dispensaryName || ''} ${logo || ''}`.replace(/[-_./]+/g, ' ');
+  const matched = BRAND_STYLE_RULES.find((rule) => rule.pattern.test(source));
+  return BRAND_STYLES[matched?.template || 'default'];
+}
+
+
 export interface FormattedMenu {
   categories: ScrapedCategory[];
   productCount: number;
   dispensaryName: string;
   logo?: string;
   layout: SmartLayout;
+  brandStyle: ImportedBrandStyle;
   warnings: string[];
 }
 
@@ -279,7 +322,7 @@ export function smartLayout(productCount: number, categoryCount: number): SmartL
   if (productCount <= 12 && categoryCount <= 3) {
     layoutMode = 'grid';
     showImages = true;
-  } else if (productCount <= 30 || categoryCount <= 4) {
+  } else if (productCount <= 30 && categoryCount <= 4) {
     layoutMode = 'columns';
     showImages = true;
   } else if (productCount <= 70) {
@@ -321,9 +364,7 @@ export function formatMenu(
     : deduped.categories;
   const productCount = tvCategories.reduce((total, category) => total + category.products.length, 0);
   const layout = smartLayout(productCount, tvCategories.length);
-  if (opts.tvOptimize) {
-    layout.showImages = true;
-  }
+  const brandStyle = inferImportedBrandStyle(dispensaryName, logo);
   const warnings = deduped.warnings.slice();
   if (opts.tvOptimize && productCount < deduped.productCount) {
     warnings.push(`Selected ${productCount} TV-ready products from ${deduped.productCount} imported products using image, price, and metadata quality.`);
@@ -334,6 +375,7 @@ export function formatMenu(
     dispensaryName,
     logo,
     layout,
+    brandStyle,
     warnings,
   };
 }

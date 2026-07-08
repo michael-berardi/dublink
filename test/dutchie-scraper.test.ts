@@ -107,6 +107,60 @@ describe('Dutchie scraper image extraction', () => {
     });
   }
 
+  it('preserves option price tiers for TV price matrices', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) {
+        return structuredResponse([
+          baseProduct('tiered-flower', {
+            recPrices: [12, 35, 60],
+            Options: ['1g', '3.5g', '7g'],
+          }),
+        ]);
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('tier-test', 'test-token');
+    const products = result.categories.flatMap((c) => c.products);
+    expect(products[0].priceTiers).toEqual([
+      { label: '1g', price: '$12' },
+      { label: '3.5g', price: '$35' },
+      { label: '7g', price: '$60' },
+    ]);
+  });
+
+  it('preserves Dutchie product descriptions for richer TV cards', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) {
+        return structuredResponse([
+          baseProduct('described-flower', {
+            name: 'Orange Kush',
+            description: 'Bright citrus flower with a smooth pine finish.',
+            image: 'https://images.dutchie.com/orange-kush.jpg',
+          }),
+        ]);
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const scraped = await scrapeDutchie('description-test', 'test-token');
+    const product = scraped.categories.flatMap((c) => c.products)[0];
+    expect(product.description).toBe('Bright citrus flower with a smooth pine finish.');
+
+    const formatted = formatMenu(scraped.categories, scraped.dispensaryName, undefined, { tvOptimize: true });
+    const page = tvPage('tv-session', 'https://dubmenu.com', {
+      initialConfig: {
+        ...formatted,
+        showImages: true,
+        template: 'default',
+      },
+    });
+    expect(page).toContain('Bright citrus flower with a smooth pine finish.');
+    expect(page).toContain('class="card-desc"');
+  });
+
   it('prefers the first active image in the images array', async () => {
     globalThis.fetch = vi.fn(async (input: string | Request) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -219,6 +273,50 @@ describe('Dutchie scraper image extraction', () => {
     expect(page).toContain('imgMarkup(p, true)');
     expect(page).toContain('class="card-image card-image-loading"');
   });
+
+  it('parses modern Dutchie store DOM from the Browserless fallback when structured scrape fails', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) {
+        return new Response('Structured scrape unavailable', { status: 500 });
+      }
+      if (url.startsWith(BROWSERLESS_URL)) {
+        return new Response(
+          JSON.stringify({
+            products: [
+              {
+                href: '/stores/nature-med-gladstone/product/0-5g-diamond-infused-preroll-2pk-1g-la-kush-cake',
+                text: '\nHybrid\nTHC: 22%\nCBD: 0.05%\n$14\n$16\nSale\nStaff Pick',
+                img: 'https://images.dutchie.com/0-5g-diamond-preroll.jpg?dpr=2&h=200&w=200',
+              },
+            ],
+            count: 1,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('nature-med-gladstone', 'test-token');
+    expect(result.productCount).toBe(1);
+
+    const products = result.categories.flatMap((c) => c.products);
+    const product = products.find(
+      (p) => p.id === '0-5g-diamond-infused-preroll-2pk-1g-la-kush-cake'
+    );
+    expect(product).toBeDefined();
+    expect(product!.name).toBe('Diamond Infused Preroll La Kush Cake');
+    expect(product!.price).toBe(14);
+    expect(product!.originalPrice).toBe(16);
+    expect(product!.thc).toBe('22%');
+    expect(product!.cbd).toBe('0.05%');
+    expect(product!.weight).toBe('0.5g');
+    expect(product!.image).toBe('https://images.dutchie.com/0-5g-diamond-preroll.jpg?h=400&w=400');
+    expect(product!.category).toBe('Pre-Rolls');
+    expect(product!.special).toBe(true);
+    expect(product!.specialLabel).toBe('Staff Pick');
+  });
 });
 
 describe('Dutchie import image bundling', () => {
@@ -280,6 +378,34 @@ describe('Dutchie import image bundling', () => {
     expect(uploads.put).toHaveBeenCalledTimes(1);
     expect([...stored.keys()][0]).toMatch(/^acct_123\/import-[a-f0-9]+\.png$/);
   });
+
+  it('removes product image URLs without fetching when imported TV layout hides images', async () => {
+    const uploads = {
+      put: vi.fn(),
+    } as unknown as R2Bucket;
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('product images should not be fetched');
+    }) as unknown as typeof fetch;
+
+    const config = {
+      categories: [
+        {
+          products: [
+            { name: 'Dense Row', image: 'https://images.dutchie.com/dense.jpg' },
+          ],
+        },
+      ],
+      showImages: false,
+    };
+
+    const result = await bundleImportedImages(config, { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+
+    expect(result.config.categories?.[0]?.products?.[0]?.image).toBeUndefined();
+    expect(result.warnings).toEqual([]);
+    expect(uploads.put).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
 
   it('omits external image URLs that cannot be safely ingested', async () => {
     const uploads = {

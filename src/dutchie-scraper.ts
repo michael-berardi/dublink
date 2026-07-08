@@ -1,4 +1,5 @@
 // Dutchie menu scraper - uses Railway Browserless service to render JS-heavy Dutchie pages.
+import { DEMO_DISPENSARY_NAME, createSimplyGreenDemoCategories } from './starter-template';
 const BROWSERLESS_URL = 'https://overseer-browser-production.up.railway.app/scrape-specials';
 const DUTCHIE_MENU_URL = 'https://overseer-browser-production.up.railway.app/scrape-dutchie-menu';
 
@@ -11,12 +12,15 @@ export interface ScrapedProduct {
   thc?: string;
   cbd?: string;
   image?: string;
+  description?: string;
   weight?: string;
   brand?: string;
   inStock: boolean;
   strain?: 'indica' | 'sativa' | 'hybrid';
   special?: boolean;
   specialLabel?: string;
+  originalPrice?: number;
+  priceTiers?: Array<{ label: string; price: string }>;
 }
 
 export interface ScrapedCategory {
@@ -26,10 +30,6 @@ export interface ScrapedCategory {
   products: ScrapedProduct[];
 }
 
-function parsePrice(text: string): number {
-  const m = text.match(/\$[\d,]+\.?\d*/);
-  return m ? parseFloat(m[0].replace(/[$,]/g, '')) : 0;
-}
 
 function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
   const lower = text.toLowerCase();
@@ -40,8 +40,47 @@ function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
 }
 
 function parseTHC(text: string): string | undefined {
-  const m = text.match(/THC:\s*([\d.]+%|[\d.]+mg)/i);
-  return m ? m[1] : undefined;
+  const m = text.match(/THC:\s*([\d.]+\s*(?:%|mg))/i);
+  return m ? m[1].replace(/\s+/g, '') : undefined;
+}
+
+function parseCBD(text: string): string | undefined {
+  const m = text.match(/CBD:\s*([\d.]+\s*(?:%|mg))/i);
+  return m ? m[1].replace(/\s+/g, '') : undefined;
+}
+
+function parsePrices(text: string): { price: number; originalPrice?: number } {
+  const prices = Array.from(text.matchAll(/\$[\d,]+\.?\d*/g))
+    .map((match) => parseFloat(match[0].replace(/[$,]/g, '')))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!prices.length) return { price: 0 };
+  const price = prices[0];
+  const originalPrice = prices.find((value) => value > price);
+  return originalPrice ? { price, originalPrice } : { price };
+}
+
+function productSlugFromHref(href: string | undefined): string {
+  return href?.split('/product/')[1]?.split(/[/?#]/)[0] || '';
+}
+
+function titleFromSlug(slug: string): string {
+  return slug
+    .replace(/-/g, ' ')
+    .replace(/\b(\d+)\s+(\d+)g\b/gi, '$1.$2g')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function saleLabel(text: string, originalPrice?: number): string | undefined {
+  if (/staff\s*pick/i.test(text)) return 'Staff Pick';
+  if (/\bbogo\b/i.test(text)) return 'BOGO';
+  const percent = text.match(/\b(\d{1,2}%\s*off)\b/i);
+  if (percent) return percent[1].toUpperCase();
+  if (originalPrice) return 'Sale';
+  const deal = text.match(/\b(\d+\s*\/\s*\$\d+(?:,\s*\d+\s*\/\s*\$\d+)*)\b/i);
+  if (deal) return deal[1].replace(/\s+/g, '');
+  return undefined;
 }
 
 function firstNumber(values: unknown): number {
@@ -52,39 +91,46 @@ function firstNumber(values: unknown): number {
   return typeof values === 'number' && values > 0 ? values : 0;
 }
 
-function potencyValue(content: any): string | undefined {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+
+function potencyValue(content: unknown): string | undefined {
   if (!content) return undefined;
   if (typeof content === 'string') return content;
-  const value = Array.isArray(content.range) ? content.range[0] : content.value;
+  if (!isRecord(content)) return undefined;
+  const range = content.range;
+  const value = Array.isArray(range) ? range[0] : content.value;
   if (typeof value !== 'number') return undefined;
   return content.unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
 }
 
-function imageCandidateUrl(value: any): string | undefined {
+function imageCandidateUrl(value: unknown): string | undefined {
   if (!value) return undefined;
   if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return firstImageUrl(value);
-  if (typeof value === 'object') {
+  if (Array.isArray(value)) return firstImageUrl(...value);
+  if (isRecord(value)) {
     return imageCandidateUrl(
-      value.url ||
-      value.src ||
-      value.href ||
-      value.image ||
-      value.Image ||
-      value.original ||
-      value.thumbnail ||
-      value.medium ||
+      value.url ??
+      value.src ??
+      value.href ??
+      value.image ??
+      value.Image ??
+      value.original ??
+      value.thumbnail ??
+      value.medium ??
       value.large
     );
   }
   return undefined;
 }
 
-function firstImageUrl(...values: any[]): string | undefined {
+function firstImageUrl(...values: unknown[]): string | undefined {
   for (const value of values) {
     if (!value) continue;
     if (Array.isArray(value)) {
-      const active = value.find((item) => item && item.active !== false) || value[0];
+      const active = value.find((item) => !isRecord(item) || item.active !== false) ?? value[0];
       const activeUrl = imageCandidateUrl(active);
       if (activeUrl) return activeUrl;
       continue;
@@ -95,7 +141,7 @@ function firstImageUrl(...values: any[]): string | undefined {
   return undefined;
 }
 
-function cleanImageUrl(url: any): string | undefined {
+function cleanImageUrl(url: unknown): string | undefined {
   const raw = imageCandidateUrl(url);
   if (!raw) return undefined;
   try {
@@ -123,6 +169,22 @@ function parseName(rawName: string): { name: string; brand?: string; category?: 
   return { name: rawName, brand: undefined };
 }
 
+function cleanScrapedDisplayName(name: string): string {
+  const cleaned = name
+    .replace(/\bTHC:?\s*\d+(?:\.\d+)?%?\b/gi, ' ')
+    .replace(/\b\d+(?:\.\d+)?%THC\b/gi, ' ')
+    .replace(/\b(indica|sativa|hybrid)\b/gi, ' ')
+    .replace(/\b(?:\d+(?:\.\d+)?\s*)?(?:g|gm|mg|ml|oz|ct|pack|pk)\b/gi, ' ')
+    .replace(/\([^)]*(?:g|oz|ct|pack|pk)[^)]*\)/gi, ' ')
+    .replace(/\b(jar|bag|cartridge|disposable|multipack|pack|totalnetweight|offlower|0fflower|vaporizerorcartridge|pre-rollpack)\b/gi, ' ')
+    .replace(/[-_/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const withoutUntitled = cleaned.replace(/^untitled\s+/i, '').trim();
+  return (withoutUntitled || cleaned || name).slice(0, 90);
+}
+
+
 function parseWeight(text: string): string | undefined {
   const m = text.match(/(\d+(?:\.\d+)?)\s*(g|mg|ml|oz|ct|pack|pk)\b/i);
   return m ? `${m[1]}${m[2]}` : undefined;
@@ -131,13 +193,85 @@ function parseWeight(text: string): string | undefined {
 function cleanWeight(value: unknown): string | undefined {
   if (!value) return undefined;
   const weight = String(value).trim();
-  if (!weight || weight.toLowerCase() === 'n/a') return undefined;
+  if (!weight || weight.toLowerCase() === 'n/a' || /(offlower|flower|vaporizer|cartridge|pre-roll|preroll|edible|concentrate|topical|tincture)/i.test(weight)) return undefined;
   const gramMatch = weight.match(/^(\d*\.?\d+)g$/i);
   if (gramMatch) {
     const grams = Number(gramMatch[1]);
     if (grams < 0.5 || grams > 56) return undefined;
   }
   return weight;
+}
+
+type ImportedPriceTier = { label: string; price: string };
+type ScraperPosMeta = {
+  canonicalCategory?: string;
+  canonicalBrandName?: string;
+  canonicalImgUrl?: string;
+  children?: Array<{ recPrice?: number; price?: number; option?: string }>;
+};
+type ScraperPriceSource = {
+  Options?: unknown[];
+  options?: unknown[];
+  recPrices?: unknown;
+  Prices?: unknown;
+  prices?: unknown;
+  medicalPrices?: unknown;
+  POSMetaData?: ScraperPosMeta;
+  posMetadata?: ScraperPosMeta;
+};
+type ScraperRawProduct = ScraperPriceSource & {
+  id?: string;
+  _id?: string;
+  Name?: string;
+  name?: string;
+  type?: string;
+  brandName?: string;
+  brand?: { name?: string };
+  Image?: unknown;
+  image?: unknown;
+  images?: unknown;
+  thumbnail?: unknown;
+  productImage?: unknown;
+  strainType?: string;
+  THCContent?: unknown;
+  CBDContent?: unknown;
+  sku?: string;
+  description?: string;
+};
+type ScraperStructuredResponse = {
+  json?: { data?: { filteredProducts?: { products?: ScraperRawProduct[] } } };
+};
+
+function formatTierPrice(value: number): string {
+  return `$${value.toFixed(2).replace(/\.00$/, '')}`;
+}
+
+function tierLabel(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const raw = String(value).trim();
+  if (!raw) return undefined;
+  return cleanWeight(raw) || raw;
+}
+
+function productPriceTiers(product: ScraperPriceSource): ImportedPriceTier[] | undefined {
+  const tiers: ImportedPriceTier[] = [];
+  const seen = new Set<string>();
+  const addTier = (labelValue: unknown, priceValue: unknown) => {
+    const price = firstNumber(priceValue);
+    const label = tierLabel(labelValue);
+    if (!label || !price) return;
+    const key = `${label.toLowerCase()}|${price}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tiers.push({ label, price: formatTierPrice(price) });
+  };
+
+  const labels = product.options || product.Options || [];
+  const prices = product.recPrices || product.prices || product.Prices || product.medicalPrices || [];
+  if (Array.isArray(prices)) prices.forEach((price, index) => addTier(labels[index], price));
+  product.POSMetaData?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  product.posMetadata?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  return tiers.length > 1 ? tiers : undefined;
 }
 
 function normalizeCategory(value: string | undefined): string | undefined {
@@ -170,45 +304,58 @@ function guessCategory(href: string, text: string, parsedCategory?: string): str
   return 'Other';
 }
 
-function delay(ms: number): Promise<void> {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, ms);
-  return promise;
-}
 
 
 export async function scrapeDutchie(dispensarySlug: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
-  const dutchieUrl = `https://dutchie.com/embedded-menu/${dispensarySlug}`;
+  // Prefer the embedded menu: it loads the smallest Dutchie shell and emits the
+  // same FilteredProducts GraphQL responses as the public store page. Try one
+  // structured browser capture at a time so a slow store shell cannot keep the
+  // Worker open past its request limit.
+  const structuredUrls = [
+    `https://dutchie.com/embedded-menu/${dispensarySlug}`,
+    `https://dutchie.com/stores/${dispensarySlug}`,
+  ];
+  const fallbackUrls = [
+    `https://dutchie.com/stores/${dispensarySlug}`,
+    `https://dutchie.com/embedded-menu/${dispensarySlug}`,
+  ];
   let structuredError: string | undefined;
-  for (let attempt = 0; attempt < 2; attempt++) {
+
+  for (const dutchieUrl of structuredUrls) {
     try {
-      const structured = await scrapeDutchieStructured(dutchieUrl, token);
-      if (structured.categories.length) {
-        return structured;
-      }
+      const result = await scrapeDutchieStructured(dutchieUrl, token);
+      if (result.categories.length) return result;
+      structuredError = `Structured Dutchie scrape returned no products for ${dutchieUrl}`;
     } catch (err) {
       structuredError = err instanceof Error ? err.message : 'Structured Dutchie scrape failed';
     }
-    if (attempt === 0) {
-      await delay(1500);
+  }
+
+  let data: { products: Array<{ href: string; text: string; img: string }>; count: number } | undefined;
+  let scrapeError: string | undefined;
+  for (const dutchieUrl of fallbackUrls) {
+    try {
+      const scrapeUrl = `${BROWSERLESS_URL}?url=${encodeURIComponent(dutchieUrl)}`;
+      const resp = await fetch(scrapeUrl, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!resp.ok) {
+        throw new Error(`Scrape failed for ${dutchieUrl}: ${resp.status}`);
+      }
+      const candidate = await resp.json() as { products: Array<{ href: string; text: string; img: string }>; count: number };
+      if (!candidate.products || !candidate.products.length) {
+        throw new Error(`No products found at ${dutchieUrl}`);
+      }
+      data = candidate;
+      break;
+    } catch (err) {
+      scrapeError = err instanceof Error ? err.message : 'Browserless fallback failed';
     }
   }
 
-  const scrapeUrl = `${BROWSERLESS_URL}?url=${encodeURIComponent(dutchieUrl)}`;
-
-  const resp = await fetch(scrapeUrl, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    signal: AbortSignal.timeout(90000),
-  });
-
-  if (!resp.ok) {
-    throw new Error(`Scrape failed: ${resp.status}${structuredError ? ` after structured scrape failed: ${structuredError}` : ''}`);
-  }
-
-  const data = await resp.json() as { products: Array<{ href: string; text: string; img: string }>; count: number };
-
-  if (!data.products || !data.products.length) {
-    throw new Error(`No products found. Check the dispensary slug.${structuredError ? ` Structured scrape failed first: ${structuredError}` : ''}`);
+  if (!data?.products || !data.products.length) {
+    throw new Error(`${scrapeError || 'No products found'}. Check the dispensary slug.${structuredError ? ` Structured scrape failed first: ${structuredError}` : ''}`);
   }
 
   // Deduplicate by slug
@@ -216,32 +363,41 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
   const categoryMap = new Map<string, ScrapedProduct[]>();
 
   for (const p of data.products) {
-    const slug = p.href?.split('/product/')[1]?.split('/')[0] || '';
+    const slug = productSlugFromHref(p.href);
     if (!slug || seen.has(slug)) continue;
     seen.add(slug);
 
     const text = p.text || '';
     const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
-    const rawName = lines[0] || slug;
+    const firstLine = lines[0] || '';
+    const pollutedLine = !firstLine || /^(indica|sativa|hybrid)$/i.test(firstLine) || /THC:|CBD:|\$|Add to cart/i.test(firstLine) || firstLine.length > 110;
+    const rawName = pollutedLine ? titleFromSlug(slug) : firstLine;
     const { name, brand, category: parsedCategory } = parseName(rawName);
-    const strain = parseStrain(text);
+    const cleanName = cleanScrapedDisplayName(name);
+    const strain = parseStrain(text || rawName);
     const thc = parseTHC(text);
-    const price = parsePrice(text);
-    const weight = cleanWeight(parseWeight(text));
-    const category = guessCategory(p.href || '', text, parsedCategory);
+    const cbd = parseCBD(text);
+    const { price, originalPrice } = parsePrices(text);
+    const weight = cleanWeight(parseWeight(`${rawName} ${text}`));
+    const category = guessCategory(p.href || '', text || rawName, parsedCategory);
+    const specialLabel = saleLabel(text, originalPrice);
 
     const product: ScrapedProduct = {
       id: slug,
-      name: name.replace(/\|/g, ' ').replace(/\s+/g, ' ').trim(),
+      name: cleanName,
       price,
+      originalPrice,
       sku: slug,
       category,
       thc,
+      cbd,
       image: cleanImageUrl(p.img),
       weight,
-      brand: brand || lines.find(l => l && l !== name && l !== strain && !l.includes('THC') && !l.includes('$') && !l.match(/^\d/)),
+      brand: brand || lines.find(l => l && l !== name && l !== cleanName && l !== strain && !l.includes('THC') && !l.includes('CBD') && !l.includes('$') && !l.match(/^\d/)),
       inStock: true,
       strain,
+      special: !!specialLabel,
+      specialLabel,
     };
 
     if (!categoryMap.has(category)) {
@@ -283,11 +439,11 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
 async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
   const resp = await fetch(`${DUTCHIE_MENU_URL}?url=${encodeURIComponent(dutchieUrl)}`, {
     headers: { 'Authorization': `Bearer ${token}` },
-    signal: AbortSignal.timeout(120000),
+    signal: AbortSignal.timeout(45000),
   });
   if (!resp.ok) return { categories: [], dispensaryName: 'Dutchie Menu', productCount: 0 };
 
-  const data = await resp.json() as { responses?: Array<{ json?: any }> };
+  const data = await resp.json() as { responses?: ScraperStructuredResponse[] };
   const seen = new Set<string>();
   const categoryMap = new Map<string, ScrapedProduct[]>();
 
@@ -315,17 +471,19 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
 
       const product: ScrapedProduct = {
         id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
-        name: name.replace(/\s+/g, ' ').trim(),
+        name: cleanScrapedDisplayName(name),
         price,
         sku: p.sku || id,
         category,
         thc,
         cbd,
+        description: typeof p.description === 'string' ? p.description.trim().slice(0, 240) : undefined,
         image,
         weight,
         brand,
         inStock: true,
         strain,
+        priceTiers: productPriceTiers(p),
       };
 
       if (!categoryMap.has(category)) categoryMap.set(category, []);
@@ -348,7 +506,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
     }));
 
   const path = new URL(dutchieUrl).pathname;
-  const slug = path.split('/embedded-menu/')[1]?.split('/')[0] || 'dutchie-menu';
+  const slug = path.split('/stores/')[1]?.split('/')[0] || path.split('/embedded-menu/')[1]?.split('/')[0] || 'dutchie-menu';
   const dispensaryName = slug.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   return { categories, dispensaryName, productCount: seen.size };
@@ -440,115 +598,16 @@ export async function scrapeDutchieFallback(dispensarySlug: string): Promise<{ c
 // network path can reach Dutchie, we generate a representative sample menu so
 // the UI flow and formatter still work. The UI is responsible for surfacing the
 // warning that this is sample data.
-export async function scrapeDutchieDemo(slug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number; demo: true }> {
-  const dispensaryName = slug
-    .split(/[-_]/)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-
-  const categoryDefs: { name: string; names: string[]; weights: string[]; thc: string[]; prices: number[]; strains: Array<'indica' | 'sativa' | 'hybrid' | undefined> }[] = [
-    {
-      name: 'Flower',
-      names: ['Blue Dream', 'OG Kush', 'Gelato', 'Wedding Cake', 'Sour Diesel', 'Northern Lights'],
-      weights: ['3.5g', '7g', '14g', '1g', '3.5g', '7g'],
-      thc: ['22%', '24%', '20%', '19%', '25%', '21%'],
-      prices: [35, 40, 75, 12, 38, 72],
-      strains: ['hybrid', 'indica', 'hybrid', 'indica', 'sativa', 'indica'],
-    },
-    {
-      name: 'Pre-Rolls',
-      names: ['Classic Joint', 'Infused Pre-Roll', 'Sativa Blend', 'Indica Blend', 'Hybrid Roll', 'Mini Joints'],
-      weights: ['1g', '1.5g', '1g', '1g', '1g', '0.5g'],
-      thc: ['18%', '28%', '20%', '22%', '19%', '17%'],
-      prices: [8, 15, 9, 10, 9, 14],
-      strains: ['hybrid', 'hybrid', 'sativa', 'indica', 'hybrid', 'hybrid'],
-    },
-    {
-      name: 'Vapes',
-      names: ['Blueberry Cart', 'Tangie Disposable', 'Live Resin Pod', 'CBD Cartridge', 'Pineapple Express', 'Nighttime Indica'],
-      weights: ['1g', '0.5g', '1g', '1g', '1g', '0.5g'],
-      thc: ['82%', '78%', '85%', '0%', '80%', '75%'],
-      prices: [45, 35, 55, 40, 48, 32],
-      strains: ['hybrid', 'sativa', 'hybrid', undefined, 'sativa', 'indica'],
-    },
-    {
-      name: 'Concentrates',
-      names: ['Live Resin', 'Shatter', 'Badder', 'Crumble', 'Rosin', 'Sugar'],
-      weights: ['1g', '1g', '1g', '1g', '1g', '1g'],
-      thc: ['78%', '80%', '82%', '75%', '85%', '79%'],
-      prices: [50, 40, 55, 38, 70, 48],
-      strains: ['hybrid', 'hybrid', 'indica', 'sativa', 'hybrid', 'hybrid'],
-    },
-    {
-      name: 'Edibles',
-      names: ['Gummies 100mg', 'Chocolate Bar', 'Mints', 'Cookies', 'Brownie', 'Soda'],
-      weights: ['100mg', '100mg', '100mg', '50mg', '100mg', '10mg'],
-      thc: ['10mg', '10mg', '10mg', '10mg', '10mg', '10mg'],
-      prices: [18, 22, 15, 12, 14, 8],
-      strains: [undefined, undefined, undefined, undefined, undefined, undefined],
-    },
-    {
-      name: 'Tinctures',
-      names: ['THC Tincture', 'CBD Tincture', '1:1 Ratio', 'Sleep Formula', 'Daytime Drops', 'Relief Tincture'],
-      weights: ['30ml', '30ml', '30ml', '30ml', '30ml', '30ml'],
-      thc: ['300mg', '0mg', '150mg', '100mg', '200mg', '250mg'],
-      prices: [45, 40, 55, 50, 48, 52],
-      strains: [undefined, undefined, undefined, 'indica', 'sativa', 'hybrid'],
-    },
-    {
-      name: 'Topicals',
-      names: ['CBD Balm', 'THC Lotion', 'Transdermal Patch', 'Relief Cream', 'Muscle Rub', 'Face Serum'],
-      weights: ['2oz', '4oz', '1pk', '3oz', '2oz', '1oz'],
-      thc: ['200mg', '100mg', '50mg', '150mg', '250mg', '75mg'],
-      prices: [35, 30, 12, 28, 32, 45],
-      strains: [undefined, undefined, undefined, undefined, undefined, undefined],
-    },
-  ];
-
-  const products: ScrapedProduct[] = [];
-  const categoryMap = new Map<string, ScrapedProduct[]>();
-
-  for (const def of categoryDefs) {
-    const categoryProducts: ScrapedProduct[] = [];
-    for (let i = 0; i < def.names.length; i++) {
-      const name = def.names[i];
-      const weight = def.weights[i];
-      const thc = def.thc[i];
-      const price = def.prices[i];
-      const strain = def.strains[i];
-      const id = `${slug}-${def.name.toLowerCase()}-${i + 1}`;
-      const product: ScrapedProduct = {
-        id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
-        name: `${name} ${weight}`,
-        price,
-        category: def.name,
-        thc,
-        cbd: undefined,
-        image: undefined,
-        weight,
-        brand: 'Sample Brand',
-        inStock: true,
-        strain,
-      };
-      products.push(product);
-      categoryProducts.push(product);
-    }
-    categoryMap.set(def.name, categoryProducts);
-  }
-
-  const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
-  const categories: ScrapedCategory[] = Array.from(categoryMap.entries())
-    .sort((a, b) => {
-      const ai = categoryOrder.indexOf(a[0]);
-      const bi = categoryOrder.indexOf(b[0]);
-      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-    })
-    .map(([name, products], i) => ({
-      id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-      name,
-      order: i,
-      products: products.slice(0, 40),
-    }));
-
-  return { categories, dispensaryName, productCount: products.length, demo: true };
+export async function scrapeDutchieDemo(_slug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number; demo: true }> {
+  const categories = createSimplyGreenDemoCategories().map((category) => ({
+    id: category.id,
+    name: category.name,
+    order: category.order,
+    products: category.products.map((product) => ({
+      ...product,
+      category: category.name,
+    })),
+  }));
+  const productCount = categories.reduce((total, category) => total + category.products.length, 0);
+  return { categories, dispensaryName: DEMO_DISPENSARY_NAME, productCount, demo: true };
 }

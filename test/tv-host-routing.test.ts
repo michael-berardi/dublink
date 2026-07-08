@@ -84,19 +84,20 @@ describe('tv.dubmenu.com routing', () => {
     expect(html).toContain('DEMO_MODE = true');
   });
 
-  it('tv.dubmenu.com root stays in pairing mode and does not show a real menu', async () => {
+  it('tv.dubmenu.com root starts a fresh pairable TV session, not the demo board', async () => {
     const res = await SELF.fetch(`${TV_BASE}/`);
     expect(res.status).toBe(200);
     const html = await res.text();
     // Pairing phase must be visible and the menu phase must be hidden by default.
     expect(html).toContain('id="pairing" class="phase">');
     expect(html).toContain('id="menu" class="phase" hidden>');
-    // It must not accidentally render the owned demo session (Bills House) or the
-    // demo menu board.
+    // Root must be a fresh access-code session, not the named demo session.
+    expect(html).not.toContain('ACCESS CODE</div>\\n      <div class="access-code">DEMO</div>');
     expect(html).not.toContain('Simply Green');
     expect(html).not.toContain('Bills House');
-    // It runs in demo mode so it does not contact the persistent demo session DO.
-    expect(html).toContain('DEMO_MODE = true');
+    expect(html).not.toContain('DEMO_MODE = true');
+    expect(html).toMatch(/\/ws\/[A-Z0-9]{16}\?role=tv/);
+    expect(html).toContain('data=https%3A%2F%2Fdubmenu.com%2F%3Fcode%3D');
   });
 
   it('/tv/<session> on the TV host renders a real session and is not demo mode', async () => {

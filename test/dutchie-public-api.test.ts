@@ -50,8 +50,8 @@ describe('importDutchiePublicMenu', () => {
               thc: { value: 22, unit: 'PERCENT' },
               cbd: { value: 0.1, unit: 'PERCENT' },
               image: 'https://images.dutchie.com/prod1.jpg?h=800&w=800&dpr=2',
-              recPrices: [35],
-              Options: ['3.5g'],
+              recPrices: [12, 35, 60],
+              Options: ['1g', '3.5g', '7g'],
             },
           ],
         },
@@ -66,6 +66,11 @@ describe('importDutchiePublicMenu', () => {
     expect(result.categories[0].name).toBe('Flower');
     expect(result.categories[0].products[0].name).toBe('Blue Dream 3.5g');
     expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/prod1.jpg?h=400&w=400');
+    expect(result.categories[0].products[0].priceTiers).toEqual([
+      { label: '1g', price: '$12' },
+      { label: '3.5g', price: '$35' },
+      { label: '7g', price: '$60' },
+    ]);
   });
 
   it('uses the SHA-256 hash of the query in the persisted-query extension', async () => {

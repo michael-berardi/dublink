@@ -3,6 +3,8 @@ import type { ScrapedCategory, ScrapedProduct } from './dutchie-scraper';
 const DUTCHIE_GRAPHQL_URL = 'https://dutchie.com/graphql';
 const DUTCHIE_GRAPHQL_FALLBACK_URL = 'https://api.dutchie.com/graphql';
 
+const DUTCHIE_RESERVED_PATHS = new Set(['api', 'api-2', 'business', 'help', 'hc', 'stores', 'store', 'dispensaries', 'us', 'embedded-menu']);
+
 
 export function parseDutchieSlug(input: string): string | null {
   const trimmed = (input || '').trim();
@@ -31,9 +33,16 @@ export function parseDutchieSlug(input: string): string | null {
     return pathParts[embeddedIdx + 1].toLowerCase();
   }
 
+  // https://dutchie.com/stores/<slug>[/products/<category>|/product/<product>]
+  if (pathParts[0] === 'stores' && pathParts[1]) {
+    const slug = pathParts[1].toLowerCase();
+    return DUTCHIE_RESERVED_PATHS.has(slug) ? null : slug;
+  }
+
   // https://dutchie.com/dispensary/<slug> (sometimes used in public links).
   if (pathParts[0] === 'dispensary' && pathParts[1]) {
-    return pathParts[1].toLowerCase();
+    const slug = pathParts[1].toLowerCase();
+    return DUTCHIE_RESERVED_PATHS.has(slug) ? null : slug;
   }
 
   // Subdomain store: https://<slug>.dutchie.com
@@ -44,7 +53,8 @@ export function parseDutchieSlug(input: string): string | null {
 
   // Root-level slug: https://dutchie.com/<slug>
   if (pathParts[0] && !pathParts[0].includes('.')) {
-    return pathParts[0].toLowerCase();
+    const slug = pathParts[0].toLowerCase();
+    return DUTCHIE_RESERVED_PATHS.has(slug) ? null : slug;
   }
 
   return null;
@@ -161,6 +171,40 @@ function cleanWeight(value: unknown): string | undefined {
     if (grams < 0.5 || grams > 56) return undefined;
   }
   return weight;
+}
+
+type ImportedPriceTier = { label: string; price: string };
+
+function formatTierPrice(value: number): string {
+  return `$${value.toFixed(2).replace(/\.00$/, '')}`;
+}
+
+function tierLabel(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const raw = String(value).trim();
+  if (!raw) return undefined;
+  return cleanWeight(raw) || raw;
+}
+
+function productPriceTiers(product: DutchieApiProduct): ImportedPriceTier[] | undefined {
+  const tiers: ImportedPriceTier[] = [];
+  const seen = new Set<string>();
+  const addTier = (labelValue: unknown, priceValue: unknown) => {
+    const price = firstNumber(priceValue);
+    const label = tierLabel(labelValue);
+    if (!label || !price) return;
+    const key = `${label.toLowerCase()}|${price}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tiers.push({ label, price: formatTierPrice(price) });
+  };
+
+  const labels = product.options || product.Options || [];
+  const prices = product.recPrices || product.prices || product.Prices || product.medicalPrices || [];
+  prices.forEach((price, index) => addTier(labels[index], price));
+  product.POSMetaData?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  product.posMetadata?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  return tiers.length > 1 ? tiers : undefined;
 }
 
 function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
@@ -298,6 +342,7 @@ function toProduct(p: DutchieApiProduct): ScrapedProduct | null {
     strain,
     special: Boolean(p.special || specialLabel || originalPrice),
     specialLabel,
+    priceTiers: productPriceTiers(p),
   };
 }
 

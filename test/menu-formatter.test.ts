@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts, isSpecialProduct } from '../src/menu-formatter';
+import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts, isSpecialProduct, inferImportedBrandStyle } from '../src/menu-formatter';
 import type { ScrapedCategory } from '../src/dutchie-scraper';
 
 describe('canonicalCategoryName', () => {
@@ -254,6 +254,14 @@ describe('formatMenu', () => {
     expect(result.layout.layoutMode).toBe('grid');
   });
 
+  it('infers a matching brand theme from imported dispensary identity', () => {
+    expect(inferImportedBrandStyle('High Society Dispensary').template).toBe('gold');
+    expect(inferImportedBrandStyle('Vibe by California Ukiah').template).toBe('vapor');
+    expect(inferImportedBrandStyle('The Forest Baltimore').template).toBe('forest');
+    expect(formatMenu([], 'High Society Dispensary').brandStyle.primaryColor).toBe('#fbbf24');
+  });
+
+
   it('TV-optimizes imported menus and preserves selected assets', () => {
     const categories: ScrapedCategory[] = [
       {
@@ -272,5 +280,32 @@ describe('formatMenu', () => {
     expect(result.categories[0].products[0].image).toBe('https://example.com/asset.jpg');
     expect(result.layout.showImages).toBe(true);
     expect(result.warnings.join(' ')).toContain('TV-ready products');
+  });
+
+  it('keeps dense TV imports in text-first mode instead of forcing product photos', () => {
+    const products = Array.from({ length: 96 }, (_, index) => ({
+      id: `p-${index}`,
+      name: `Product ${index}`,
+      price: 20 + index,
+      image: `https://example.com/p-${index}.jpg`,
+      brand: 'Dense Brand',
+      inStock: true,
+    }));
+    const categories: ScrapedCategory[] = [
+      { id: 'flower', name: 'Flower', order: 0, products },
+      { id: 'vapes', name: 'Vapes', order: 1, products: products.map((p) => ({ ...p, id: `v-${p.id}` })) },
+      { id: 'edibles', name: 'Edibles', order: 2, products: products.map((p) => ({ ...p, id: `e-${p.id}` })) },
+      { id: 'pre-rolls', name: 'Pre-Rolls', order: 3, products: products.map((p) => ({ ...p, id: `r-${p.id}` })) },
+    ];
+
+    const result = formatMenu(categories, 'Dense Menu', undefined, {
+      tvOptimize: true,
+      maxTvCategories: 4,
+      maxTvProductsPerCategory: 24,
+    });
+
+    expect(result.productCount).toBeGreaterThan(70);
+    expect(result.layout.layoutMode).toBe('compact');
+    expect(result.layout.showImages).toBe(false);
   });
 });

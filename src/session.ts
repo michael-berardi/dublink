@@ -197,8 +197,12 @@ export class SessionDurableObject implements DurableObject {
           layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? 'auto',
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
           theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
+          template: this.sanitizeTemplate(data.template) ?? this.config.template,
+          primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
+          secondaryColor: this.sanitizeHexColor(data.secondaryColor) ?? this.config.secondaryColor,
           displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
           showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
+          showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
           showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
           showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : true,
           tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : false,
@@ -290,6 +294,7 @@ export class SessionDurableObject implements DurableObject {
           products: cat.products.map((p) => ({
             id: p.id,
             name: p.name,
+            description: p.description,
             price: p.price,
             originalPrice: p.originalPrice,
             thc: p.thc,
@@ -300,6 +305,7 @@ export class SessionDurableObject implements DurableObject {
             strain: p.strain,
             inStock: p.inStock,
             isPromo: p.isPromo,
+            specialLabel: p.specialLabel,
             image: p.image,
             priceTiers: p.priceTiers,
           })),
@@ -605,6 +611,7 @@ export class SessionDurableObject implements DurableObject {
           inStock: payload.product.inStock !== false,
           strain: this.sanitizeStrain(payload.product.strain),
           isPromo: Boolean(payload.product.isPromo),
+          specialLabel: typeof payload.product.specialLabel === 'string' ? this.sanitizeString(payload.product.specialLabel) : undefined,
           priceTiers: this.sanitizePriceTiers(payload.product.priceTiers)
         };
 
@@ -664,6 +671,9 @@ export class SessionDurableObject implements DurableObject {
         }
         if (updates.isPromo !== undefined) {
           prod.isPromo = Boolean(updates.isPromo);
+        }
+        if (updates.specialLabel !== undefined) {
+          prod.specialLabel = typeof updates.specialLabel === 'string' ? this.sanitizeString(updates.specialLabel) : undefined;
         }
         if (updates.priceTiers !== undefined) {
           prod.priceTiers = this.sanitizePriceTiers(updates.priceTiers);
@@ -785,7 +795,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.layout !== undefined && this.sanitizeLayout(payload.layout) === undefined) return false;
     if (payload.fontSize !== undefined && this.sanitizeFontSize(payload.fontSize) === undefined) return false;
     if (payload.theme !== undefined && this.sanitizeTheme(payload.theme) === undefined) return false;
-    if (payload.template !== undefined && !['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(payload.template)) return false;
+    if (payload.template !== undefined && this.sanitizeTemplate(payload.template) === undefined) return false;
     if (payload.layoutMode !== undefined && this.sanitizeLayoutMode(payload.layoutMode) === undefined) return false;
     if (payload.displayCount !== undefined && this.sanitizeDisplayCount(payload.displayCount) === undefined) return false;
     if (payload.autoScrollSpeed !== undefined && (typeof payload.autoScrollSpeed !== 'number' || payload.autoScrollSpeed < 1 || payload.autoScrollSpeed > 200)) return false;
@@ -943,7 +953,7 @@ export class SessionDurableObject implements DurableObject {
   }
 
   private sanitizeLayout(value: unknown): MenuConfig['layout'] | undefined {
-    if (value === 'auto' || value === 'grid' || value === 'list' || value === 'cards' || value === 'compact' || value === 'poster' || value === 'cinematic' || value === 'showcase' || value === 'editorial' || value === 'sparse') return value;
+    if (value === 'auto' || value === 'grid' || value === 'list' || value === 'pricewall' || value === 'cards' || value === 'compact' || value === 'poster' || value === 'cinematic' || value === 'showcase' || value === 'editorial' || value === 'sparse') return value;
     return undefined;
   }
 
@@ -954,6 +964,17 @@ export class SessionDurableObject implements DurableObject {
 
   private sanitizeFontSize(value: unknown): MenuConfig['fontSize'] | undefined {
     if (value === 'small' || value === 'medium' || value === 'large') return value;
+    return undefined;
+  }
+
+  private sanitizeHexColor(value: unknown): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const v = value.trim();
+    return /^#[0-9A-Fa-f]{6}$/.test(v) ? v : undefined;
+  }
+
+  private sanitizeTemplate(value: unknown): MenuConfig['template'] | undefined {
+    if (value === 'default' || value === 'minimal' || value === 'neon' || value === 'light' || value === 'sunset' || value === 'forest' || value === 'royal' || value === 'gold' || value === 'ocean' || value === 'crimson' || value === 'bone' || value === 'vapor') return value;
     return undefined;
   }
 

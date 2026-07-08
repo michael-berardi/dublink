@@ -165,6 +165,42 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
+type ImportedPriceTier = { label: string; price: string };
+
+function formatTierPrice(value: number): string {
+  return `$${value.toFixed(2).replace(/\.00$/, '')}`;
+}
+
+function tierLabel(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const raw = String(value).trim();
+  if (!raw) return undefined;
+  return cleanWeight(raw) || raw;
+}
+
+function productPriceTiers(product: DutchiePublicProduct): ImportedPriceTier[] | undefined {
+  const tiers: ImportedPriceTier[] = [];
+  const seen = new Set<string>();
+  const addTier = (labelValue: unknown, priceValue: unknown) => {
+    const price = firstNumber(priceValue);
+    const label = tierLabel(labelValue);
+    if (!label || !price) return;
+    const key = `${label.toLowerCase()}|${price}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    tiers.push({ label, price: formatTierPrice(price) });
+  };
+
+  const labels = product.options || product.Options || product.weights?.map((w) => `${w.value}${w.unit || 'g'}`) || [];
+  const prices = product.recPrices || product.prices || product.Prices || product.medicalPrices || [];
+  prices.forEach((price, index) => addTier(labels[index], price));
+  product.weights?.forEach((weight) => addTier(`${weight.value}${weight.unit || 'g'}`, weight.price));
+  product.variants?.forEach((variant) => addTier(variant.option, variant.recPrice || variant.price));
+  product.POSMetaData?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  product.posMetadata?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
+  return tiers.length > 1 ? tiers : undefined;
+}
+
 function extractCannabinoid(product: DutchiePublicProduct, name: string): string | undefined {
   if (!Array.isArray(product.cannabinoids)) return undefined;
   const match = product.cannabinoids.find((c) => c && c.name?.toLowerCase() === name.toLowerCase());
@@ -264,6 +300,7 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     strain,
     special: Boolean(p.special || specialLabel || originalPrice),
     specialLabel,
+    priceTiers: productPriceTiers(p),
   };
 }
 

@@ -12,19 +12,18 @@ export function configPage(sessionId: string, origin: string): string {
     *{margin:0;padding:0;box-sizing:border-box;}
     :root{--bg:#000;--surface:#1c1c1e;--surface2:#2c2c2e;--border:#38383a;--text:#fff;--muted:#a1a1a6;--primary:#10b981;--danger:#ef4444;}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased;}
-    .config-column{max-width:520px;margin:0 auto;padding:1rem;}
-    .status-bar{display:flex;align-items:center;justify-content:space-between;padding:0.75rem 1rem;background:var(--surface);border-radius:0.75rem;margin-bottom:1.25rem;position:sticky;top:0.5rem;z-index:100;}
-    .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.5rem;}
+    .config-column{max-width:560px;margin:0 auto;padding:0.85rem 1rem 6rem;}
+    .remote-heading{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.8rem;}
+    .remote-heading h1{font-size:1.55rem;font-weight:780;letter-spacing:-0.045em;line-height:1.02;}
+    .inline-status{display:inline-flex;align-items:center;gap:0.4rem;padding:0.35rem 0.55rem;background:rgba(28,28,30,0.88);border:1px solid rgba(255,255,255,0.08);border-radius:999px;color:var(--muted);font-size:0.72rem;font-weight:700;line-height:1;white-space:nowrap;}
+    .status-dot{display:inline-block;width:0.42rem;height:0.42rem;border-radius:50%;flex-shrink:0;}
     .status-connected{background:var(--primary);}
     .status-disconnected{background:var(--danger);}
     .status-connecting{background:#f59e0b;}
-    .status-text{font-size:0.875rem;font-weight:600;}
-    .header{margin-bottom:1.5rem;}
-    .header h1{font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;}
-    .header .sub{color:var(--muted);font-size:0.875rem;margin-top:0.25rem;}
-    .header .sub a{color:var(--primary);text-decoration:none;font-weight:600;}
-    .card{background:var(--surface);border-radius:0.75rem;padding:1.25rem;margin-bottom:0.75rem;}
-    .card-title{font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem;}
+    .status-text{font-size:0.72rem;font-weight:700;}
+    .card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:1rem;padding:1.1rem;margin-bottom:0.75rem;box-shadow:0 1px 0 rgba(255,255,255,0.04) inset;}
+    .primary-card{background:linear-gradient(180deg,rgba(16,185,129,0.14),rgba(28,28,30,0.96));border-color:rgba(16,185,129,0.24);}
+    .card-title{font-size:0.75rem;font-weight:760;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem;}
     .field{margin-bottom:1rem;}
     .field:last-child{margin-bottom:0;}
     .field label{display:block;font-size:0.75rem;font-weight:600;color:var(--muted);margin-bottom:0.375rem;text-transform:uppercase;letter-spacing:0.04em;}
@@ -109,10 +108,28 @@ export function configPage(sessionId: string, origin: string): string {
     .screenset-tv{display:flex;align-items:center;gap:0.75rem;padding:0.625rem;background:var(--surface2);border-radius:0.5rem;}
     .screenset-tv-num{width:28px;height:28px;background:var(--primary);color:#000;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:0.8125rem;flex-shrink:0;}
     .screenset-tv-url{font-size:0.75rem;color:var(--muted);flex:1;word-break:break-all;}
+    .screen-layout-select{background:var(--surface);border:1px solid var(--border);border-radius:0.45rem;color:var(--text);font-size:0.75rem;padding:0.45rem 0.5rem;max-width:8rem;}
     .helper{font-size:0.8125rem;color:var(--muted);line-height:1.45;margin-top:0.4rem;}
-    .import-status{font-size:0.875rem;color:var(--muted);margin-top:0.75rem;min-height:1.2rem;}
+    .import-status{font-size:0.875rem;color:var(--muted);margin-top:0.75rem;min-height:1.2rem;line-height:1.45;}
     .import-status.ok{color:var(--primary);}
     .import-status.err{color:var(--danger);}
+    .import-progress{display:none;margin-top:0.875rem;border:1px solid var(--border);border-radius:0.75rem;background:var(--surface2);overflow:hidden;}
+    .import-progress.active{display:block;}
+    .import-progress-bar{height:4px;background:rgba(16,185,129,0.18);}
+    .import-progress-fill{height:100%;width:0%;background:var(--primary);transition:width 0.45s ease;}
+    .import-steps{display:grid;gap:0.45rem;padding:0.85rem;}
+    .import-step{display:flex;align-items:center;gap:0.55rem;color:var(--muted);font-size:0.8125rem;}
+    .import-step-dot{width:0.55rem;height:0.55rem;border-radius:999px;background:var(--border);flex-shrink:0;}
+    .import-step.active{color:var(--text);font-weight:650;}
+    .import-step.active .import-step-dot{background:var(--primary);box-shadow:0 0 0 3px rgba(16,185,129,0.15);}
+    .import-step.done .import-step-dot{background:var(--primary);}
+    .import-results{display:none;margin-top:0.75rem;padding:0.75rem;border:1px solid var(--border);border-radius:0.75rem;background:var(--surface2);}
+    .import-results.active{display:block;}
+    .import-result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-bottom:0.6rem;}
+    .import-result-stat{background:var(--surface);border:1px solid var(--border);border-radius:0.55rem;padding:0.55rem;}
+    .import-result-stat strong{display:block;color:var(--text);font-size:1.15rem;line-height:1;}
+    .import-result-stat span{display:block;color:var(--muted);font-size:0.72rem;margin-top:0.25rem;}
+    .import-warning{font-size:0.8125rem;color:#fbbf24;line-height:1.4;}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
     .skip-link{position:absolute;left:-9999px;top:0.5rem;z-index:200;background:var(--primary);color:#000;padding:0.5rem 1rem;border-radius:0.375rem;font-weight:700;font-size:0.875rem;}
     .skip-link:focus{left:0.5rem;}
@@ -143,6 +160,22 @@ export function configPage(sessionId: string, origin: string): string {
     .lib-error{text-align:center;padding:2.5rem 1rem;color:var(--danger);font-size:0.9375rem;}
     .lib-loadmore{margin-top:1rem;text-align:center;}
     .lib-loadmore .btn{display:inline-flex;}
+    .mobile-control-hub{display:none;}
+    .hub-title{font-size:0.68rem;font-weight:780;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin:0 0 0.5rem;}
+    .hub-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;}
+    .hub-tile{appearance:none;background:linear-gradient(180deg,rgba(44,44,46,0.98),rgba(28,28,30,0.98));border:1px solid rgba(255,255,255,0.08);border-radius:1rem;color:var(--text);cursor:pointer;font-family:inherit;min-height:5.9rem;padding:0.78rem;text-align:left;box-shadow:0 1px 0 rgba(255,255,255,0.05) inset;}
+    .hub-tile:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+    .hub-icon{align-items:center;background:rgba(16,185,129,0.16);border-radius:0.72rem;color:var(--primary);display:flex;font-size:1rem;height:1.75rem;justify-content:center;margin-bottom:0.52rem;width:1.75rem;}
+    .hub-label{display:block;font-size:0.95rem;font-weight:780;letter-spacing:-0.02em;}
+    .hub-desc{color:var(--muted);display:block;font-size:0.68rem;line-height:1.25;margin-top:0.16rem;}
+    .control-section{display:block;}
+    .section-head{display:none;}
+    .section-back{appearance:none;background:var(--surface2);border:1px solid rgba(255,255,255,0.08);border-radius:999px;color:var(--text);cursor:pointer;font-family:inherit;font-size:1rem;font-weight:700;height:2.35rem;width:2.35rem;}
+    .section-kicker{color:var(--primary);font-size:0.72rem;font-weight:760;letter-spacing:0.08em;text-transform:uppercase;}
+    .section-head h2{font-size:1.35rem;letter-spacing:-0.03em;line-height:1.08;margin-top:0.1rem;}
+    .remote-preview-button{position:static;width:100%;margin:0.75rem 0 0;justify-content:center;border-radius:1rem;padding:0.85rem 1rem;font-size:0.9rem;}
+    .backup-actions{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;margin-top:0.75rem;}
+    .backup-actions .btn{width:100%;}
     @media(max-width:480px){.lib-grid{grid-template-columns:repeat(2,1fr);}}
     @media(max-width:400px){.grid-2{grid-template-columns:1fr;}.theme-grid{grid-template-columns:1fr;}}
     @media(max-width:480px){
@@ -150,6 +183,8 @@ export function configPage(sessionId: string, origin: string): string {
       .cat-header .btn{flex:0 0 auto;}
       .prod-edit .grid-2{grid-template-columns:1fr;}
       .prod-edit input,.prod-edit select{min-width:0;}
+      .import-result-grid{grid-template-columns:1fr;}
+      .import-step{align-items:flex-start;}
     }
 
     /* ----------------------------------------------------------------
@@ -161,13 +196,11 @@ export function configPage(sessionId: string, origin: string): string {
     ----------------------------------------------------------------- */
     @media(min-width:1100px){
       body{max-width:none;margin:0;height:100vh;overflow:hidden;}
-      .desktop-layout{display:flex;flex-direction:row;height:100vh;width:100vw;}
       .config-column{flex:1;min-width:0;max-width:680px;height:100vh;overflow-y:auto;padding:1rem;}
-      .status-bar{position:sticky;top:0.5rem;margin-top:0;}
+      .remote-heading{margin-bottom:1.25rem;}
       #simulatorPanel{flex:0 0 420px;display:flex;flex-direction:column;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
       .sim-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-shrink:0;}
       .sim-header h2{font-size:1.25rem;font-weight:700;}
-      .sim-header-actions{display:flex;gap:0.5rem;}
       .sim-controls{display:flex;align-items:flex-end;gap:0.75rem;margin-bottom:0.75rem;flex-shrink:0;flex-wrap:wrap;}
       .sim-field{display:flex;flex-direction:column;gap:0.35rem;}
       .sim-field label{font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--muted);}
@@ -191,13 +224,28 @@ export function configPage(sessionId: string, origin: string): string {
       .sim-footer{display:flex;align-items:center;justify-content:space-between;margin-top:0.75rem;flex-shrink:0;font-size:0.8rem;color:var(--muted);}
     }
     @media(max-width:1099px){
+      body:not(.section-open){height:100dvh;overflow:hidden;}
       #simulatorPanel{display:none;}
+      .desktop-layout{display:block;}
+      .mobile-control-hub{display:block;}
+      .control-section{display:none;}
+      .control-section.open{display:block;position:fixed;inset:0;z-index:430;background:var(--bg);overflow-y:auto;padding:calc(env(safe-area-inset-top) + 0.75rem) 1rem 7rem;}
+      .control-section.open::before{content:'';position:fixed;inset:0 0 auto 0;height:5.4rem;background:linear-gradient(180deg,var(--bg),rgba(0,0,0,0));pointer-events:none;z-index:0;}
+      .section-head{display:flex;align-items:center;gap:0.9rem;margin-bottom:1rem;position:sticky;top:0;z-index:2;background:rgba(0,0,0,0.84);padding:0.35rem 0 0.75rem;-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);}
+      .section-head + .card{margin-top:0;}
+      .control-section .card:last-child{margin-bottom:0;}
+      body.section-open{overflow:hidden;}
+      .config-column{height:100dvh;overflow:hidden;padding:calc(env(safe-area-inset-top) + 0.7rem) 0.9rem calc(env(safe-area-inset-bottom) + 0.8rem);}
+      #mainContent{height:100%;display:flex;flex-direction:column;}
+      .remote-heading{margin-bottom:0.75rem;flex-shrink:0;}
+      .remote-heading h1{font-size:1.18rem;letter-spacing:-0.035em;white-space:nowrap;}
+      .modal-overlay{align-items:flex-end;padding:0;}
+      .modal-panel{border-radius:1.2rem 1.2rem 0 0;max-height:86vh;border-left:none;border-right:none;border-bottom:none;}
+      .mobile-preview-panel{max-width:none;}
     }
-
-/* Mobile preview: on narrow screens the settings page is primary. A
-   compact floating button opens the live TV preview in a modal so it can
-   be opened and closed without dominating the operator view. */
-.mobile-preview-fab{position:fixed;bottom:1rem;right:1rem;z-index:200;display:flex;align-items:center;gap:0.375rem;padding:0.625rem 1rem;border-radius:9999px;background:var(--primary);color:#000;font-size:0.875rem;font-weight:600;border:none;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(0,0,0,0.4);}
+/* Mobile preview: compact in-flow remote action. The TV renderer still opens
+   in a modal so the main remote remains a static one-screen control surface. */
+.mobile-preview-fab{display:flex;align-items:center;gap:0.375rem;background:var(--primary);color:#000;font-weight:700;border:none;cursor:pointer;font-family:inherit;}
 @media(min-width:1100px){.mobile-preview-fab{display:none;}}
 .mobile-preview-panel{max-width:900px;}
 .mobile-preview-body{padding:0;overflow:hidden;}
@@ -205,6 +253,11 @@ export function configPage(sessionId: string, origin: string): string {
 .mobile-preview-modal-frame iframe{position:absolute;top:0;left:0;width:1920px;height:1080px;border:none;transform-origin:top left;pointer-events:none;}
 @media(max-width:600px){.mobile-preview-modal-frame{height:320px;}}
 .mobile-preview-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.9375rem;}
+@media(max-width:1099px){
+  .modal-overlay{align-items:flex-end;padding:0;}
+  .modal-panel{border-radius:1.2rem 1.2rem 0 0;max-height:86vh;border-left:none;border-right:none;border-bottom:none;}
+  .mobile-preview-panel{max-width:none;}
+}
   </style>
 </head>
 <body>
@@ -214,20 +267,11 @@ export function configPage(sessionId: string, origin: string): string {
 <div class="desktop-layout">
 <div class="config-column">
 
-<div class="status-bar" role="status" aria-live="polite" aria-atomic="true">
-  <div><span class="status-dot status-disconnected" id="statusDot" aria-hidden="true"></span><span class="status-text" id="statusText">Connecting...</span></div>
-  <div><button class="btn btn-sm btn-secondary" type="button" onclick="exportData()">Export</button><button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById('importInput').click()" style="margin-left:0.25rem;">Import</button><input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)"></div>
-</div>
-
 <main id="mainContent">
 
-<div class="header">
+<div class="remote-heading">
   <h1>DubMenu Remote Control</h1>
-  <div class="sub">This is your operator panel. Customers see the TV menu, not this page.</div>
-  <div class="sub" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem;">
-    <a id="tvDisplayLink" href="https://tv.dubmenu.com/tv/${sessionId}" target="_blank">Open TV Display on TV &rarr;</a>
-    <button class="btn btn-sm btn-secondary" type="button" onclick="copyTvUrl()">Copy TV URL</button>
-  </div>
+  <div class="inline-status" role="status" aria-live="polite" aria-atomic="true"><span class="status-dot status-disconnected" id="statusDot" aria-hidden="true"></span><span class="status-text" id="statusText">Connecting...</span></div>
 </div>
 
 <div class="screenset-info" id="screensetInfo">
@@ -235,9 +279,23 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="screenset-list" id="screensetList"></div>
 </div>
 
-<button class="mobile-preview-fab" type="button" onclick="openMobilePreview()" aria-label="Open TV preview">
-  <span aria-hidden="true">&#9654;</span> Preview TV
-</button>
+<div class="mobile-control-hub" aria-label="Remote control sections">
+  <div class="hub-title">Controls</div>
+  <div class="hub-grid">
+    <button class="hub-tile" type="button" onclick="openControlSection('brand')"><span class="hub-icon" aria-hidden="true">B</span><span class="hub-label">Brand</span><span class="hub-desc">Name, logo, color.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('design')"><span class="hub-icon" aria-hidden="true">D</span><span class="hub-label">Design</span><span class="hub-desc">Theme and layout.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('promos')"><span class="hub-icon" aria-hidden="true">%</span><span class="hub-label">Promos</span><span class="hub-desc">Banners and specials.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('inventory')"><span class="hub-icon" aria-hidden="true">P</span><span class="hub-label">Products</span><span class="hub-desc">Categories and prices.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('legal')"><span class="hub-icon" aria-hidden="true">L</span><span class="hub-label">Legal</span><span class="hub-desc">Required copy.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('import')"><span class="hub-icon" aria-hidden="true">I</span><span class="hub-label">Import</span><span class="hub-desc">Menus and backups.</span></button>
+  </div>
+  <button class="mobile-preview-fab remote-preview-button" type="button" onclick="openMobilePreview()" aria-label="Open TV preview">
+    <span aria-hidden="true">&#9654;</span> Preview TV
+  </button>
+</div>
+
+<section class="control-section" id="section-brand" aria-labelledby="sectionBrandTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Setup</div><h2 id="sectionBrandTitle">Brand identity</h2></div></div>
 
 <div class="card">
   <h2 class="card-title">Branding</h2>
@@ -250,23 +308,48 @@ export function configPage(sessionId: string, origin: string): string {
     <button class="btn btn-secondary btn-sm" type="button" onclick="openImageLibrary()">Browse Image Library</button>
   </div>
 </div>
+</section>
 
-    <div class="card">
-      <h2 class="card-title">Import Menu</h2>
-      <form id="dutchieForm" onsubmit="event.preventDefault();importDutchie();">
-        <div class="field">
-          <label for="dutchieUrl">Menu URL, Dutchie Link, or Store Slug</label>
-          <input type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" spellcheck="false" id="dutchieUrl" name="dutchieUrl" placeholder="https://dutchie.com/embedded-menu/your-store or your-store.com" style="-webkit-user-select:text;user-select:text;">
-          <div class="helper">Paste any Dutchie link (embedded, store, or subdomain), your store slug, or a dispensary website URL. DubMenu finds Dutchie menus, extracts menu products from the page, and imports prices, THC, strain, brand, weight, images, and store name/logo.</div>
-        </div>
-        <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Import Menu</button>
-      </form>
-      <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
+<section class="control-section" id="section-import" aria-labelledby="sectionImportTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Menu data</div><h2 id="sectionImportTitle">Import</h2></div></div>
+<div class="card primary-card">
+  <h2 class="card-title">Import Menu</h2>
+  <form id="dutchieForm" onsubmit="event.preventDefault();importDutchie();">
+    <div class="field">
+      <label for="dutchieUrl">Menu URL, Dutchie Link, or Store Slug</label>
+      <input type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" spellcheck="false" id="dutchieUrl" name="dutchieUrl" placeholder="https://dutchie.com/embedded-menu/your-store or your-store.com" style="-webkit-user-select:text;user-select:text;">
+      <div class="helper">Paste a Dutchie link, store slug, or dispensary website URL. DubMenu finds the menu and imports products, prices, THC, strain, brand, weights, images, and store name/logo.</div>
     </div>
-
+    <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Import Menu</button>
+  </form>
+  <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
+  <div class="import-progress" id="dutchieProgress" aria-hidden="true">
+    <div class="import-progress-bar"><div class="import-progress-fill" id="dutchieProgressFill"></div></div>
+    <div class="import-steps">
+      <div class="import-step" data-step="1"><span class="import-step-dot"></span><span>Normalize the Dutchie/store URL</span></div>
+      <div class="import-step" data-step="2"><span class="import-step-dot"></span><span>Find the menu feed or browser-rendered product cards</span></div>
+      <div class="import-step" data-step="3"><span class="import-step-dot"></span><span>Import product photos, prices, THC, strain, brand, and weights</span></div>
+      <div class="import-step" data-step="4"><span class="import-step-dot"></span><span>Sync the formatted TV menu to this session</span></div>
+    </div>
+  </div>
+  <div class="import-results" id="dutchieResults" aria-live="polite"></div>
+</div>
 <div class="card">
-  <h2 class="card-title">Theme</h2>
-  <div class="theme-grid" id="templateSelect" role="radiogroup" aria-label="Menu theme">
+  <h2 class="card-title">Settings Backup</h2>
+  <div class="helper">Save or restore this remote configuration as a private JSON file.</div>
+  <div class="backup-actions">
+    <button class="btn btn-sm btn-secondary" type="button" onclick="exportData()">Export Settings</button>
+    <button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById('importInput').click()">Import Settings</button>
+  </div>
+  <input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
+</div>
+</section>
+
+<section class="control-section" id="section-design" aria-labelledby="sectionDesignTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Presentation</div><h2 id="sectionDesignTitle">Design the TV menu</h2></div></div>
+<div class="card">
+  <h2 class="card-title">Color Theme</h2>
+  <div class="theme-grid" id="templateSelect" role="radiogroup" aria-label="Menu color theme">
     <div class="theme-option" data-template="default" onclick="selectTemplate('default')">
       <div class="theme-preview preview-dark"></div>
       <div class="theme-name">Classic Dark</div>
@@ -333,15 +416,17 @@ export function configPage(sessionId: string, origin: string): string {
 <div class="card">
   <h2 class="card-title">Layout</h2>
   <div class="field">
-    <label for="layout">Menu Style</label>
+    <label for="layout">Default Layout</label>
     <select id="layout" onchange="debounceConfig('layout',this.value)">
-      <option value="auto">Auto (match theme)</option>
+      <option value="auto">Auto (grid)</option>
       <option value="grid">Grid</option>
       <option value="list">Price List</option>
+      <option value="pricewall">Dense Price Wall</option>
       <option value="poster">Poster</option>
       <option value="cinematic">Cinematic</option>
       <option value="showcase">Showcase</option>
       <option value="editorial">Editorial</option>
+      <option value="sparse">Single-Product Hero</option>
     </select>
   </div>
   <div class="grid-2">
@@ -356,7 +441,10 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Scroll Speed</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
   <div class="field"><label for="customFont">Custom Font (Google Fonts)</label><input type="text" id="customFont" placeholder="e.g. Inter, Poppins, Oswald" oninput="debounceConfig('customFont',this.value)"></div>
 </div>
+</section>
 
+<section class="control-section" id="section-promos" aria-labelledby="sectionPromosTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Merchandising</div><h2 id="sectionPromosTitle">Promos and specials</h2></div></div>
 <div class="card">
   <h2 class="card-title">Promo Banner (Always On)</h2>
   <div class="field"><label for="promoBannerText" class="sr-only">Promo banner text</label><input type="text" id="promoBannerText" placeholder="Today's special..." oninput="updatePromoBanner()"></div>
@@ -380,12 +468,18 @@ export function configPage(sessionId: string, origin: string): string {
   <button class="btn btn-secondary btn-sm" type="button" style="margin-top:0.5rem;" onclick="addSpecial()">+ Add Special</button>
   <div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">These display as a dedicated TV category before products. Use them for brand promos, BOGO offers, staff picks, and non-product discounts.</div>
 </div>
+</section>
 
+<section class="control-section" id="section-legal" aria-labelledby="sectionLegalTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Required text</div><h2 id="sectionLegalTitle">Compliance</h2></div></div>
 <div class="card">
   <h2 class="card-title">Compliance</h2>
   <div class="field"><label for="disclaimer">Disclaimer Text</label><textarea id="disclaimer" placeholder="Must be 21+ with valid ID." rows="2" oninput="debounceConfig('disclaimer',this.value)"></textarea></div>
 </div>
+</section>
 
+<section class="control-section" id="section-inventory" aria-labelledby="sectionInventoryTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Menu data</div><h2 id="sectionInventoryTitle">Products</h2></div></div>
 <div class="card">
   <h2 class="card-title">Products</h2>
   <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
@@ -396,6 +490,7 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="field"><div style="display:flex;gap:0.5rem;"><label for="newCategoryName" class="sr-only">New category name</label><input type="text" id="newCategoryName" placeholder="New category name" style="flex:1;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;" onkeydown="if(event.key==='Enter')addCategory()"><button class="btn btn-primary btn-sm" type="button" onclick="addCategory()">+ Add</button></div></div>
   <div id="categoryList"></div>
 </div>
+</section>
 
 </main>
 
@@ -404,10 +499,6 @@ export function configPage(sessionId: string, origin: string): string {
 <aside id="simulatorPanel" aria-label="TV preview">
   <div class="sim-header">
     <h2>TV Preview</h2>
-    <div class="sim-header-actions">
-      <button class="btn btn-sm btn-secondary" type="button" onclick="copyAllTvUrls()">Copy TV URLs</button>
-      <button class="btn btn-sm btn-primary" type="button" onclick="openSelectedDisplay()">Open on TV</button>
-    </div>
   </div>
   <div class="sim-controls">
     <div class="sim-field">
@@ -421,7 +512,7 @@ export function configPage(sessionId: string, origin: string): string {
   </div>
   <div class="sim-controls">
     <div class="sim-field">
-      <label for="simThemeOverride">Theme Override</label>
+      <label for="simThemeOverride">Color Override</label>
       <select id="simThemeOverride" onchange="updateSimulator()">
         <option value="">Match config</option>
         <option value="default">Classic Dark</option>
@@ -444,10 +535,12 @@ export function configPage(sessionId: string, origin: string): string {
         <option value="">Match config</option>
         <option value="grid">Grid</option>
         <option value="list">Price List</option>
+        <option value="pricewall">Dense Price Wall</option>
         <option value="poster">Poster</option>
         <option value="cinematic">Cinematic</option>
         <option value="showcase">Showcase</option>
         <option value="editorial">Editorial</option>
+        <option value="sparse">Single-Product Hero</option>
       </select>
     </div>
     <div class="sim-field">
@@ -526,6 +619,23 @@ function debounceConfig(k,v){clearTimeout(debounceTimer);debounceTimer=setTimeou
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
 function setSwitch(id,on){var el=document.getElementById(id);if(el){el.classList.toggle('on',on);el.setAttribute('aria-checked',on?'true':'false');}}
 function getSwitch(id){var el=document.getElementById(id);return el?el.classList.contains('on'):false;}
+function openControlSection(id){
+  var target=document.getElementById('section-'+id);
+  if(!target)return;
+  document.querySelectorAll('.control-section.open').forEach(function(el){el.classList.remove('open');});
+  target.classList.add('open');
+  document.body.classList.add('section-open');
+  document.addEventListener('keydown',controlSectionKeydown,true);
+  setTimeout(function(){var back=target.querySelector('.section-back');if(back)back.focus();},0);
+}
+function closeControlSection(){
+  document.querySelectorAll('.control-section.open').forEach(function(el){el.classList.remove('open');});
+  document.body.classList.remove('section-open');
+  document.removeEventListener('keydown',controlSectionKeydown,true);
+}
+function controlSectionKeydown(e){
+  if(e.key==='Escape'&&document.body.classList.contains('section-open')){e.preventDefault();closeControlSection();}
+}
 
 function selectTemplate(t){
   document.querySelectorAll('#templateSelect .theme-option').forEach(function(el){
@@ -670,6 +780,56 @@ function removeSpecial(idx){
 function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show';setTimeout(function(){t.classList.remove('show');},2500);}
 function escapeHtml(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
+function resetDutchieImportUi(){
+  var progress=document.getElementById('dutchieProgress');
+  var fill=document.getElementById('dutchieProgressFill');
+  var results=document.getElementById('dutchieResults');
+  if(progress){progress.className='import-progress';progress.setAttribute('aria-hidden','true');}
+  if(fill) fill.style.width='0%';
+  if(results){results.className='import-results';results.innerHTML='';}
+  document.querySelectorAll('#dutchieProgress .import-step').forEach(function(step){
+    step.classList.remove('active','done');
+  });
+}
+function setDutchieImportStage(stage, pct){
+  var progress=document.getElementById('dutchieProgress');
+  var fill=document.getElementById('dutchieProgressFill');
+  if(progress){progress.className='import-progress active';progress.setAttribute('aria-hidden','false');}
+  if(fill) fill.style.width=String(Math.max(0,Math.min(100,pct)))+'%';
+  document.querySelectorAll('#dutchieProgress .import-step').forEach(function(step){
+    var n=parseInt(step.getAttribute('data-step')||'0',10);
+    step.classList.toggle('done',n<stage);
+    step.classList.toggle('active',n===stage);
+  });
+}
+function imageCountFromImport(data){
+  return (data.categories||[]).reduce(function(total,cat){
+    return total + ((cat.products||[]).filter(function(p){return !!(p&&p.image);}).length);
+  },0);
+}
+function renderDutchieImportResults(data){
+  var results=document.getElementById('dutchieResults');
+  if(!results)return;
+  var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:0);},0));
+  var categoryCount=(data.categories||[]).length;
+  var imageCount=imageCountFromImport(data);
+  var warnings=(data.warnings||[]).filter(Boolean);
+  var sourceLabel=data.source?String(data.source).replace(/-/g,' '):'menu source';
+  var warningHtml='';
+  if(data.demo){
+    warningHtml+='<div class="import-warning">Live Dutchie data was unavailable, so DubMenu loaded the Simply Green demo instead of pretending the scrape succeeded.</div>';
+  }
+  if(warnings.length){
+    warningHtml+='<div class="import-warning">'+escapeHtml(warnings[0])+'</div>';
+  }
+  results.innerHTML='<div class="import-result-grid">'+
+    '<div class="import-result-stat"><strong>'+count+'</strong><span>products</span></div>'+
+    '<div class="import-result-stat"><strong>'+categoryCount+'</strong><span>categories</span></div>'+
+    '<div class="import-result-stat"><strong>'+imageCount+'</strong><span>photos</span></div>'+
+    '</div><div class="helper">Source: '+escapeHtml(sourceLabel)+'. Product photos are used when imported; missing-photo products render as clean text rows, not icons.</div>'+warningHtml;
+  results.className='import-results active';
+}
+
 async function importDutchie(){
   var input=document.getElementById('dutchieUrl');
   var btn=document.getElementById('dutchieImportBtn');
@@ -695,26 +855,38 @@ async function importDutchie(){
     status.className='import-status err';
     return;
   }
+  resetDutchieImportUi();
   btn.disabled=true;
   btn.textContent='Importing...';
-  status.textContent='Importing menu. This can take up to a minute.';
+  status.textContent='Starting import. Keep this tab open while DubMenu reads the menu.';
   status.className='import-status';
+  setDutchieImportStage(1,18);
+  var stageTimer=setTimeout(function(){setDutchieImportStage(2,44);status.textContent='Finding Dutchie data or browser-rendered product cards...';},900);
+  var syncTimer=setTimeout(function(){setDutchieImportStage(3,72);status.textContent='Formatting products, photos, pricing, and TV layout...';},4200);
+  var controller=new AbortController();
+  var importTimeout=setTimeout(function(){controller.abort();},90000);
   try{
-    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,session:SESSION_ID})});
-    var data=await res.json();
+    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,session:SESSION_ID}),signal:controller.signal});
+    var data={};
+    try{data=await res.json();}catch(parseErr){throw new Error('Import returned an unreadable response. Try a Dutchie store URL or store slug.');}
     if(!res.ok||!data.success)throw new Error(data.error||'Import failed');
+    setDutchieImportStage(4,92);
     var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:0);},0));
-    var nameNote=data.dispensaryName?' Store name/logo imported.':'';
-    var demoNote=data.demo?' Using sample data because the live Dutchie source is unavailable.':'';
-    var warningNote=(data.warnings&&data.warnings.length)?' '+data.warnings[0]:'';
-    status.textContent='Imported '+count+' products across '+(data.categories||[]).length+' categories.'+nameNote+demoNote+warningNote;
+    var categoryCount=(data.categories||[]).length;
+    status.textContent='Imported '+count+' products across '+categoryCount+' categories. Open the TV preview to verify the synced board.';
     status.className='import-status ok'+(data.demo?' err':'');
-    showToast('Menu imported');
+    renderDutchieImportResults(data);
+    setDutchieImportStage(5,100);
+    showToast(data.demo?'Demo menu imported':'Menu imported');
   }catch(err){
-    status.textContent=err&&err.message?err.message:'Import failed';
+    status.textContent=(err&&err.name==='AbortError')?'Import timed out. Try the store slug, or use a smaller source menu if this Dutchie page is very large.':(err&&err.message?err.message:'Import failed');
     status.className='import-status err';
+    setDutchieImportStage(2,100);
     showToast('Menu import failed');
   }finally{
+    clearTimeout(stageTimer);
+    clearTimeout(syncTimer);
+    clearTimeout(importTimeout);
     btn.disabled=false;
     btn.textContent='Import Menu';
   }
@@ -755,6 +927,34 @@ function render(){
   updateScreenSet();
 }
 
+var SCREEN_LAYOUT_OPTIONS=[
+  ['','Default'],
+  ['grid','Grid'],
+  ['list','Price List'],
+  ['pricewall','Dense Price Wall'],
+  ['poster','Poster'],
+  ['cinematic','Cinematic'],
+  ['showcase','Showcase'],
+  ['editorial','Editorial'],
+  ['sparse','Single-Product Hero']
+];
+function getScreenLayoutOverrides(){
+  try{return JSON.parse(localStorage.getItem('dubmenu_screen_layouts')||'{}')||{};}catch(e){return {};}
+}
+function setScreenLayout(sid,value){
+  var overrides=getScreenLayoutOverrides();
+  if(value) overrides[sid]=value; else delete overrides[sid];
+  localStorage.setItem('dubmenu_screen_layouts',JSON.stringify(overrides));
+  updateScreenSet();
+  updateSimulator();
+}
+function tvUrlForScreen(sid,index,total){
+  var url=ORIGIN+'/tv/'+sid+'?display='+(index+1)+'&displays='+total;
+  var layout=getScreenLayoutOverrides()[sid];
+  if(layout) url+='&layout='+encodeURIComponent(layout);
+  return url;
+}
+
 // Screen set: detect TVs from cookie
 function updateScreenSet(){
   var screens=getCookie('dubmenu_screens');
@@ -767,11 +967,38 @@ function updateScreenSet(){
   document.getElementById('screensetPlural').textContent=screenIds.length>1?'s':'';
   var list=document.getElementById('screensetList');
   list.innerHTML='';
+  var overrides=getScreenLayoutOverrides();
   screenIds.forEach(function(sid,i){
-    var url=ORIGIN+'/tv/'+sid+'?display='+(i+1)+'&displays='+screenIds.length;
+    var url=tvUrlForScreen(sid,i,screenIds.length);
+    var currentLayout=overrides[sid]||'';
     var div=document.createElement('div');
     div.className='screenset-tv';
-    div.innerHTML='<div class="screenset-tv-num">'+(i+1)+'</div><div class="screenset-tv-url">'+escapeHtml(url)+'</div><button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(\\''+url+'\\');showToast(\\'Copied!\\')">Copy</button>';
+    var num=document.createElement('div');
+    num.className='screenset-tv-num';
+    num.textContent=String(i+1);
+    var urlEl=document.createElement('div');
+    urlEl.className='screenset-tv-url';
+    urlEl.textContent=url;
+    var select=document.createElement('select');
+    select.className='screen-layout-select';
+    select.setAttribute('aria-label','Layout for display '+(i+1));
+    SCREEN_LAYOUT_OPTIONS.forEach(function(opt){
+      var option=document.createElement('option');
+      option.value=opt[0];
+      option.textContent=opt[1];
+      option.selected=opt[0]===currentLayout;
+      select.appendChild(option);
+    });
+    select.addEventListener('change',function(){setScreenLayout(sid,select.value);});
+    var button=document.createElement('button');
+    button.className='btn btn-sm btn-secondary';
+    button.type='button';
+    button.textContent='Copy';
+    button.addEventListener('click',function(){navigator.clipboard.writeText(url);showToast('Copied!');});
+    div.appendChild(num);
+    div.appendChild(urlEl);
+    div.appendChild(select);
+    div.appendChild(button);
     list.appendChild(div);
   });
   sendConfig('displayCount',screenIds.length);
@@ -1419,13 +1646,6 @@ function renderSimulatorControls(){
   }
   var statusEl=document.getElementById('simStatus');
   if(statusEl) statusEl.textContent='Previewing display '+simState.selectedDisplay+' of '+simState.displayCount;
-  updateTvDisplayLink();
-}
-
-function updateTvDisplayLink(){
-  var link=document.getElementById('tvDisplayLink');
-  if(!link) return;
-  link.href=location.origin+getSimTvUrl(simState.selectedDisplay,false);
 }
 
 function renderSimulatorPreview(){
@@ -1507,20 +1727,6 @@ function getSimTvUrl(displayNum,embed){
   return url;
 }
 
-function openSelectedDisplay(){
-  window.open(getSimTvUrl(simState.selectedDisplay,false),'_blank');
-}
-
-function copyAllTvUrls(){
-  var urls=[];
-  for(var i=1;i<=simState.displayCount;i++) urls.push(location.origin+getSimTvUrl(i,false));
-  try{navigator.clipboard.writeText(urls.join('\\n'));showToast('Copied '+urls.length+' TV URLs');}catch(e){showToast('Copy failed');}
-}
-
-function copyTvUrl(){
-  var url=document.getElementById('tvDisplayLink').href;
-  try{navigator.clipboard.writeText(url);showToast('Copied TV URL');}catch(e){showToast('Copy failed');}
-}
 
 function rotateSimDisplay(){
   setSimSelectedDisplay((simState.selectedDisplay % simState.displayCount)+1);

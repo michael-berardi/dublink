@@ -48,13 +48,14 @@ describe('menuPage', () => {
     expect(page).toContain('onerror="window.dubmenuImgFallback(this)"');
   });
 
-  it('renders demo config with category pills and placeholder icons', () => {
+  it('renders demo config with Simply Green product photos instead of placeholders', () => {
     const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');
     expect(page).toContain('Simply Green');
     expect(page).toContain('Flower');
     expect(page).toContain('Pre-Rolls');
     expect(page).toContain('OG Kush');
-    expect(page).toContain('product-image-placeholder');
+    expect(page).toContain('data:image/webp;base64,');
+    expect((page.match(/<img class="product-image/g) || []).length).toBeGreaterThan(0);
   });
 
   it('emits a parseable inline script with no broken string literals', () => {

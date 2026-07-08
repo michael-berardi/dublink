@@ -36,9 +36,11 @@ export interface MenuImportEnv {
 }
 
 const DUTCHIE_EMBEDDED_RE = /dutchie\.com\/embedded-menu\/([a-zA-Z0-9_-]+)/i;
+const DUTCHIE_STORE_RE = /dutchie\.com\/stores\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_DISPENSARY_RE = /dutchie\.com\/dispensary\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_ROOT_SLUG_RE = /dutchie\.com\/([a-zA-Z0-9_-]+)(?:\/[a-zA-Z0-9_-]+)?/i;
 const DUTCHIE_EMBEDDED_ID_RE = /dutchie\.com\/api\/v2\/embedded-menu\/([a-f0-9]+)(?:\.js)?/i;
+const DUTCHIE_RESERVED_PATHS = new Set(['api', 'api-2', 'business', 'help', 'hc', 'stores', 'store', 'dispensaries', 'us', 'embedded-menu']);
 
 const DUTCHIE_EMBEDDED_ID_MAP: Record<string, string> = {
   // Simply Green NY embedded menu ID -> known Dutchie slug.
@@ -101,21 +103,26 @@ export function detectMenuSource(input: string): MenuSource {
 
     if (path.startsWith('/embedded-menu/')) {
       const slug = path.split('/')[2];
-      if (slug) return { type: 'dutchie-embedded', slug: slug.toLowerCase(), url: urlStr };
+      if (slug && !DUTCHIE_RESERVED_PATHS.has(slug.toLowerCase())) return { type: 'dutchie-embedded', slug: slug.toLowerCase(), url: urlStr };
+    }
+
+    if (path.startsWith('/stores/')) {
+      const slug = path.split('/')[2];
+      if (slug && !DUTCHIE_RESERVED_PATHS.has(slug.toLowerCase())) return { type: 'dutchie-regular', slug: slug.toLowerCase(), url: urlStr };
     }
 
     if (path.startsWith('/dispensary/')) {
       const slug = path.split('/')[2];
-      if (slug) return { type: 'dutchie-regular', slug: slug.toLowerCase(), url: urlStr };
+      if (slug && !DUTCHIE_RESERVED_PATHS.has(slug.toLowerCase())) return { type: 'dutchie-regular', slug: slug.toLowerCase(), url: urlStr };
     }
 
     const subdomain = hostname.replace(/\.dutchie\.com$/, '');
-    if (subdomain && subdomain !== 'dutchie' && !subdomain.includes('.')) {
+    if (subdomain && subdomain !== 'dutchie' && !subdomain.includes('.') && !DUTCHIE_RESERVED_PATHS.has(subdomain)) {
       return { type: 'dutchie-regular', slug: subdomain.toLowerCase(), url: urlStr };
     }
 
     const rootParts = path.split('/').filter(Boolean);
-    if (rootParts[0]) {
+    if (rootParts[0] && !DUTCHIE_RESERVED_PATHS.has(rootParts[0].toLowerCase())) {
       return { type: 'dutchie-regular', slug: rootParts[0].toLowerCase(), url: urlStr };
     }
 
@@ -128,16 +135,18 @@ export function detectMenuSource(input: string): MenuSource {
 
 export function extractDutchieSlugFromHtml(html: string): string | null {
   const embedded = html.match(DUTCHIE_EMBEDDED_RE);
-  if (embedded) return embedded[1].toLowerCase();
+  if (embedded && !DUTCHIE_RESERVED_PATHS.has(embedded[1].toLowerCase())) return embedded[1].toLowerCase();
+  const store = html.match(DUTCHIE_STORE_RE);
+  if (store && !DUTCHIE_RESERVED_PATHS.has(store[1].toLowerCase())) return store[1].toLowerCase();
   const embeddedId = html.match(DUTCHIE_EMBEDDED_ID_RE);
   if (embeddedId) {
     const slug = DUTCHIE_EMBEDDED_ID_MAP[embeddedId[1]];
     if (slug) return slug.toLowerCase();
   }
   const dispensary = html.match(DUTCHIE_DISPENSARY_RE);
-  if (dispensary) return dispensary[1].toLowerCase();
+  if (dispensary && !DUTCHIE_RESERVED_PATHS.has(dispensary[1].toLowerCase())) return dispensary[1].toLowerCase();
   const root = html.match(DUTCHIE_ROOT_SLUG_RE);
-  if (root) return root[1].toLowerCase();
+  if (root && !DUTCHIE_RESERVED_PATHS.has(root[1].toLowerCase())) return root[1].toLowerCase();
   return null;
 }
 
@@ -442,27 +451,6 @@ async function importDutchieFromSlug(
     }
   }
 
-  if (!result && env.BROWSERLESS_TOKEN) {
-    try {
-      const scraperResult = await scrapeDutchie(slug, env.BROWSERLESS_TOKEN);
-      result = {
-        categories: scraperResult.categories,
-        productCount: scraperResult.productCount,
-        dispensaryName: scraperResult.dispensaryName,
-        logo: undefined,
-        source: sourceLabel,
-        apiUsed: false,
-        warnings: errors.length ? [`Dutchie API unavailable; used Browserless scraper (${errors[errors.length - 1]}).`] : [],
-      };
-      if (isUsableResult(result)) return result;
-      errors.push('Browserless scraper returned no usable products');
-      result = undefined;
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'Browserless scraper failed');
-      console.error(`Browserless scraper failed for slug "${slug}": ${errors[errors.length - 1]}`);
-    }
-  }
-
   if (!result) {
     try {
       const publicResult = await importDutchiePublicMenu(slug);
@@ -473,7 +461,7 @@ async function importDutchieFromSlug(
         logo: publicResult.logo,
         source: sourceLabel,
         apiUsed: false,
-        warnings: errors.length ? [`Dutchie API/Browserless unavailable; used public GraphQL fallback (${errors.join('; ')}).`] : [],
+        warnings: errors.length ? [`Dutchie API unavailable; used public GraphQL fallback (${errors.join('; ')}).`] : [],
       };
       if (isUsableResult(result)) return result;
       errors.push('Dutchie public API returned no usable products');
@@ -481,6 +469,27 @@ async function importDutchieFromSlug(
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Dutchie public API import failed');
       console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
+    }
+  }
+
+  if (!result && env.BROWSERLESS_TOKEN) {
+    try {
+      const scraperResult = await scrapeDutchie(slug, env.BROWSERLESS_TOKEN);
+      result = {
+        categories: scraperResult.categories,
+        productCount: scraperResult.productCount,
+        dispensaryName: scraperResult.dispensaryName,
+        logo: undefined,
+        source: sourceLabel,
+        apiUsed: false,
+        warnings: errors.length ? [`Dutchie API/public GraphQL unavailable; used Browserless scraper (${errors.join('; ')}).`] : [],
+      };
+      if (isUsableResult(result)) return result;
+      errors.push('Browserless scraper returned no usable products');
+      result = undefined;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Browserless scraper failed');
+      console.error(`Browserless scraper failed for slug "${slug}": ${errors[errors.length - 1]}`);
     }
   }
 
