@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { configPage } from '../src/html-config';
 
+function between(source: string, start: string, end: string): string {
+  const s = source.indexOf(start);
+  if (s === -1) return '';
+  const e = source.indexOf(end, s + start.length);
+  return source.slice(s, e === -1 ? undefined : e + end.length);
+}
+
 describe('configPage inline script', () => {
   it('renders a parseable inline script', () => {
     const html = configPage('test-session-id', 'https://dubmenu.com');
@@ -67,10 +74,16 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('body:not(.section-open){height:100dvh;overflow:hidden;}');
   });
 
-  it('places JSON backup actions inside the Import section', () => {
-    expect(html).toContain('Settings Backup');
-    expect(html).toContain('Export Settings');
-    expect(html).toContain('Import Settings');
+  it('places JSON backup actions in the TV preview options area, not the import card', () => {
+    const importSection = between(html, '<section class="control-section" id="section-import"', '</section>');
+    const simulatorPanel = between(html, '<aside id="simulatorPanel"', '</aside>');
+    expect(importSection).toBeTruthy();
+    expect(simulatorPanel).toBeTruthy();
+    expect(importSection).not.toContain('Settings Backup');
+    expect(importSection).not.toContain('Export Settings');
+    expect(importSection).not.toContain('Import Settings');
+    expect(simulatorPanel).toContain('Export Settings');
+    expect(simulatorPanel).toContain('Import Settings');
     expect(html).toContain('id="importInput"');
   });
 
@@ -109,5 +122,40 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('tvUrlForScreen');
     expect(html).toContain('&layout=');
     expect(html).toContain('screen-layout-select');
+  });
+});
+
+describe('configPage setup wizard', () => {
+  const html = configPage('test-session-id', 'https://dubmenu.com');
+  const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+  const script = scriptMatch ? scriptMatch[1] : '';
+
+  it('renders a setup wizard shell for the blank/no-products state', () => {
+    expect(html).toContain('<section class="setup-wizard" id="setupWizard"');
+    expect(html).toContain('id="setupWizardTitle"');
+    expect(html).toContain('Build your TV menu from one source.');
+    expect(script).toContain('function runSetupWizard()');
+  });
+
+  it('wizard includes menu URL, style notes, display count, and settings JSON import', () => {
+    expect(html).toContain('id="wizardMenuUrl"');
+    expect(html).toContain('id="wizardStyleNotes"');
+    expect(html).toContain('id="wizardDisplayCount"');
+    expect(html).toContain('Import Settings JSON');
+    expect(html).toContain('id="importInput"');
+  });
+
+  it('sends style notes and display count from the wizard to the smart import endpoint', () => {
+    expect(script).toContain("'/api/scrape-dutchie'");
+    expect(script).toContain('styleNotes:');
+    expect(script).toContain('displayCount:');
+  });
+
+  it('gates normal controls behind the wizard until products have been imported', () => {
+    expect(script).toContain('function needsSetupWizard()');
+    expect(script).toContain('function menuProductCount(');
+    expect(script).toContain('function updateSetupWizard()');
+    expect(script).toContain("wizard.classList.toggle('active',need)");
+    expect(script).toContain("document.body.classList.toggle('wizard-body-lock',need)");
   });
 });

@@ -419,4 +419,18 @@ describe('tvPage', () => {
     expect(page).toContain('if(config && config.showDescription === false) return');
     expect(page).toContain('if(!config || config.analyticsEnabled !== false) fetch');
   });
+
+  it('guides setup on the TV blank state instead of a generic no-products message', () => {
+    const page = tvPage('test-session', 'https://tv.dubmenu.com', {
+      preview: true,
+      initialConfig: { categories: [] },
+    });
+
+    expect(page).toContain('Menu setup required');
+    expect(page).toContain('Build this TV menu from the remote.');
+    expect(page).toContain('empty-state-card');
+    expect(page).toContain('function emptyMenuMarkup()');
+    expect(page).toContain('function stopCycling()');
+    expect(page).not.toContain('No products to display on this screen');
+  });
 });

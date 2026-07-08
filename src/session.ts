@@ -205,6 +205,9 @@ export class SessionDurableObject implements DurableObject {
           showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
           showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
           showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : true,
+          showPromos: typeof data.showPromos === 'boolean' ? data.showPromos : this.config.showPromos,
+          showDescription: typeof data.showDescription === 'boolean' ? data.showDescription : this.config.showDescription,
+          styleProfile: this.sanitizeStyleProfile(isRecord(data) ? data.styleProfile : undefined) ?? this.config.styleProfile,
           tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : false,
         };
         if (!this.ownerAccountId) {

@@ -258,11 +258,34 @@ export function configPage(sessionId: string, origin: string): string {
   .modal-panel{border-radius:1.2rem 1.2rem 0 0;max-height:86vh;border-left:none;border-right:none;border-bottom:none;}
   .mobile-preview-panel{max-width:none;}
 }
+.setup-wizard{display:none;margin:1rem 0 1.2rem;border:1px solid rgba(16,185,129,0.35);background:linear-gradient(160deg,rgba(16,185,129,0.13),rgba(255,255,255,0.055)),var(--surface);border-radius:1rem;padding:1rem;box-shadow:0 22px 70px rgba(0,0,0,0.28);}
+.setup-wizard.active{display:block;}
+.wizard-eyebrow{font-size:0.75rem;color:var(--accent);font-weight:900;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:0.45rem;}
+.wizard-title{margin:0;font-size:clamp(1.7rem,5vw,2.55rem);letter-spacing:-0.045em;line-height:0.96;}
+.wizard-copy{color:var(--muted);font-size:0.98rem;line-height:1.45;margin:0.65rem 0 1rem;}
+.wizard-grid{display:grid;grid-template-columns:1.05fr 0.95fr;gap:0.9rem;align-items:start;}
+.wizard-panel{background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:0.85rem;padding:0.85rem;}
+.wizard-steps{display:grid;gap:0.55rem;margin-top:0.7rem;}
+.wizard-step{display:flex;gap:0.55rem;align-items:flex-start;color:var(--muted);font-size:0.86rem;}
+.wizard-step b{color:var(--text);display:block;font-size:0.9rem;}
+.wizard-dot{width:1.35rem;height:1.35rem;border-radius:999px;background:rgba(16,185,129,0.18);color:var(--accent);display:inline-flex;align-items:center;justify-content:center;font-size:0.72rem;font-weight:900;flex:0 0 auto;margin-top:0.05rem;}
+.wizard-actions{display:flex;gap:0.55rem;flex-wrap:wrap;margin-top:0.8rem;}
+.wizard-status{margin-top:0.75rem;color:var(--muted);font-size:0.88rem;min-height:1.2rem;}
+.wizard-status.ok{color:var(--accent);}
+.wizard-status.err{color:var(--danger);}
+.wizard-quality{display:none;margin-top:0.8rem;}
+.wizard-quality.active{display:block;}
+.wizard-body-lock .mobile-control-hub,.wizard-body-lock .control-section{display:none;}
+.wizard-body-lock .screenset-info{display:none;}
+.wizard-body-lock #simulatorPanel .sim-controls,.wizard-body-lock #simulatorPanel .sim-footer{display:none;}
+@media(max-width:900px){.wizard-grid{grid-template-columns:1fr}.setup-wizard{margin:0.75rem 0;padding:0.85rem}.wizard-title{font-size:2rem}}
+@media(max-width:600px){.setup-wizard{margin:0.45rem 0;padding:0.7rem;border-radius:0.85rem}.wizard-eyebrow{font-size:0.68rem;margin-bottom:0.3rem}.wizard-title{font-size:1.55rem;line-height:0.98}.wizard-copy{font-size:0.82rem;line-height:1.28;margin:0.42rem 0 0.55rem}.wizard-steps{gap:0.34rem;margin-top:0.45rem}.wizard-step{gap:0.4rem;font-size:0.76rem;line-height:1.15}.wizard-step b{font-size:0.8rem}.wizard-dot{width:1.1rem;height:1.1rem;font-size:0.62rem}.wizard-panel{padding:0.62rem;border-radius:0.7rem}.wizard-panel .field{margin-bottom:0.55rem}.wizard-panel label{font-size:0.68rem}.wizard-panel input,.wizard-panel textarea,.wizard-panel select{font-size:0.9rem;padding:0.66rem}.wizard-panel textarea{min-height:4.2rem}.wizard-actions{margin-top:0.55rem}.wizard-status{font-size:0.8rem;margin-top:0.55rem}}
   </style>
 </head>
 <body>
 
 <a class="skip-link" href="#mainContent">Skip to main content</a>
+<input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
 
 <div class="desktop-layout">
 <div class="config-column">
@@ -272,7 +295,46 @@ export function configPage(sessionId: string, origin: string): string {
 <div class="remote-heading">
   <h1>DubMenu Remote Control</h1>
   <div class="inline-status" role="status" aria-live="polite" aria-atomic="true"><span class="status-dot status-disconnected" id="statusDot" aria-hidden="true"></span><span class="status-text" id="statusText">Connecting...</span></div>
+
 </div>
+
+<section class="setup-wizard" id="setupWizard" aria-labelledby="setupWizardTitle">
+  <div class="wizard-eyebrow">First TV setup</div>
+  <div class="wizard-grid">
+    <div>
+      <h2 class="wizard-title" id="setupWizardTitle">Build your TV menu from one source.</h2>
+      <p class="wizard-copy">Paste a Dutchie link, store slug, or dispensary website. DubMenu imports products, prices, THC, strain, brand, weights, images, store title, logo, and a safe visual theme, then maps it to the best TV layout.</p>
+      <div class="wizard-steps" aria-label="Wizard steps">
+        <div class="wizard-step"><span class="wizard-dot">1</span><span><b>Scan menu data</b>Products, categories, prices, photos, title, and logo.</span></div>
+        <div class="wizard-step"><span class="wizard-dot">2</span><span><b>Choose the premium layout</b>Dense price wall, image-led, sparse hero, or multi-display wall.</span></div>
+        <div class="wizard-step"><span class="wizard-dot">3</span><span><b>Open the normal controls</b>After the TV has products, the full remote appears for fine-tuning.</span></div>
+      </div>
+    </div>
+    <div class="wizard-panel">
+      <form id="setupWizardForm" onsubmit="event.preventDefault();runSetupWizard();">
+        <div class="field">
+          <label for="wizardMenuUrl">Menu URL, Dutchie link, or store slug</label>
+          <input type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" spellcheck="false" id="wizardMenuUrl" placeholder="https://dutchie.com/embedded-menu/your-store or your-store.com" style="-webkit-user-select:text;user-select:text;">
+        </div>
+        <div class="field">
+          <label for="wizardStyleNotes">Visual direction or competitor reference notes</label>
+          <textarea id="wizardStyleNotes" rows="3" placeholder="Example: dense green TV price board, daily deals rail, no photos, four displays"></textarea>
+        </div>
+        <div class="field">
+          <label for="wizardDisplayCount">TV displays</label>
+          <select id="wizardDisplayCount"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select>
+        </div>
+        <button class="btn btn-primary" id="setupWizardBtn" type="submit" style="width:100%;">Build My TV Menu</button>
+      </form>
+      <div class="wizard-actions">
+        <button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById('importInput').click()">Import Settings JSON</button>
+        <button class="btn btn-sm btn-secondary" type="button" onclick="openMobilePreview()">Preview Blank TV</button>
+      </div>
+      <div class="wizard-status" id="setupWizardStatus" aria-live="polite">Your TV is blank until the wizard imports a menu or settings file.</div>
+      <div class="wizard-quality" id="setupWizardQuality"></div>
+    </div>
+  </div>
+</section>
 
 <div class="screenset-info" id="screensetInfo">
   <h3>Screen Set (<span id="screensetCount">1</span> TV<span id="screensetPlural">s</span>)</h3>
@@ -311,16 +373,18 @@ export function configPage(sessionId: string, origin: string): string {
 </section>
 
 <section class="control-section" id="section-import" aria-labelledby="sectionImportTitle">
-  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Menu data</div><h2 id="sectionImportTitle">Import</h2></div></div>
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Smart setup</div><h2 id="sectionImportTitle">Menu Wizard</h2></div></div>
 <div class="card primary-card">
-  <h2 class="card-title">Import Menu</h2>
+  <h2 class="card-title">Import & Design Menu</h2>
   <form id="dutchieForm" onsubmit="event.preventDefault();importDutchie();">
     <div class="field">
       <label for="dutchieUrl">Menu URL, Dutchie Link, or Store Slug</label>
       <input type="text" inputmode="url" autocomplete="off" autocapitalize="none" autocorrect="off" enterkeyhint="go" spellcheck="false" id="dutchieUrl" name="dutchieUrl" placeholder="https://dutchie.com/embedded-menu/your-store or your-store.com" style="-webkit-user-select:text;user-select:text;">
-      <div class="helper">Paste a Dutchie link, store slug, or dispensary website URL. DubMenu finds the menu and imports products, prices, THC, strain, brand, weights, images, and store name/logo.</div>
+      <div class="helper">The wizard imports products, scans store title/logo, maps categories, chooses a TV-safe visual theme, and picks the strongest layout for the display wall.</div>
     </div>
-    <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Import Menu</button>
+    <div class="field"><label for="dutchieStyleNotes">Visual direction</label><textarea id="dutchieStyleNotes" rows="2" placeholder="Example: dense green TV price board, daily deals rail, no photos"></textarea></div>
+    <div class="field"><label for="dutchieDisplayCount">TV displays</label><select id="dutchieDisplayCount"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select></div>
+    <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Build TV Menu</button>
   </form>
   <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
   <div class="import-progress" id="dutchieProgress" aria-hidden="true">
@@ -333,15 +397,6 @@ export function configPage(sessionId: string, origin: string): string {
     </div>
   </div>
   <div class="import-results" id="dutchieResults" aria-live="polite"></div>
-</div>
-<div class="card">
-  <h2 class="card-title">Settings Backup</h2>
-  <div class="helper">Save or restore this remote configuration as a private JSON file.</div>
-  <div class="backup-actions">
-    <button class="btn btn-sm btn-secondary" type="button" onclick="exportData()">Export Settings</button>
-    <button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById('importInput').click()">Import Settings</button>
-  </div>
-  <input type="file" id="importInput" accept=".json" style="display:none" onchange="importData(event)">
 </div>
 </section>
 
@@ -569,6 +624,8 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="sim-footer">
     <span id="simStatus">Previewing display 1 of 1</span>
     <div style="display:flex;gap:0.5rem;">
+      <button class="btn btn-sm btn-secondary" type="button" onclick="exportData()">Export Settings</button>
+      <button class="btn btn-sm btn-secondary" type="button" onclick="document.getElementById('importInput').click()">Import Settings</button>
       <button class="btn btn-sm btn-secondary" type="button" onclick="rotateSimDisplay()">Next Display</button>
       <button class="btn btn-sm btn-primary" type="button" onclick="sendToConnectedTv()">Send to Connected TV</button>
     </div>
@@ -794,6 +851,54 @@ function removeSpecial(idx){
 }
 function showToast(msg){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show';setTimeout(function(){t.classList.remove('show');},2500);}
 function escapeHtml(s){if(!s)return'';var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function menuProductCount(cfg){
+  return cfg&&Array.isArray(cfg.categories)?cfg.categories.reduce(function(total,cat){return total+((cat.products||[]).length);},0):0;
+}
+function needsSetupWizard(){
+  return !config || menuProductCount(config)===0;
+}
+function renderSetupWizardQuality(data){
+  var box=document.getElementById('setupWizardQuality');
+  if(!box)return;
+  var profile=(data&&data.styleProfile)||(config&&config.styleProfile);
+  if(!profile){box.classList.remove('active');box.innerHTML='';return;}
+  box.className='wizard-quality active helper';
+  box.innerHTML='<strong>Recommended TV setup:</strong> '+escapeHtml(profile.layout||'auto')+' / '+escapeHtml(profile.template||'default')+'. '+escapeHtml(profile.summary||'Visual profile applied.')+' No competitor assets or HTML copied.';
+}
+function updateSetupWizard(){
+  var wizard=document.getElementById('setupWizard');
+  if(!wizard)return;
+  var need=needsSetupWizard();
+  wizard.classList.toggle('active',need);
+  document.body.classList.toggle('wizard-body-lock',need);
+  var display=document.getElementById('wizardDisplayCount');
+  if(display && config && typeof config.displayCount==='number')display.value=String(Math.max(1,Math.min(4,config.displayCount)));
+  if(!need)renderSetupWizardQuality();
+}
+async function runSetupWizard(){
+  var src=document.getElementById('wizardMenuUrl');
+  var notes=document.getElementById('wizardStyleNotes');
+  var displays=document.getElementById('wizardDisplayCount');
+  var btn=document.getElementById('setupWizardBtn');
+  var status=document.getElementById('setupWizardStatus');
+  var url=(src&&src.value||'').trim();
+  if(!url){if(status){status.textContent='Paste a Dutchie link, store slug, or store website first.';status.className='wizard-status err';}if(src)src.focus();return;}
+  var target=document.getElementById('dutchieUrl');
+  var targetNotes=document.getElementById('dutchieStyleNotes');
+  var targetDisplays=document.getElementById('dutchieDisplayCount');
+  if(target)target.value=url;
+  if(targetNotes)targetNotes.value=(notes&&notes.value||'').trim();
+  if(targetDisplays&&displays)targetDisplays.value=displays.value;
+  if(btn){btn.disabled=true;btn.textContent='Building TV Menu...';}
+  if(status){status.textContent='Importing menu data and choosing a TV-safe layout...';status.className='wizard-status';}
+  var ok=await importDutchie();
+  if(status){
+    var normal=document.getElementById('dutchieStatus');
+    status.textContent=ok?'TV menu built. The full controls are now unlocked.':(normal&&normal.textContent||'Import failed.');
+    status.className='wizard-status '+(ok?'ok':'err');
+  }
+  if(btn){btn.disabled=false;btn.textContent='Build My TV Menu';}
+}
 
 function resetDutchieImportUi(){
   var progress=document.getElementById('dutchieProgress');
@@ -855,7 +960,7 @@ async function importDutchie(){
     status.textContent='Paste a menu URL or store slug first.';
     status.className='import-status err';
     if(input) input.focus();
-    return;
+    return false;
   }
   var isSlug=/^[a-zA-Z0-9_-]+$/.test(rawUrl);
   var url=rawUrl;
@@ -868,7 +973,7 @@ async function importDutchie(){
   if(!isSlug && !isValidUrl){
     status.textContent='Enter a valid URL, Dutchie link, or store slug.';
     status.className='import-status err';
-    return;
+    return false;
   }
   resetDutchieImportUi();
   btn.disabled=true;
@@ -880,8 +985,12 @@ async function importDutchie(){
   var syncTimer=setTimeout(function(){setDutchieImportStage(3,72);status.textContent='Formatting products, photos, pricing, and TV layout...';},4200);
   var controller=new AbortController();
   var importTimeout=setTimeout(function(){controller.abort();},90000);
+  var styleNotesEl=document.getElementById('dutchieStyleNotes');
+  var displayCountEl=document.getElementById('dutchieDisplayCount');
+  var displayCount=parseInt(displayCountEl&&displayCountEl.value||'1',10);
+  var payload={url:url,session:SESSION_ID,styleNotes:(styleNotesEl&&styleNotesEl.value||'').trim(),displayCount:Math.max(1,Math.min(4,isNaN(displayCount)?1:displayCount))};
   try{
-    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url,session:SESSION_ID}),signal:controller.signal});
+    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
     var data={};
     try{data=await res.json();}catch(parseErr){throw new Error('Import returned an unreadable response. Try a Dutchie store URL or store slug.');}
     if(!res.ok||!data.success)throw new Error(data.error||'Import failed');
@@ -893,18 +1002,22 @@ async function importDutchie(){
     renderDutchieImportResults(data);
     setDutchieImportStage(5,100);
     showToast(data.demo?'Demo menu imported':'Menu imported');
+    renderSetupWizardQuality(data);
+    updateSetupWizard();
+    return true;
   }catch(err){
     status.textContent=(err&&err.name==='AbortError')?'Import timed out. Try the store slug, or use a smaller source menu if this Dutchie page is very large.':(err&&err.message?err.message:'Import failed');
     status.className='import-status err';
     setDutchieImportStage(2,100);
     showToast('Menu import failed');
+    return false;
 
   }finally{
     clearTimeout(stageTimer);
     clearTimeout(syncTimer);
     clearTimeout(importTimeout);
     btn.disabled=false;
-    btn.textContent='Import Menu';
+    btn.textContent='Build TV Menu';
   }
 }
 
@@ -1021,6 +1134,9 @@ function render(){
   document.getElementById('currency').value=config.currency||'$';
   document.getElementById('fontSize').value=config.fontSize||'medium';
   renderStyleProfile();
+  updateSetupWizard();
+  var wizardDisplays=document.getElementById('dutchieDisplayCount');
+  if(wizardDisplays && typeof config.displayCount==='number')wizardDisplays.value=String(Math.max(1,Math.min(4,config.displayCount)));
   document.getElementById('layout').value=config.layout||'auto';
   document.getElementById('promoBannerText').value=config.promoBanner?(config.promoBanner.text||''):'';
   document.getElementById('promoBannerBg').value=config.promoBanner?(config.promoBanner.bgColor||'#10b981'):'#10b981';

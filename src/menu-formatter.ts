@@ -10,7 +10,7 @@ export interface SmartLayout {
   theme: 'dark' | 'light';
 }
 
-type ImportedTemplate = 'default' | 'minimal' | 'neon' | 'light' | 'sunset' | 'forest' | 'royal' | 'gold' | 'ocean' | 'crimson' | 'bone' | 'vapor';
+export type ImportedTemplate = 'default' | 'minimal' | 'neon' | 'light' | 'sunset' | 'forest' | 'royal' | 'gold' | 'ocean' | 'crimson' | 'bone' | 'vapor';
 
 export interface ImportedBrandStyle {
   template: ImportedTemplate;
@@ -44,6 +44,10 @@ const BRAND_STYLE_RULES: Array<{ template: ImportedTemplate; pattern: RegExp }> 
   { template: 'bone', pattern: /\b(white|bone|ivory|cream|clean|minimal|clinic|medical|apothecary)\b/i },
   { template: 'neon', pattern: /\b(neon|night|after dark|club|glow)\b/i },
 ];
+
+export function getImportedTemplateStyle(template: ImportedTemplate): ImportedBrandStyle {
+  return BRAND_STYLES[template] || BRAND_STYLES.default;
+}
 
 export function inferImportedBrandStyle(dispensaryName: string, logo?: string): ImportedBrandStyle {
   const source = `${dispensaryName || ''} ${logo || ''}`.replace(/[-_./]+/g, ' ');

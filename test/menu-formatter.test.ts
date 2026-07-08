@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts, isSpecialProduct, inferImportedBrandStyle } from '../src/menu-formatter';
+import { canonicalCategoryName, dedupeAndFormatCategories, smartLayout, formatMenu, scoreProductForTv, selectTvProducts, isSpecialProduct, inferImportedBrandStyle, getImportedTemplateStyle } from '../src/menu-formatter';
 import type { ScrapedCategory } from '../src/dutchie-scraper';
 
 describe('canonicalCategoryName', () => {
@@ -259,6 +259,14 @@ describe('formatMenu', () => {
     expect(inferImportedBrandStyle('Vibe by California Ukiah').template).toBe('vapor');
     expect(inferImportedBrandStyle('The Forest Baltimore').template).toBe('forest');
     expect(formatMenu([], 'High Society Dispensary').brandStyle.primaryColor).toBe('#fbbf24');
+  });
+
+  it('exposes template colors for notes-driven smart import styles', () => {
+    expect(getImportedTemplateStyle('forest')).toMatchObject({
+      primaryColor: '#22c55e',
+      secondaryColor: '#14532d',
+    });
+    expect(getImportedTemplateStyle('gold').primaryColor).toBe('#fbbf24');
   });
 
 

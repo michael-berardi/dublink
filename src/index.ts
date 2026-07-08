@@ -21,7 +21,7 @@ import { adminPage } from './html-admin';
 import { widgetPage, widgetJs } from './html-widget';
 import { getStatus } from './status';
 import { resolveMenuSource } from './menu-source';
-import { formatMenu } from './menu-formatter';
+import { formatMenu, getImportedTemplateStyle } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
 import { analyzeReferenceStyle } from './reference-style';
 import { createStarterConfig, createDemoConfig } from './starter-template';
@@ -1001,7 +1001,7 @@ export default {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       try {
-        const body = await request.json() as { url?: string; session?: string };
+        const body = await request.json() as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
         const urlStr = (body.url || '').trim();
         if (!urlStr) {
           return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
@@ -1017,21 +1017,38 @@ export default {
           maxTvCategories: 6,
           maxTvProductsPerCategory: 8,
         });
+        const style = analyzeReferenceStyle({
+          sourceUrl: urlStr.slice(0, 300),
+          notes: typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '',
+          productCount: formatted.productCount,
+          currentDisplayCount: typeof body.displayCount === 'number' ? body.displayCount : formatted.layout.displayCount,
+        });
+        const resolvedTemplate = style.template === 'default' ? formatted.brandStyle.template : style.template;
+        const styleColors = getImportedTemplateStyle(resolvedTemplate);
+        const styleProfile = {
+          ...style.styleProfile,
+          template: resolvedTemplate,
+          summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
+        };
         const importPayload = {
           dispensaryName: formatted.dispensaryName,
           logo: formatted.logo,
           categories: formatted.categories,
           productCount: formatted.productCount,
-          displayCount: formatted.layout.displayCount,
-          layoutMode: formatted.layout.layoutMode,
-          fontSize: formatted.layout.fontSize,
-          showImages: formatted.layout.showImages,
-          showBrand: formatted.layout.showBrand,
-          showStrain: formatted.layout.showStrain,
+          displayCount: style.displayCount,
+          layout: style.layout,
+          layoutMode: style.layoutMode,
+          fontSize: style.fontSize,
+          showImages: style.showImages,
+          showDescription: style.showDescription,
+          showBrand: style.showBrand,
+          showStrain: style.showStrain,
+          showPromos: style.showPromos,
           theme: formatted.layout.theme,
-          template: formatted.brandStyle.template,
-          primaryColor: formatted.brandStyle.primaryColor,
-          secondaryColor: formatted.brandStyle.secondaryColor,
+          template: resolvedTemplate,
+          primaryColor: styleColors.primaryColor,
+          secondaryColor: styleColors.secondaryColor,
+          styleProfile,
           showLogo: true,
           tvDemo: raw.demo === true,
         };

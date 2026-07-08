@@ -353,7 +353,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   @keyframes content-refresh{0%{opacity:0.55;transform:translateY(6px);}100%{opacity:1;transform:translateY(0);}}
   @keyframes blink{0%,100%{opacity:0.5;}50%{opacity:1;}}
   .cursor-hidden,.cursor-hidden *{cursor:none !important;}
-  .empty-state{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-faint);font-size:1.5rem;text-align:center;}
+  .empty-state{grid-column:1/-1;align-self:stretch;display:flex;align-items:center;justify-content:center;height:100%;min-height:0;padding:3rem;color:var(--text-faint);text-align:center;}
+  .empty-state-card{max-width:920px;border:1px solid var(--border);border-radius:1.4rem;background:linear-gradient(150deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02)),var(--bg-elev);padding:3rem;box-shadow:var(--card-shadow);}
+  .empty-state-kicker{color:var(--accent);font-weight:900;letter-spacing:0.18em;text-transform:uppercase;font-size:1rem;margin-bottom:0.8rem;}
+  .empty-state-title{color:var(--text);font-size:clamp(2.6rem,5vw,5rem);line-height:0.95;font-weight:950;letter-spacing:-0.055em;margin-bottom:1rem;}
+  .empty-state-copy{color:var(--text);font-size:clamp(1.15rem,1.6vw,1.65rem);line-height:1.35;margin-bottom:1.4rem;}
+  .empty-state-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:0.8rem;text-align:left;}
+  .empty-state-step{border:1px solid var(--border);border-radius:0.9rem;padding:1rem;background:rgba(0,0,0,0.22);color:var(--text);font-size:clamp(1.02rem,1.2vw,1.25rem);line-height:1.22;}
+  .empty-state-step b{display:block;color:var(--text);font-size:clamp(1rem,1.25vw,1.3rem);margin-bottom:0.3rem;}
 
   .conn-indicator{position:fixed;top:1rem;right:1rem;display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0.9rem;border-radius:2rem;background:rgba(0,0,0,0.8);backdrop-filter:blur(10px);border:1px solid var(--border);font-size:0.75rem;font-weight:700;z-index:200;opacity:0;transition:opacity 0.5s;pointer-events:none;}
   .conn-indicator.visible{opacity:1;}
@@ -903,6 +910,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return Math.max(4000, Math.min(20000, 5000 + raw * 100));
   }
 
+  function stopCycling(){
+    clearInterval(cycleState.interval);
+    cycleState.interval=null;
+  }
+
   function startCycling(){
     stopCycling();
     if(cycleState.totalPages<=1) return;
@@ -921,14 +933,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     },getCycleInterval());
   }
 
-  function stopCycling(){
-    if(cycleState.interval){clearInterval(cycleState.interval);cycleState.interval=null;}
+  function emptyMenuMarkup(){
+    return '<div class="empty-state"><div class="empty-state-card"><div class="empty-state-kicker">Menu setup required</div><div class="empty-state-title">Build this TV menu from the remote.</div><div class="empty-state-copy">Open DubMenu on your phone or desktop, run the setup wizard, and import a menu URL or settings file before this display goes live.</div><div class="empty-state-steps"><div class="empty-state-step"><b>1. Import</b>Paste a Dutchie link, store slug, or website.</div><div class="empty-state-step"><b>2. Style</b>Use competitor notes to choose a premium layout.</div><div class="empty-state-step"><b>3. Verify</b>Preview every display before showing customers.</div></div></div></div>';
   }
 
   function renderEmptyMenu(layout){
     var content = document.getElementById('menu-content');
     if(!content) return;
-    content.innerHTML = '<div class="empty-state">No products to display on this screen</div>';
+    content.innerHTML = emptyMenuMarkup();
     content.className = 'menu-content layout-' + (layout || 'grid');
     stopCycling();
     showTvInfo(layout);
@@ -1028,14 +1040,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       footerEl.textContent = disc;
       footerEl.style.display = disc ? '' : 'none';
     }
-    
     var cats = getCategoriesForDisplay(config.categories||[]);
     var urlCat = new URLSearchParams(location.search).get('category');
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
     
     if(!cats.length){
-      document.getElementById('menu-content').innerHTML = '<div class="empty-state">No products to display on this screen</div>';
+      document.getElementById('menu-content').innerHTML = emptyMenuMarkup();
       return;
     }
     
