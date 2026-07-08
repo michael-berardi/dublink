@@ -271,6 +271,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall .card-meta span{white-space:nowrap;}
   .layout-pricewall .card-desc{display:none;}
   .layout-pricewall .card-price{font-size:clamp(1.32rem,1.6vw,1.92rem);min-width:4rem;text-align:right;}
+  .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.18rem auto;padding:0.12rem 0.36rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:clamp(0.54rem,0.58vw,0.7rem);line-height:1;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;}
   .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
   .pricewall-panel{background:linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow);overflow:hidden;}
@@ -955,9 +956,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
     var displayCats = cats;
+    var pricewallRailCats = cats;
     if(layout === 'pricewall' && cats.length > 1){
-      displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);});
-      if(!displayCats.length) displayCats = cats;
+      var promoProducts = getPricewallPromoProducts(cats);
+      var shouldUsePromoRail = !!getActiveBanner() || promoProducts.length >= 3;
+      if(shouldUsePromoRail){
+        displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);});
+        if(!displayCats.length) displayCats = cats;
+      } else if(promoProducts.length){
+        displayCats = mergeSparsePricewallSpecials(cats, promoProducts);
+        pricewallRailCats = [];
+      }
     }
     if(!displayCats.length){renderEmptyMenu(layout);return;}
     
@@ -976,7 +985,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     content.className = 'menu-content layout-' + layout;
     
     if(layout==='grid') renderGrid(pageCats, content);
-    else if(layout==='pricewall') renderPricewall(pageCats, content, cats);
+    else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats);
     else if(layout==='list') renderList(pageCats, content);
     else if(layout==='poster') renderPoster(pageCats, content);
     else if(layout==='cinematic') renderCinematic(pageCats, content);
@@ -1166,7 +1175,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return /special|deal|promo/.test(source);
   }
 
-  function renderPricewallShell(cats, container){
+  function getPricewallPromoProducts(cats){
     var promoProducts = [];
     cats.forEach(function(cat){
       var specialCat = isSpecialCategory(cat);
@@ -1174,10 +1183,39 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         if(p && (specialCat || p.isPromo || p.special || p.specialLabel || p.originalPrice || p.priceOriginal)) promoProducts.push(p);
       });
     });
+    return promoProducts;
+  }
+
+  function mergeSparsePricewallSpecials(cats, promoProducts){
+    var promos = promoProducts.slice(0, 2).map(function(p){
+      return Object.assign({}, p, { isPromo: true, specialLabel: p.specialLabel || 'Special' });
+    });
+    var inserted = false;
+    var merged = [];
+    cats.forEach(function(cat){
+      if(isSpecialCategory(cat)) return;
+      var copy = Object.assign({}, cat);
+      var products = (cat.products || []).slice();
+      if(!inserted && products.length){
+        copy.products = promos.concat(products);
+        inserted = true;
+      } else {
+        copy.products = products;
+      }
+      merged.push(copy);
+    });
+    return inserted ? merged : cats;
+  }
+
+
+
+
+  function renderPricewallShell(cats, container){
+    var promoProducts = getPricewallPromoProducts(cats);
+    var banner = getActiveBanner();
     promoProducts = promoProducts.slice(0, 3);
     var shell = document.createElement('aside');
     shell.className = 'pricewall-shell';
-    var banner = getActiveBanner();
     var headline = banner ? banner.text : 'Specials';
     var specials = promoProducts.map(function(p){
       return '<div class="pricewall-special-row"><div class="pricewall-special-name">' + escapeHtml(p.name) + '</div><div class="pricewall-special-price">' + makePrice(p) + '</div></div>';

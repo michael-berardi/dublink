@@ -366,7 +366,7 @@ describe('tvPage', () => {
     });
 
     expect(page).toContain("if(getTotalProductCount(cfg) >= 36) return 'pricewall'");
-    expect(page).toContain("else if(layout==='pricewall') renderPricewall(pageCats, content, cats)");
+    expect(page).toContain("else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats)");
     expect(page).toContain('pricewall-shell');
     expect(page).toContain('pricewall-status');
     expect(page).toContain('Featured deals');
@@ -378,12 +378,14 @@ describe('tvPage', () => {
     expect(page).toContain('flex:0 0 auto;');
   });
 
-  it('uses specials as price-wall rail content instead of duplicating them as a sparse main category', () => {
+  it('merges sparse specials into populated price-wall categories instead of rendering empty rails', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
-    expect(page).toContain('function isSpecialCategory(cat)');
-    expect(page).toContain("displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);})");
-    expect(page).toContain('var specialCat = isSpecialCategory(cat)');
-    expect(page).toContain("var promoPanel = banner ? '' : (specials ?");
+    expect(page).toContain('function getPricewallPromoProducts(cats)');
+    expect(page).toContain('function mergeSparsePricewallSpecials(cats, promoProducts)');
+    expect(page).toContain('var shouldUsePromoRail = !!getActiveBanner() || promoProducts.length >= 3');
+    expect(page).toContain('displayCats = mergeSparsePricewallSpecials(cats, promoProducts)');
+    expect(page).toContain('pricewallRailCats = []');
+    expect(page).toContain('.layout-pricewall .card-price .promo-price');
   });
 
   it('allows monitor-level dense price wall layout overrides', () => {
