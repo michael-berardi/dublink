@@ -372,6 +372,12 @@ describe('tvPage', () => {
     expect(page).toContain('Featured deals');
   });
 
+  it('keeps sparse price-wall category rows top-aligned instead of stretching a single product', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
+    expect(page).toContain('justify-content:flex-start');
+    expect(page).toContain('flex:0 0 auto;');
+  });
+
   it('allows monitor-level dense price wall layout overrides', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
     expect(page).toContain("'pricewall'");
