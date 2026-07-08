@@ -23,6 +23,7 @@ import { getStatus } from './status';
 import { resolveMenuSource } from './menu-source';
 import { formatMenu } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
+import { analyzeReferenceStyle } from './reference-style';
 import { createStarterConfig, createDemoConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload, bundleImportedImages } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
@@ -967,6 +968,28 @@ export default {
         return jsonResponse({ success: true });
       } catch {
         return jsonResponse({ error: 'Invalid request' }, 400);
+      }
+    }
+
+    if (path === '/api/style/analyze' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account || !isSubscriptionActive(account)) {
+        return jsonResponse({ error: 'Active subscription required' }, 403);
+      }
+      try {
+        const body = await request.json() as { sourceUrl?: string; notes?: string; productCount?: number; currentDisplayCount?: number };
+        const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim().slice(0, 300) : '';
+        const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) : '';
+        return jsonResponse(analyzeReferenceStyle({
+          sourceUrl,
+          notes,
+          productCount: typeof body.productCount === 'number' ? body.productCount : 0,
+          currentDisplayCount: typeof body.currentDisplayCount === 'number' ? body.currentDisplayCount : 1,
+        }));
+      } catch {
+        return jsonResponse({ error: 'Invalid style analysis request' }, 400);
       }
     }
 

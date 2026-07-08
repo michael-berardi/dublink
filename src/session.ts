@@ -1,4 +1,4 @@
-import { MenuConfig, DEFAULT_CONFIG, type Category, type Product, type PriceTier, type MenuSpecial } from './types';
+import { MenuConfig, DEFAULT_CONFIG, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
 import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
 
 export interface Env extends AuthEnv {}
@@ -521,17 +521,21 @@ export class SessionDurableObject implements DurableObject {
         if (sanitizedPayload.specials !== undefined) {
           sanitizedPayload.specials = this.sanitizeSpecials(sanitizedPayload.specials);
         }
+        if (sanitizedPayload.styleProfile !== undefined) {
+          const profile = this.sanitizeStyleProfile(sanitizedPayload.styleProfile);
+          if (profile) sanitizedPayload.styleProfile = profile;
+          else delete sanitizedPayload.styleProfile;
+        }
         this.config = { ...this.config, ...sanitizedPayload };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
       }
-
       case 'config_replace': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!payload || typeof payload !== 'object' || !this.isValidImportedCategories(payload.categories)) return;
-        this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories) };
+        this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories), styleProfile: this.sanitizeStyleProfile(isRecord(payload) ? payload.styleProfile : undefined) };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -780,7 +784,7 @@ export class SessionDurableObject implements DurableObject {
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
                          'layoutMode', 'fontSize', 'theme', 'autoScroll', 'autoScrollSpeed', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
-                         'displayCount'];
+                         'displayCount', 'styleProfile'];
     
     for (const key of Object.keys(payload)) {
       if (!allowedKeys.includes(key)) return false;
@@ -804,6 +808,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.specials !== undefined && !Array.isArray(payload.specials)) return false;
     if (payload.disclaimer !== undefined && typeof payload.disclaimer !== 'string') return false;
     if (payload.complianceState !== undefined && payload.complianceState !== '' && this.sanitizeComplianceState(payload.complianceState) === undefined) return false;
+    if (payload.styleProfile !== undefined && payload.styleProfile !== null && !this.sanitizeStyleProfile(payload.styleProfile)) return false;
     
     return true;
   }
@@ -918,6 +923,40 @@ export class SessionDurableObject implements DurableObject {
       specialLabel: typeof special.specialLabel === 'string' ? this.sanitizeString(special.specialLabel) : undefined,
       active: special.active !== false,
     })).filter((special) => special.title.length > 0);
+  }
+
+  private sanitizeStyleProfile(profile: unknown): ReferenceStyleProfile | undefined {
+    if (!isRecord(profile)) return undefined;
+    const intent = profile.intent === 'dense-menu-board' || profile.intent === 'image-led' || profile.intent === 'promo-board' || profile.intent === 'single-hero' || profile.intent === 'editorial-board'
+      ? profile.intent
+      : undefined;
+    const layout = this.sanitizeLayout(profile.layout);
+    const template = this.sanitizeTemplate(profile.template);
+    const fontSize = this.sanitizeFontSize(profile.fontSize);
+    if (!intent || !layout || !template || !fontSize) return undefined;
+    const keywords = Array.isArray(profile.keywords)
+      ? profile.keywords.filter((keyword): keyword is string => typeof keyword === 'string').slice(0, 12).map((keyword) => this.sanitizeString(keyword).slice(0, 40)).filter(Boolean)
+      : [];
+    const confidence = typeof profile.confidence === 'number' && Number.isFinite(profile.confidence)
+      ? Math.max(0, Math.min(1, Math.round(profile.confidence * 100) / 100))
+      : 0.5;
+    return {
+      sourceUrl: typeof profile.sourceUrl === 'string' ? this.sanitizeString(profile.sourceUrl).slice(0, 300) : undefined,
+      notes: typeof profile.notes === 'string' ? this.sanitizeString(profile.notes).slice(0, 500) : undefined,
+      intent,
+      layout,
+      template,
+      fontSize,
+      showImages: profile.showImages !== false,
+      showDescription: profile.showDescription === true,
+      showPromos: profile.showPromos !== false,
+      showBrand: profile.showBrand !== false,
+      showStrain: profile.showStrain !== false,
+      confidence,
+      keywords,
+      summary: typeof profile.summary === 'string' ? this.sanitizeString(profile.summary).slice(0, 240) : 'Imported reference style',
+      appliedAt: typeof profile.appliedAt === 'string' ? this.sanitizeString(profile.appliedAt).slice(0, 40) : new Date().toISOString(),
+    };
   }
 
   private sanitizeString(str: string): string {

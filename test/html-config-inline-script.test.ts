@@ -92,6 +92,17 @@ describe('configPage remote-control UI', () => {
     expect(html).not.toContain('Auto (match theme)');
   });
 
+  it('includes deterministic reference style importer controls', () => {
+    expect(html).toContain('Template Intelligence');
+    expect(html).toContain('referenceStyleUrl');
+    expect(html).toContain('referenceStyleNotes');
+    expect(html).toContain('analyzeReferenceStyle');
+    expect(html).toContain('styleProfile');
+    expect(html).toContain('No competitor assets or HTML copied');
+    expect(html).toContain('canSend');
+    expect(html).toContain('Reconnect before applying reference style');
+  });
+
   it('generates per-screen layout override URLs', () => {
     expect(html).toContain('SCREEN_LAYOUT_OPTIONS');
     expect(html).toContain('setScreenLayout');

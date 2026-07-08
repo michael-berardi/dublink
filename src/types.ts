@@ -68,6 +68,24 @@ export interface CustomDomain {
   verified: boolean;
 }
 
+export interface ReferenceStyleProfile {
+  sourceUrl?: string;
+  notes?: string;
+  intent: 'dense-menu-board' | 'image-led' | 'promo-board' | 'single-hero' | 'editorial-board';
+  layout: MenuConfig['layout'];
+  template: MenuConfig['template'];
+  fontSize: MenuConfig['fontSize'];
+  showImages: boolean;
+  showDescription: boolean;
+  showPromos: boolean;
+  showBrand: boolean;
+  showStrain: boolean;
+  confidence: number;
+  keywords: string[];
+  summary: string;
+  appliedAt: string;
+}
+
 export interface MenuConfig {
   dispensaryName: string;
   logo?: string;
@@ -100,6 +118,7 @@ export interface MenuConfig {
   displayCount: number;
   tvDemo?: boolean;
   updatedAt?: string;
+  styleProfile?: ReferenceStyleProfile;
 }
 
 export const DEFAULT_CONFIG: MenuConfig = {

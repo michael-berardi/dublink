@@ -441,6 +441,20 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Scroll Speed</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
   <div class="field"><label for="customFont">Custom Font (Google Fonts)</label><input type="text" id="customFont" placeholder="e.g. Inter, Poppins, Oswald" oninput="debounceConfig('customFont',this.value)"></div>
 </div>
+<div class="card">
+  <h2 class="card-title">Template Intelligence</h2>
+  <div class="field">
+    <label for="referenceStyleUrl">Reference URL</label>
+    <input type="url" id="referenceStyleUrl" placeholder="https://competitor.com/menu-board or template gallery">
+    <div class="helper">Use a public competitor/template URL as context. DubMenu analyzes the wording only; it does not copy assets or HTML.</div>
+  </div>
+  <div class="field">
+    <label for="referenceStyleNotes">Reference Notes</label>
+    <textarea id="referenceStyleNotes" rows="3" placeholder="Example: dense green TV price board, daily deals rail, no photos, four displays"></textarea>
+  </div>
+  <button class="btn btn-primary" type="button" style="width:100%;" onclick="applyReferenceStyle()">Analyze & Apply Style</button>
+  <div id="referenceStyleResult" class="helper" style="margin-top:0.75rem;">No reference style applied yet.</div>
+</div>
 </section>
 
 <section class="control-section" id="section-promos" aria-labelledby="sectionPromosTitle">
@@ -613,7 +627,8 @@ function setStatus(s){
   document.getElementById('statusDot').className='status-dot status-'+s;
   document.getElementById('statusText').textContent=s==='connected'?'Connected':s==='disconnected'?'Disconnected':'Connecting...';
 }
-function send(t,p){if(ws&&ws.readyState===WebSocket.OPEN)ws.send(JSON.stringify({type:t,payload:p}));}
+function canSend(){return !!(ws&&ws.readyState===WebSocket.OPEN);}
+function send(t,p){if(canSend())ws.send(JSON.stringify({type:t,payload:p}));}
 function sendConfig(k,v){const u={};u[k]=v;send('config_update',u);}
 function debounceConfig(k,v){clearTimeout(debounceTimer);debounceTimer=setTimeout(function(){sendConfig(k,v);},400);}
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
@@ -883,6 +898,7 @@ async function importDutchie(){
     status.className='import-status err';
     setDutchieImportStage(2,100);
     showToast('Menu import failed');
+
   }finally{
     clearTimeout(stageTimer);
     clearTimeout(syncTimer);
@@ -898,6 +914,104 @@ function updateBrandWeight(){
   sendConfig('showBrand',on);
 }
 
+function analyzeReferenceStyle(url,notes){
+  var source=((url||'')+' '+(notes||'')).toLowerCase();
+  var productCount=(config&&config.categories?config.categories:[]).reduce(function(total,cat){return total+((cat.products||[]).length);},0);
+  var hits=[];
+  function hit(words,label){var matched=words.some(function(w){return source.indexOf(w)!==-1;});if(matched)hits.push(label);return matched;}
+  var dense=hit(['dense','price wall','pricewall','price board','price list','menu board','tv menu','digital menu','table','columns','many products'],'dense');
+  var images=hit(['image','photo','photos','photography','poster','video','gallery','visual','hero'],'image');
+  var promos=hit(['deal','deals','special','specials','happy hour','loyalty','discount','promo','promotion','daily'],'promo');
+  var single=hit(['single product','one product','hero','sparse','minimal','feature product'],'single');
+  var editorial=hit(['editorial','lifestyle','premium','story','curated','cinematic','brand campaign'],'editorial');
+  var noPhotos=hit(['no photo','no photos','no image','no images','text only','price only'],'no-photo');
+  var layout='grid';
+  if(single) layout='sparse';
+  else if(dense||productCount>=36) layout='pricewall';
+  else if(productCount>0&&productCount<=4) layout='sparse';
+  else if(editorial) layout='editorial';
+  else if(images&&promos) layout='cinematic';
+  else if(images) layout='poster';
+  else if(promos) layout='poster';
+  var template='default';
+  if(hit(['green','forest','leaf','cannabis','emerald'],'forest-color')) template='forest';
+  else if(hit(['gold','luxury','premium','black and gold'],'gold-color')) template='gold';
+  else if(hit(['blue','ocean','aqua'],'ocean-color')) template='ocean';
+  else if(hit(['red','crimson'],'red-color')) template='crimson';
+  else if(hit(['purple','vapor','pink'],'vapor-color')) template='vapor';
+  else if(hit(['white','clean','light','minimal white'],'light-color')) template='bone';
+  else if(hit(['neon','glow','cyber'],'neon-color')) template='neon';
+  var showImages=!noPhotos&&(images||layout==='poster'||layout==='cinematic'||layout==='editorial'||layout==='showcase');
+  var showDescription=layout==='editorial'||(editorial&&showImages);
+  var fontSize=dense?'medium':(single?'large':'medium');
+  var displayCount=config&&typeof config.displayCount==='number'?config.displayCount:1;
+  if(/\\b(4|four)\\b[^.]{0,24}\\b(display|screen|tv|monitor)s?\\b/.test(source)||/\\b(display|screen|tv|monitor)s?\\b[^.]{0,24}\\b(4|four)\\b/.test(source))displayCount=4;
+  else if(/\\b(3|three)\\b[^.]{0,24}\\b(display|screen|tv|monitor)s?\\b/.test(source)||/\\b(display|screen|tv|monitor)s?\\b[^.]{0,24}\\b(3|three)\\b/.test(source))displayCount=3;
+  else if(/\\b(2|two)\\b[^.]{0,24}\\b(display|screen|tv|monitor)s?\\b/.test(source)||/\\b(display|screen|tv|monitor)s?\\b[^.]{0,24}\\b(2|two)\\b/.test(source))displayCount=2;
+  var confidence=Math.min(0.95,Math.max(0.45,0.45+(hits.length*0.06)+(productCount>=36?0.1:0)));
+  var summary='Applied '+layout+' / '+template+' from '+(hits.length?hits.slice(0,5).join(', '):'general menu-board cues')+'.';
+  return {
+    layout:layout,
+    template:template,
+    layoutMode:'auto',
+    fontSize:fontSize,
+    showImages:showImages,
+    showDescription:showDescription,
+    showPromos:promos||layout==='pricewall',
+    showBrand:true,
+    showStrain:true,
+    displayCount:displayCount,
+    styleProfile:{
+      sourceUrl:(url||'').trim().slice(0,300)||undefined,
+      notes:(notes||'').trim().slice(0,500)||undefined,
+      intent:layout==='pricewall'?'dense-menu-board':layout==='sparse'?'single-hero':layout==='editorial'?'editorial-board':showImages?'image-led':'promo-board',
+      layout:layout,
+      template:template,
+      fontSize:fontSize,
+      showImages:showImages,
+      showDescription:showDescription,
+      showPromos:promos||layout==='pricewall',
+      showBrand:true,
+      showStrain:true,
+      confidence:Math.round(confidence*100)/100,
+      keywords:hits.slice(0,12),
+      summary:summary,
+      appliedAt:new Date().toISOString()
+    }
+  };
+}
+
+function renderStyleProfile(){
+  var result=document.getElementById('referenceStyleResult');
+  if(!result)return;
+  var profile=config&&config.styleProfile;
+  if(!profile){result.textContent='No reference style applied yet.';return;}
+  result.textContent=profile.summary+' Confidence '+Math.round((profile.confidence||0)*100)+'%. No competitor assets or HTML copied.';
+  var url=document.getElementById('referenceStyleUrl');
+  var notes=document.getElementById('referenceStyleNotes');
+  if(url&&!url.value&&profile.sourceUrl)url.value=profile.sourceUrl;
+  if(notes&&!notes.value&&profile.notes)notes.value=profile.notes;
+}
+
+async function applyReferenceStyle(){
+  var urlEl=document.getElementById('referenceStyleUrl');
+  var notesEl=document.getElementById('referenceStyleNotes');
+  var url=(urlEl&&urlEl.value||'').trim().slice(0,300);
+  var notes=(notesEl&&notesEl.value||'').trim().slice(0,500);
+  if(!url&&!notes){showToast('Add a reference URL or notes first');if(urlEl)urlEl.focus();return;}
+  if(!canSend()){showToast('Reconnect before applying reference style');return;}
+  var patch=analyzeReferenceStyle(url,notes);
+  try{
+    var productCount=(config&&config.categories?config.categories:[]).reduce(function(total,cat){return total+((cat.products||[]).length);},0);
+    var res=await fetch('/api/style/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sourceUrl:url,notes:notes,productCount:productCount,currentDisplayCount:config&&config.displayCount})});
+    if(res.ok)patch=await res.json();
+  }catch(err){}
+  send('config_update',patch);
+  config=Object.assign({},config,patch);
+  render();
+  showToast('Reference style applied');
+}
+
 function render(){
   if(!config)return;
   syncSimulatorFromConfig();
@@ -906,6 +1020,7 @@ function render(){
   document.getElementById('primaryColor').value=config.primaryColor||'#10b981';
   document.getElementById('currency').value=config.currency||'$';
   document.getElementById('fontSize').value=config.fontSize||'medium';
+  renderStyleProfile();
   document.getElementById('layout').value=config.layout||'auto';
   document.getElementById('promoBannerText').value=config.promoBanner?(config.promoBanner.text||''):'';
   document.getElementById('promoBannerBg').value=config.promoBanner?(config.promoBanner.bgColor||'#10b981'):'#10b981';
