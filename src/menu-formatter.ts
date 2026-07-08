@@ -100,6 +100,13 @@ function normalizeProductName(name: string): string {
     .slice(0, 40);
 }
 
+function cleanProductDisplayName(product: ScrapedProduct, categoryName: string): string {
+  const raw = product.name.replace(/\s+/g, ' ').replace(/^\s*\|+\s*/, '').replace(/\s*\|+\s*$/, '').trim();
+  if (!/^[.]?\d+(?:\.\d+)?\s*(g|mg|ml|oz|ct)$/i.test(raw)) return raw;
+  const fallbackPrefix = (product.brand || categoryName).replace(/\s+/g, ' ').trim();
+  return fallbackPrefix ? `${fallbackPrefix} ${raw}` : raw;
+}
+
 export interface FormatMenuOptions {
   maxCategories?: number;
   maxProductsPerCategory?: number;
@@ -289,7 +296,7 @@ export function dedupeAndFormatCategories(
       products.push({
         ...p,
         id,
-        name: p.name.replace(/\s+/g, ' ').trim(),
+        name: cleanProductDisplayName(p, name),
         category: name,
         inStock: p.inStock !== false,
       });

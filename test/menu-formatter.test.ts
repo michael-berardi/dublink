@@ -290,6 +290,22 @@ describe('formatMenu', () => {
     expect(result.warnings.join(' ')).toContain('TV-ready products');
   });
 
+  it('cleans scraped TV product names that start with separators or only contain weights', () => {
+    const result = formatMenu([
+      {
+        id: 'vapes',
+        name: 'Vapes',
+        order: 0,
+        products: [
+          { id: 'pipe', name: '| Black Zskittles', price: 55, brand: 'Woodstock', inStock: true },
+          { id: 'weight', name: '2g', price: 76, brand: 'ayrloom', inStock: true },
+        ],
+      },
+    ], 'Green Leaf');
+
+    expect(result.categories[0].products.map((p) => p.name)).toEqual(['Black Zskittles', 'ayrloom 2g']);
+  });
+
   it('keeps dense TV imports in text-first mode instead of forcing product photos', () => {
     const products = Array.from({ length: 96 }, (_, index) => ({
       id: `p-${index}`,

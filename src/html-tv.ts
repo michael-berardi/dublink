@@ -954,15 +954,20 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var urlCat = new URLSearchParams(location.search).get('category');
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
-    if(!cats.length){renderEmptyMenu(layout);return;}
+    var displayCats = cats;
+    if(layout === 'pricewall' && cats.length > 1){
+      displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);});
+      if(!displayCats.length) displayCats = cats;
+    }
+    if(!displayCats.length){renderEmptyMenu(layout);return;}
     
     var bannerActive = !!getActiveBanner();
     var perPage = getProductsPerPage(layout, bannerActive);
     var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
-    var pageCats = paginateCategories(cats, cycleState.currentPage, perPage, maxCategories);
-    if(!pageCats.length && cats.length){
+    var pageCats = paginateCategories(displayCats, cycleState.currentPage, perPage, maxCategories);
+    if(!pageCats.length && displayCats.length){
       cycleState.currentPage = 0;
-      pageCats = paginateCategories(cats, 0, perPage, maxCategories);
+      pageCats = paginateCategories(displayCats, 0, perPage, maxCategories);
     }
     if(!pageCats.length){renderEmptyMenu(layout);return;}
     
@@ -1156,12 +1161,20 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     });
   }
 
+  function isSpecialCategory(cat){
+    var source = String((cat && (cat.name || cat.id)) || '').toLowerCase();
+    return /special|deal|promo/.test(source);
+  }
+
   function renderPricewallShell(cats, container){
-    var all = [];
+    var promoProducts = [];
     cats.forEach(function(cat){
-      (cat.products || []).forEach(function(p){ all.push(p); });
+      var specialCat = isSpecialCategory(cat);
+      (cat.products || []).forEach(function(p){
+        if(p && (specialCat || p.isPromo || p.special || p.specialLabel || p.originalPrice || p.priceOriginal)) promoProducts.push(p);
+      });
     });
-    var promoProducts = all.filter(function(p){ return p && (p.isPromo || p.special || p.specialLabel || p.originalPrice || p.priceOriginal); }).slice(0, 3);
+    promoProducts = promoProducts.slice(0, 3);
     var shell = document.createElement('aside');
     shell.className = 'pricewall-shell';
     var banner = getActiveBanner();

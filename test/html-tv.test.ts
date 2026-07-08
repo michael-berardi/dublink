@@ -100,7 +100,7 @@ describe('tvPage', () => {
     expect(demoPage).toContain('PRESERVE_INITIAL_DEMO_CONFIG = true');
     expect(livePage).toContain('PRESERVE_INITIAL_DEMO_CONFIG = false');
     expect(livePage).toContain('hasCategoryArray(incoming) && !PRESERVE_INITIAL_DEMO_CONFIG');
-    expect(livePage).toContain("if(!cats.length){renderEmptyMenu(layout);return;}");
+    expect(livePage).toContain("if(!displayCats.length){renderEmptyMenu(layout);return;}");
   });
 
   it('keeps unpaired TVs on the QR screen when config data arrives', () => {
@@ -297,9 +297,9 @@ describe('tvPage', () => {
 
   it('clamps stale cycle page state before rendering a smaller display slice', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig } });
-    expect(page).toContain('if(!pageCats.length && cats.length)');
+    expect(page).toContain('if(!pageCats.length && displayCats.length)');
     expect(page).toContain('cycleState.currentPage = 0');
-    expect(page).toContain('pageCats = paginateCategories(cats, 0, perPage, maxCategories)');
+    expect(page).toContain('pageCats = paginateCategories(displayCats, 0, perPage, maxCategories)');
   });
 
   it('uses the same safe image helper in sparse layouts as other layouts', () => {
@@ -376,6 +376,13 @@ describe('tvPage', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
     expect(page).toContain('justify-content:flex-start');
     expect(page).toContain('flex:0 0 auto;');
+  });
+
+  it('uses specials as price-wall rail content instead of duplicating them as a sparse main category', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
+    expect(page).toContain('function isSpecialCategory(cat)');
+    expect(page).toContain("displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);})");
+    expect(page).toContain('var specialCat = isSpecialCategory(cat)');
   });
 
   it('allows monitor-level dense price wall layout overrides', () => {
