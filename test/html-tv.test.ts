@@ -383,6 +383,7 @@ describe('tvPage', () => {
     expect(page).toContain('function isSpecialCategory(cat)');
     expect(page).toContain("displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);})");
     expect(page).toContain('var specialCat = isSpecialCategory(cat)');
+    expect(page).toContain("var promoPanel = banner ? '' : (specials ?");
   });
 
   it('allows monitor-level dense price wall layout overrides', () => {

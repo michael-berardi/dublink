@@ -1182,7 +1182,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var specials = promoProducts.map(function(p){
       return '<div class="pricewall-special-row"><div class="pricewall-special-name">' + escapeHtml(p.name) + '</div><div class="pricewall-special-price">' + makePrice(p) + '</div></div>';
     }).join('');
-    var promoPanel = banner ? '' : '<div class="pricewall-panel pricewall-promo"><div class="pricewall-promo-main">' + escapeHtml(headline).slice(0, 42) + '</div></div>';
+    var promoPanel = banner ? '' : (specials ? '<div class="pricewall-panel pricewall-promo"><div class="pricewall-promo-main">' + escapeHtml(headline).slice(0, 42) + '</div></div>' : '');
     var specialPanel = specials ? '<div class="pricewall-panel pricewall-specials"><div class="pricewall-panel-title">Featured deals</div>' + specials + '</div>' : '';
     if(!promoPanel && !specialPanel) return false;
     shell.innerHTML = promoPanel + specialPanel;
