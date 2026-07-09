@@ -307,13 +307,12 @@ function guessCategory(href: string, text: string, parsedCategory?: string): str
 
 
 export async function scrapeDutchie(dispensarySlug: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
-  // Prefer the embedded menu: it loads the smallest Dutchie shell and emits the
-  // same FilteredProducts GraphQL responses as the public store page. Try one
-  // structured browser capture at a time so a slow store shell cannot keep the
-  // Worker open past its request limit.
+  // Prefer the store page: Simply Green currently emits FilteredProducts
+  // responses there, while its embedded-menu shell can render without exposing
+  // the product GraphQL payloads Browserless needs to capture.
   const structuredUrls = [
-    `https://dutchie.com/embedded-menu/${dispensarySlug}`,
     `https://dutchie.com/stores/${dispensarySlug}`,
+    `https://dutchie.com/embedded-menu/${dispensarySlug}`,
   ];
   const fallbackUrls = [
     `https://dutchie.com/stores/${dispensarySlug}`,

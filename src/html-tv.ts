@@ -191,6 +191,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   body.font-large .layout-grid .card-price{font-size:clamp(1.78rem,2.15vw,2.55rem);}
   body.font-small .row-name{font-size:0.92em;}
   body.font-large .row-name{font-size:1.12em;}
+  .font-custom-serif{font-family:Georgia,'Times New Roman',serif;}
+  .font-custom-slab{font-family:Rockwell,Georgia,'Times New Roman',serif;}
+  .font-custom-mono{font-family:'SF Mono','JetBrains Mono','Fira Code',monospace;}
+  .font-custom-condensed{font-family:'Arial Narrow','Roboto Condensed',Impact,sans-serif;}
+  .font-custom-bold .category-title,.font-custom-bold .card-name,.font-custom-bold .row-name,.font-custom-bold .dispensary-name{font-weight:950;}
   ::-webkit-scrollbar{display:none;width:0;height:0;}
   body{scrollbar-width:none;-ms-overflow-style:none;}
   .phase{position:fixed;inset:0;display:flex;transition:opacity 0.8s ease;}
@@ -274,6 +279,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.18rem auto;padding:0.12rem 0.36rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:clamp(0.54rem,0.58vw,0.7rem);line-height:1;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;}
   .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
+  body.has-promo-banner .menu-content{padding-top:0.95rem;padding-bottom:0.7rem;}
+  body.has-promo-banner .layout-grid .category-block,body.has-promo-banner .layout-pricewall .category-block{padding:0.78rem;}
+  body.has-promo-banner .layout-grid .category-header,body.has-promo-banner .layout-pricewall .category-header{margin-bottom:0.55rem;padding-bottom:0.48rem;}
+  body.has-promo-banner .layout-grid .grid-products,body.has-promo-banner .layout-pricewall .grid-products{gap:0.36rem;}
+  body.has-promo-banner .layout-grid .product-card,body.has-promo-banner .layout-pricewall .product-card{min-height:4.45rem;padding-top:0.48rem;padding-bottom:0.48rem;}
+  body.has-promo-banner .layout-grid .product-card.has-image,body.has-promo-banner .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 3.4rem minmax(0,1fr) auto;}
+  body.has-promo-banner .layout-grid .card-image,body.has-promo-banner .layout-pricewall .card-image{width:3.4rem;height:3.4rem;}
   .pricewall-panel{background:linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow);overflow:hidden;}
   .pricewall-panel-title{font-size:0.68rem;font-weight:950;color:var(--text-faint);letter-spacing:0.16em;text-transform:uppercase;margin-bottom:0.5rem;}
   .pricewall-promo{min-height:9.5rem;display:flex;align-items:flex-start;justify-content:center;background:radial-gradient(circle at 78% 18%,var(--accent-dim),transparent 45%),linear-gradient(160deg,rgba(255,255,255,0.09),rgba(0,0,0,0.16)),var(--bg-card);}
@@ -672,6 +684,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function safeFontSize(v){
     return v === 'small' || v === 'large' || v === 'medium' ? v : 'medium';
   }
+  function customFontClass(v){
+    var lower = String(v || '').toLowerCase();
+    var classes = [];
+    if(lower.indexOf('serif') !== -1) classes.push(lower.indexOf('slab') !== -1 ? 'font-custom-slab' : 'font-custom-serif');
+    else if(lower.indexOf('mono') !== -1 || lower.indexOf('code') !== -1) classes.push('font-custom-mono');
+    else if(lower.indexOf('condensed') !== -1 || lower.indexOf('narrow') !== -1) classes.push('font-custom-condensed');
+    if(lower.indexOf('bold') !== -1 || lower.indexOf('heavy') !== -1) classes.push('font-custom-bold');
+    return classes.join(' ');
+  }
   function hexToRgb(hex){
     var m = /^#([0-9a-f]{6})$/i.exec(String(hex || '').trim());
     if(!m) return null;
@@ -817,14 +838,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       name: 'Specials',
       order: -1,
       products: specials.slice(0, 8).map(function(s, idx){
-        var price = typeof s.price === 'number' ? s.price : 0;
         return {
           id: s.id || ('manual-special-' + idx),
           name: s.title,
           description: s.description || '',
           brand: s.brand || '',
           image: s.image || '',
-          price: price,
+          price: typeof s.price === 'number' ? s.price : undefined,
           originalPrice: typeof s.originalPrice === 'number' ? s.originalPrice : undefined,
           priceTiers: Array.isArray(s.priceTiers) ? s.priceTiers : undefined,
           specialLabel: s.specialLabel || 'Special',
@@ -885,17 +905,34 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return bannerActive && layout !== 'pricewall' ? Math.max(1, base - 1) : base;
   }
 
+  function getPagingInfo(cats, perPage, maxCategories){
+    var catsWithProducts = (cats || []).filter(function(c){return c && c.products && c.products.length>0;});
+    if(catsWithProducts.length===0) return {categoryPages:1,productPages:1,totalPages:1};
+    var categoryPages = Math.max(1, Math.ceil(catsWithProducts.length / maxCategories));
+    var maxProductPages = 1;
+    for(var page=0; page<categoryPages; page++){
+      var pageCats = catsWithProducts.slice(page * maxCategories, (page + 1) * maxCategories);
+      var perCategory = Math.max(1, Math.floor(perPage / Math.max(1, pageCats.length)));
+      pageCats.forEach(function(cat){
+        maxProductPages = Math.max(maxProductPages, Math.ceil(cat.products.length / perCategory));
+      });
+    }
+    return {categoryPages:categoryPages,productPages:maxProductPages,totalPages:categoryPages * maxProductPages};
+  }
+
   function paginateCategories(cats, pageNum, perPage, maxCategories){
     var catsWithProducts = cats.filter(function(c){return c.products.length>0;});
     if(catsWithProducts.length===0) return [];
-    // Show only a sliding window of categories per page.
-    var pageCats = catsWithProducts.slice(pageNum * maxCategories, (pageNum + 1) * maxCategories);
+    var paging = getPagingInfo(catsWithProducts, perPage, maxCategories);
+    var categoryPage = pageNum % paging.categoryPages;
+    var productPage = Math.floor(pageNum / paging.categoryPages);
+    var pageCats = catsWithProducts.slice(categoryPage * maxCategories, (categoryPage + 1) * maxCategories);
     if(pageCats.length===0) return [];
     var perCategory = Math.max(1, Math.floor(perPage / pageCats.length));
     return pageCats.map(function(cat){
       var total = cat.products.length;
       var count = Math.min(perCategory, total);
-      var start = (pageNum * count) % total;
+      var start = (productPage * count) % total;
       var products = [];
       for(var i=0;i<count;i++){
         var idx = (start+i) % total;
@@ -922,15 +959,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cycleState.interval = setInterval(function(){
       if(cycleState.isTransitioning) return;
       cycleState.isTransitioning = true;
+      cycleState.currentPage = (cycleState.currentPage + 1) % cycleState.totalPages;
+      renderCurrentPage();
       var content = document.getElementById('menu-content');
-      content.style.opacity = '0';
-      content.style.transition = 'opacity 0.5s ease';
-      setTimeout(function(){
-        cycleState.currentPage = (cycleState.currentPage + 1) % cycleState.totalPages;
-        renderCurrentPage();
-        content.style.opacity = '1';
-        setTimeout(function(){cycleState.isTransitioning=false;},500);
-      },500);
+      if(content){
+        content.classList.remove('content-refresh');
+        void content.offsetWidth;
+        content.classList.add('content-refresh');
+      }
+      setTimeout(function(){cycleState.isTransitioning=false;},180);
     },getCycleInterval());
   }
 
@@ -1020,12 +1057,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var pb=document.getElementById('promo-bar');
     if(!pb)return;
     var banner=getActiveBanner();
+    document.body.classList.toggle('has-promo-banner',!!banner);
     if(banner){
       pb.textContent=banner.text;
-      pb.style.background = safeCssValue(banner.bgColor);
-      pb.style.color = safeCssValue(banner.textColor);
+      pb.style.background = safeCssValue(banner.bgColor) || '';
+      pb.style.color = safeCssValue(banner.textColor) || '';
       pb.classList.add('active');
     }else{
+      pb.textContent='';
+      pb.style.background='';
+      pb.style.color='';
       pb.classList.remove('active');
     }
   }
@@ -1033,7 +1074,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderMenu(){
     if(!config) return;
-    document.body.className = 'template-' + getActiveTemplate(config) + ' font-' + safeFontSize(config.fontSize);
+    document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + safeFontSize(config.fontSize) + ' ' + customFontClass(config.customFont)).trim();
     applyBrandStyle(config);
     var demoPill = document.getElementById('demo-pill');
     if(demoPill) demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo);
@@ -1054,7 +1095,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       footerEl.textContent = disc;
       footerEl.style.display = disc ? '' : 'none';
     }
-    var cats = getCategoriesForDisplay(config.categories||[]);
+    var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));
     var urlCat = new URLSearchParams(location.search).get('category');
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
@@ -1069,13 +1110,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     
     var layout = getActiveLayout(config);
     var bannerActive = !!getActiveBanner();
+    var perPage = getProductsPerPage(layout, bannerActive);
     var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
-    cycleState.totalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : Math.max(1, Math.ceil(cats.length / maxCategories));
+    cycleState.totalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : getPagingInfo(cats, perPage, maxCategories).totalPages;
     cycleState.currentPage = 0;
     
     renderCurrentPage();
     
-    if(config.autoScroll) startCycling();
+    if(config.autoScroll || cycleState.totalPages > 1) startCycling();
     else stopCycling();
 
     showTvInfo(layout);
@@ -1120,10 +1162,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         return promo + '<div class="price-tiers">' + tiers + '</div>';
       }
     }
+    var hasPrice = typeof p.price === 'number' || (typeof p.price === 'string' && p.price.trim());
     var orig = p.priceOriginal || p.originalPrice;
-    if(orig && orig !== p.price){
+    if(orig && hasPrice && orig !== p.price){
       return promo + '<span class="card-price-orig">$' + escapeHtml(orig) + '</span> <span class="sale-text">$' + escapeHtml(p.price) + '</span>';
     }
+    if(!hasPrice) return promo.trim();
     return promo + '$' + (typeof p.price === 'number' ? p.price.toFixed(2).replace(/\\.00$/, '') : escapeHtml(p.price));
   }
 
@@ -1411,9 +1455,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     menu.style.width = SCALE_BASELINE_W + 'px';
     menu.style.height = SCALE_BASELINE_H + 'px';
     menu.style.transform = 'scale(' + scale + ')';
-    var overshootX = (SCALE_BASELINE_W * scale - vw);
-    var overshootY = (SCALE_BASELINE_H * scale - vh);
-    menu.style.marginLeft = (overshootX > 0 ? -overshootX / 2 : 0) + 'px';
+    var scaledW = SCALE_BASELINE_W * scale;
+    var scaledH = SCALE_BASELINE_H * scale;
+    var overshootX = scaledW - vw;
+    var overshootY = scaledH - vh;
+    menu.style.marginLeft = (overshootX > 0 ? -overshootX / 2 : Math.max(0, (vw - scaledW) / 2)) + 'px';
     menu.style.marginTop = (overshootY > 0 ? -overshootY / 2 : 0) + 'px';
   }
 

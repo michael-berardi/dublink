@@ -74,6 +74,19 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('body:not(.section-open){height:100dvh;overflow:hidden;}');
   });
 
+  it('uploads logos directly from the Brand section and sends the uploaded URL to the TV', () => {
+    expect(html).toContain('id="logoFile"');
+    expect(html).toContain('uploadLogoImage(this)');
+    expect(html).toContain('function uploadLogoImage(input)');
+    expect(html).toContain("sendConfig('logo',url)");
+  });
+
+  it('makes the specials card actionable instead of a dead-looking heading', () => {
+    expect(html).toContain('ensureSpecialsOpen(event)');
+    expect(html).toContain('function ensureSpecialsOpen');
+    expect(html).toContain('Open / Add');
+  });
+
   it('places JSON backup actions in the TV preview options area, not the import card', () => {
     const importSection = between(html, '<section class="control-section" id="section-import"', '</section>');
     const simulatorPanel = between(html, '<aside id="simulatorPanel"', '</aside>');
@@ -145,10 +158,31 @@ describe('configPage setup wizard', () => {
     expect(html).toContain('id="importInput"');
   });
 
-  it('sends style notes and display count from the wizard to the smart import endpoint', () => {
-    expect(script).toContain("'/api/scrape-dutchie'");
+  it('starts an import job with style notes and display count, then polls progress', () => {
+    expect(script).toContain("'/api/import/jobs'");
+    expect(script).toContain('pollImportJob(startData.statusUrl');
     expect(script).toContain('styleNotes:');
     expect(script).toContain('displayCount:');
+  });
+
+  it('preserves wizard and import display count after late config renders', () => {
+    expect(html).toContain("this.dataset.userSet='1';var target=document.getElementById('dutchieDisplayCount');if(target)target.value=this.value");
+    expect(html).toContain("<select id=\"dutchieDisplayCount\" onchange=\"this.dataset.userSet='1'\"");
+    expect(script).toContain("display.dataset.userSet!=='1'");
+    expect(script).toContain("wizardDisplays.dataset.userSet!=='1'");
+  });
+
+  it('normalizes QR wizard store domains before importing through the same endpoint', () => {
+    expect(script).toContain("var target=document.getElementById('dutchieUrl')");
+    expect(script).toContain("if(target)target.value=url");
+    expect(script).toContain("url='https://'+url");
+  });
+
+  it('keeps large Dutchie imports visible as a long-running job', () => {
+    expect(script).toContain('Starting an import job');
+    expect(script).toContain('progress will update here');
+    expect(script).toContain('Import debug log');
+    expect(script).toContain('Trying the direct importer');
   });
 
   it('gates normal controls behind the wizard until products have been imported', () => {

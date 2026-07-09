@@ -1,5 +1,6 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
+import { shouldRedirectToHttps } from '../src/index';
 
 describe('auth gates', () => {
   it('blocks /api/sessions when unauthenticated', async () => {
@@ -30,5 +31,14 @@ describe('public pages', () => {
     const text = await res.text();
     expect(text).toContain('DubMenu TV');
     expect(text).toContain("location.origin.replace(/^http/, 'ws')");
+  });
+
+  it('keeps local development requests on HTTP while redirecting production HTTP', async () => {
+    const local = await SELF.fetch('http://127.0.0.1:8792/api/health', { redirect: 'manual' });
+    expect(local.status).toBe(200);
+
+    expect(shouldRedirectToHttps(new URL('http://127.0.0.1:8792/api/health'), '127.0.0.1:8792', 'https://dubmenu.com')).toBe(false);
+    expect(shouldRedirectToHttps(new URL('http://dubmenu.com/api/health'), 'dubmenu.com', 'https://dubmenu.com')).toBe(true);
+    expect(shouldRedirectToHttps(new URL('https://dubmenu.com/api/health'), 'dubmenu.com', 'https://dubmenu.com')).toBe(false);
   });
 });

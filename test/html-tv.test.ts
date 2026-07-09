@@ -230,7 +230,7 @@ describe('tvPage', () => {
     });
     expect(page).toContain('originalPrice: typeof s.originalPrice');
     expect(page).toContain('priceTiers: Array.isArray(s.priceTiers)');
-    expect(page).toContain('price: price');
+    expect(page).toContain("price: typeof s.price === 'number' ? s.price : undefined");
     expect(page).toContain('Tiered Flower Special');
   });
 
@@ -273,6 +273,19 @@ describe('tvPage', () => {
     expect(page).toContain('function getCycleInterval');
     expect(page).toContain('config.autoScrollSpeed');
     expect(page).toContain('Math.max(4000, Math.min(20000, 5000 + raw * 100))');
+  });
+
+  it('auto-cycles overflow category pages so all imported categories become visible', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: false } });
+    expect(page).toContain('if(config.autoScroll || cycleState.totalPages > 1) startCycling();');
+    expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
+  });
+
+  it('compacts the TV board and centers scaled previews when a promo banner is active', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
+    expect(page).toContain('body.has-promo-banner .menu-content');
+    expect(page).toContain("document.body.classList.toggle('has-promo-banner',!!banner)");
+    expect(page).toContain('Math.max(0, (vw - scaledW) / 2)');
   });
 
   it('shows the demo pill when tvDemo is enabled', () => {
@@ -386,6 +399,12 @@ describe('tvPage', () => {
     expect(page).toContain('displayCats = mergeSparsePricewallSpecials(cats, promoProducts)');
     expect(page).toContain('pricewallRailCats = []');
     expect(page).toContain('.layout-pricewall .card-price .promo-price');
+  });
+
+  it('does not render manual specials without prices as zero-dollar products', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, specials: [{ id: 'bogo', title: 'BOGO gummies', active: true }] } });
+    expect(page).toContain("price: typeof s.price === 'number' ? s.price : undefined");
+    expect(page).toContain('if(!hasPrice) return promo.trim()');
   });
 
   it('allows monitor-level dense price wall layout overrides', () => {

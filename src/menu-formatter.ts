@@ -78,7 +78,7 @@ const CATEGORY_SYNONYMS: { canonical: string; needles: string[] }[] = [
   { canonical: 'CBD', needles: ['cbd'] },
   { canonical: 'Tinctures', needles: ['tincture', 'sublingual', 'drops', 'spray', 'elixir'] },
   { canonical: 'Topicals', needles: ['topical', 'cream', 'balm', 'lotion', 'transdermal', 'salve', 'patch'] },
-  { canonical: 'Accessories', needles: ['accessory', 'gear', 'battery', 'paper', 'grinder', 'pipe', 'lighter', 'bong', 'rig', 'tool', 'apparel'] },
+  { canonical: 'Accessories', needles: ['accessory', 'accessories', 'gear', 'battery', 'paper', 'grinder', 'pipe', 'lighter', 'bong', 'rig', 'tool', 'apparel'] },
 ];
 
 export function canonicalCategoryName(name: string): string {
@@ -113,6 +113,7 @@ export interface FormatMenuOptions {
   tvOptimize?: boolean;
   maxTvCategories?: number;
   maxTvProductsPerCategory?: number;
+  preserveSections?: boolean;
 }
 export function isSpecialProduct(p: ScrapedProduct): boolean {
   if (p.special) return true;
@@ -227,10 +228,17 @@ function selectDiverseTvProducts(products: ScrapedProduct[], maxProducts: number
 
 export function selectTvProducts(
   categories: ScrapedCategory[],
-  opts: { maxCategories?: number; maxProductsPerCategory?: number } = {}
+  opts: { maxCategories?: number; maxProductsPerCategory?: number; preserveSections?: boolean } = {}
 ): ScrapedCategory[] {
-  const maxCategories = opts.maxCategories ?? 6;
+  const maxCategories = opts.maxCategories ?? 10;
   const maxProductsPerCategory = opts.maxProductsPerCategory ?? 6;
+  if (opts.preserveSections) {
+    return categories
+      .map((cat) => ({ ...cat, products: selectDiverseTvProducts(cat.products, maxProductsPerCategory) }))
+      .filter((cat) => cat.products.length > 0)
+      .slice(0, maxCategories)
+      .map((cat, index) => ({ ...cat, order: index }));
+  }
   const specialProducts = categories.flatMap((cat) =>
     cat.products
       .filter(isSpecialProduct)
@@ -261,30 +269,35 @@ export function dedupeAndFormatCategories(
   const maxProductsPerCategory = opts.maxProductsPerCategory ?? 40;
   const warnings: string[] = [];
 
-  const merged = new Map<string, { name: string; products: ScrapedProduct[] }>();
+  const preserveSections = opts.preserveSections === true;
+  const merged = new Map<string, { name: string; products: ScrapedProduct[]; order: number }>();
   for (const cat of categories) {
-    const canonical = canonicalCategoryName(cat.name);
-    if (!merged.has(canonical)) {
-      merged.set(canonical, { name: canonical, products: [] });
+    const sourceName = (cat.name || 'Other').replace(/\s+/g, ' ').trim() || 'Other';
+    const displayName = preserveSections ? sourceName : canonicalCategoryName(sourceName);
+    const key = preserveSections ? displayName.toLowerCase() : displayName;
+    if (!merged.has(key)) {
+      merged.set(key, { name: displayName, products: [], order: cat.order ?? merged.size });
     }
-    merged.get(canonical)!.products.push(...cat.products);
+    merged.get(key)!.products.push(...cat.products);
   }
 
-  const sorted = Array.from(merged.entries()).sort((a, b) => {
-    const ai = CATEGORY_ORDER.indexOf(a[0]);
-    const bi = CATEGORY_ORDER.indexOf(b[0]);
+  const sorted = Array.from(merged.values()).sort((a, b) => {
+    if (preserveSections) return a.order - b.order;
+    const ai = CATEGORY_ORDER.indexOf(a.name);
+    const bi = CATEGORY_ORDER.indexOf(b.name);
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
 
   if (sorted.length > maxCategories) {
-    warnings.push(`Limited menu to ${maxCategories} categories; some niche categories were merged into Other.`);
+    warnings.push(`Limited menu to ${maxCategories} sections for TV readability.`);
   }
 
   const outCategories: ScrapedCategory[] = [];
   let productCount = 0;
 
   for (let i = 0; i < sorted.length && i < maxCategories; i++) {
-    const [name, group] = sorted[i];
+    const group = sorted[i];
+    const name = group.name;
     const seen = new Set<string>();
     const products: ScrapedProduct[] = [];
     for (const p of group.products) {
@@ -371,6 +384,7 @@ export function formatMenu(
     ? selectTvProducts(deduped.categories, {
         maxCategories: opts.maxTvCategories,
         maxProductsPerCategory: opts.maxTvProductsPerCategory,
+        preserveSections: opts.preserveSections,
       })
     : deduped.categories;
   const productCount = tvCategories.reduce((total, category) => total + category.products.length, 0);

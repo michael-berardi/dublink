@@ -13,6 +13,7 @@ STRIPE_PRICE_ID = "price_1ToXsZIS4hxpOM6xRO0sMxTw"
 APP_URL = "https://dubmenu.com"
 TV_URL = "https://tv.dubmenu.com"
 ADMIN_EMAILS = "mike.r.berardi@gmail.com"
+OVERSEER_CRAWL_URL = "https://overseer-crawl.libertydesignstudio.workers.dev"
 
 [[r2_buckets]]
 bucket_name = "dubmenu-uploads"

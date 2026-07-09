@@ -30,12 +30,16 @@ describe('analyzeReferenceStyle', () => {
     expect(result.showImages).toBe(false);
   });
 
-  it('uses a sparse hero only for explicit single-product cues or small real menus', () => {
-    const explicitSingle = analyzeReferenceStyle({ notes: 'single product hero with premium photo', productCount: 100 });
-    const smallMenu = analyzeReferenceStyle({ notes: 'quiet boutique selection', productCount: 3 });
+  it('keeps small real menus in a grid unless notes explicitly request a sparse hero', () => {
+    const threeProducts = analyzeReferenceStyle({ notes: 'quiet boutique selection', productCount: 3 });
+    const fourProducts = analyzeReferenceStyle({ notes: 'quiet boutique selection', productCount: 4 });
+    const explicitHero = analyzeReferenceStyle({ notes: 'single product hero with premium photo', productCount: 100 });
+    const explicitSparse = analyzeReferenceStyle({ notes: 'sparse featured item board', productCount: 4 });
 
-    expect(explicitSingle.layout).toBe('sparse');
-    expect(smallMenu.layout).toBe('sparse');
+    expect(threeProducts.layout).toBe('grid');
+    expect(fourProducts.layout).toBe('grid');
+    expect(explicitHero.layout).toBe('sparse');
+    expect(explicitSparse.layout).toBe('sparse');
   });
 
   it('caps reference text before scanning or storing style profiles', () => {

@@ -42,13 +42,15 @@ export function analyzeReferenceStyle(input: ReferenceStyleInput): ReferenceStyl
   const images = hit(['image', 'photo', 'photos', 'photography', 'poster', 'video', 'gallery', 'visual', 'hero'], 'image');
   const promos = hit(['deal', 'deals', 'special', 'specials', 'happy hour', 'loyalty', 'discount', 'promo', 'promotion', 'daily'], 'promo');
   const single = hit(['single product', 'one product', 'hero', 'sparse', 'minimal', 'feature product'], 'single');
+  const explicitSingle = single && !/\b(no|not|avoid|without)\b[^.]{0,28}\b(hero|sparse|single product|feature product)\b/.test(source);
   const editorial = hit(['editorial', 'lifestyle', 'premium', 'story', 'curated', 'cinematic', 'brand campaign'], 'editorial');
   const noPhotos = hit(['no photo', 'no photos', 'no image', 'no images', 'text only', 'price only'], 'no-photo');
 
   let layout: MenuConfig['layout'] = 'grid';
-  if (single) layout = 'sparse';
+  const explicitSingleStrong = explicitSingle && /\b(single product|one product|feature product|sparse)\b/.test(source);
+  if (explicitSingleStrong) layout = 'sparse';
   else if (dense || productCount >= 36) layout = 'pricewall';
-  else if (productCount > 0 && productCount <= 4) layout = 'sparse';
+  else if (explicitSingle) layout = 'sparse';
   else if (editorial) layout = 'editorial';
   else if (images && promos) layout = 'cinematic';
   else if (images || promos) layout = 'poster';
@@ -67,7 +69,7 @@ export function analyzeReferenceStyle(input: ReferenceStyleInput): ReferenceStyl
   const display = detectDisplayCount(source, input.currentDisplayCount || 1);
   const showImages = !noPhotos && (images || layout === 'poster' || layout === 'cinematic' || layout === 'editorial' || layout === 'showcase');
   const showDescription = layout === 'editorial' || (editorial && showImages);
-  const fontSize: MenuConfig['fontSize'] = dense ? 'medium' : single ? 'large' : 'medium';
+  const fontSize: MenuConfig['fontSize'] = dense || productCount >= 36 ? 'medium' : explicitSingle ? 'large' : 'medium';
   const confidence = clamp(0.45 + keywords.length * 0.06 + (productCount >= 36 ? 0.1 : 0) + (display.explicit ? 0.05 : 0), 0.45, 0.95);
   const summary = `Applied ${layout} / ${template} from ${keywords.length ? keywords.slice(0, 5).join(', ') : 'general menu-board cues'}.`;
 

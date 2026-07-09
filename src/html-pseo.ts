@@ -166,7 +166,7 @@ function generatePSEOHTML(page: PSEOPageData, origin: string): string {
     </div>
 
     <div class="pseo-cta-bottom">
-      <a href="${TV_ORIGIN}/tv/demo" target="_blank">Start Your Free Trial</a>
+      <a href="${safeOrigin}/signup">Start Your Free Trial</a>
     </div>
   </div>
 

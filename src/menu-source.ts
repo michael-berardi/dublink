@@ -1,12 +1,11 @@
 import { importDutchieMenu } from './dutchie-api';
 import { importDutchiePublicMenu } from './dutchie-public-api';
-import { scrapeDutchie, scrapeDutchieDemo, type ScrapedCategory, type ScrapedProduct } from './dutchie-scraper';
+import { scrapeDutchie, type ScrapedCategory, type ScrapedProduct } from './dutchie-scraper';
 
 export type SourceType =
   | 'dutchie-embedded'
   | 'dutchie-regular'
   | 'dutchie-slug'
-  | 'simply-green'
   | 'website-dutchie'
   | 'website-generic'
   | 'invalid';
@@ -33,29 +32,91 @@ export interface MenuImportResult {
 export interface MenuImportEnv {
   DUTCHIE_API_KEY?: string;
   BROWSERLESS_TOKEN?: string;
+  OVERSEER_CRAWL_URL?: string;
+  OVERSEER_CRAWL_API_KEY?: string;
 }
+
+type OverseerProductCrawlProduct = {
+  id?: string;
+  name?: string;
+  price?: number;
+  currency?: string;
+  url?: string;
+  image?: string;
+  category?: string;
+  brand?: string;
+  description?: string;
+  inStock?: boolean;
+  thc?: string;
+  cbd?: string;
+  weight?: string;
+};
+
+type OverseerProductCrawlResponse = {
+  success?: boolean;
+  sourceURL?: string;
+  discoveredUrls?: string[];
+  dutchie?: {
+    kind?: 'iframe' | 'script' | 'link';
+    slug?: string;
+    embedId?: string;
+    embedUrl?: string;
+  };
+  products?: OverseerProductCrawlProduct[];
+  productCount?: number;
+  categories?: Array<{ name?: string; products?: OverseerProductCrawlProduct[] }>;
+  warnings?: string[];
+};
 
 const DUTCHIE_EMBEDDED_RE = /dutchie\.com\/embedded-menu\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_STORE_RE = /dutchie\.com\/stores\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_DISPENSARY_RE = /dutchie\.com\/dispensary\/([a-zA-Z0-9_-]+)/i;
-const DUTCHIE_ROOT_SLUG_RE = /dutchie\.com\/([a-zA-Z0-9_-]+)(?:\/[a-zA-Z0-9_-]+)?/i;
-const DUTCHIE_EMBEDDED_ID_RE = /dutchie\.com\/api\/v2\/embedded-menu\/([a-f0-9]+)(?:\.js)?/i;
-const DUTCHIE_RESERVED_PATHS = new Set(['api', 'api-2', 'business', 'help', 'hc', 'stores', 'store', 'dispensaries', 'us', 'embedded-menu']);
+const DUTCHIE_ROOT_SLUG_RE = /https?:\/\/(?:www\.)?dutchie\.com\/([a-zA-Z0-9_-]+)(?:\/[a-zA-Z0-9_-]+)?/i;
+const DUTCHIE_RESERVED_PATHS = new Set(['api', 'api-2', 'assets', 'business', 'cdn', 'help', 'hc', 'images', 'stores', 'store', 'dispensaries', 'us', 'embedded-menu', 'www']);
 
-const DUTCHIE_EMBEDDED_ID_MAP: Record<string, string> = {
-  // Simply Green NY embedded menu ID -> known Dutchie slug.
-  '69ab2eec51d4a55999d225a5': 'simply-green',
-};
-
-const SIMPLY_GREEN_HOSTS = new Set([
-  'simplygreenny.com',
-  'www.simplygreenny.com',
-  'simply-green-ny.pages.dev',
-  'dc88ae0b.simply-green-ny.pages.dev',
-]);
 
 function looksLikeUrl(value: string): boolean {
   return /^https?:\/\//i.test(value) || (value.includes('.') && !value.includes(' '));
+}
+
+function isPrivateOrLocalHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal')
+  ) return true;
+  if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true;
+  if (/^169\.254\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return true;
+  if (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe80')) return true;
+  return false;
+}
+
+export function normalizePublicHttpUrl(input: string): string {
+  const raw = (input || '').trim();
+  const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let url: URL;
+  try {
+    url = new URL(withProtocol);
+  } catch {
+    throw new Error('Enter a public HTTP(S) website URL.');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error('Only public HTTP(S) website URLs can be scanned.');
+  }
+  if (url.username || url.password) {
+    throw new Error('Website URLs with embedded credentials cannot be scanned.');
+  }
+  if (url.port && url.port !== '80' && url.port !== '443') {
+    throw new Error('Only standard public website ports can be scanned.');
+  }
+  if (isPrivateOrLocalHostname(url.hostname)) {
+    throw new Error('Only public website URLs can be scanned.');
+  }
+  url.hash = '';
+  return url.toString();
 }
 
 export function detectMenuSource(input: string): MenuSource {
@@ -85,20 +146,17 @@ export function detectMenuSource(input: string): MenuSource {
 
   const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
 
-  // Simply Green NY shortcut: map the SG website domains directly to the known
-  // Dutchie slug so the importer can use the Dutchie API / public fallback.
-  if (SIMPLY_GREEN_HOSTS.has(hostname)) {
-    return { type: 'simply-green', slug: 'simply-green', url: urlStr };
-  }
 
   if (hostname.endsWith('dutchie.com')) {
     const path = url.pathname.replace(/\/+$/, '');
 
-    // Dutchie v2 embedded-menu script IDs (e.g. simply-green uses one).
+    // Dutchie v2 embedded-menu script IDs are hex hashes, not cName slugs.
+    // Treat them as dutchie-embedded; the crawl service resolves the cName
+    // from the rendered iframe at runtime.
     const embeddedIdMatch = path.match(/^\/api\/v2\/embedded-menu\/([a-f0-9]+)(?:\.js)?$/i);
     if (embeddedIdMatch) {
-      const slug = DUTCHIE_EMBEDDED_ID_MAP[embeddedIdMatch[1]];
-      if (slug) return { type: 'simply-green', slug, url: urlStr };
+      const embeddedId = embeddedIdMatch[1].toLowerCase();
+      return { type: 'dutchie-embedded', slug: embeddedId, url: urlStr };
     }
 
     if (path.startsWith('/embedded-menu/')) {
@@ -134,15 +192,13 @@ export function detectMenuSource(input: string): MenuSource {
 }
 
 export function extractDutchieSlugFromHtml(html: string): string | null {
+  // Look for cName slugs in iframe/store/dispensary URLs. We deliberately
+  // skip api/v2/embedded-menu/{hexId}.js script references because those IDs
+  // are internal Dutchie dispensary hashes, not customer-facing slugs.
   const embedded = html.match(DUTCHIE_EMBEDDED_RE);
   if (embedded && !DUTCHIE_RESERVED_PATHS.has(embedded[1].toLowerCase())) return embedded[1].toLowerCase();
   const store = html.match(DUTCHIE_STORE_RE);
   if (store && !DUTCHIE_RESERVED_PATHS.has(store[1].toLowerCase())) return store[1].toLowerCase();
-  const embeddedId = html.match(DUTCHIE_EMBEDDED_ID_RE);
-  if (embeddedId) {
-    const slug = DUTCHIE_EMBEDDED_ID_MAP[embeddedId[1]];
-    if (slug) return slug.toLowerCase();
-  }
   const dispensary = html.match(DUTCHIE_DISPENSARY_RE);
   if (dispensary && !DUTCHIE_RESERVED_PATHS.has(dispensary[1].toLowerCase())) return dispensary[1].toLowerCase();
   const root = html.match(DUTCHIE_ROOT_SLUG_RE);
@@ -223,18 +279,37 @@ function guessCategoryFromName(name: string): string {
   return 'Other';
 }
 
-function normalizeGenericProduct(item: any, baseUrl: string): ScrapedProduct | null {
-  const name = typeof item.name === 'string' ? item.name.trim() : '';
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringField(record: UnknownRecord, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function recordField(record: UnknownRecord, key: string): UnknownRecord | undefined {
+  const value = record[key];
+  return isRecord(value) ? value : undefined;
+}
+
+function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct | null {
+  if (!isRecord(item)) return null;
+
+  const name = stringField(item, 'name') || stringField(item, 'title') || '';
   if (!name) return null;
 
-  const offers = item.offers;
-  const price = parsePrice(offers?.price);
-  if (!price && typeof offers !== 'object') return null;
+  const offers = recordField(item, 'offers');
+  const price = parsePrice(offers?.price ?? item.price);
+  if (!price && !offers) return null;
 
   let image: string | undefined;
-  if (typeof item.image === 'string') image = item.image;
-  else if (Array.isArray(item.image) && item.image.length) image = item.image[0];
-  else if (typeof item.image?.url === 'string') image = item.image.url;
+  const imageValue = item.image ?? item.imageUrl;
+  if (typeof imageValue === 'string') image = imageValue;
+  else if (Array.isArray(imageValue) && typeof imageValue[0] === 'string') image = imageValue[0];
+  else if (isRecord(imageValue) && typeof imageValue.url === 'string') image = imageValue.url;
   if (image) {
     try {
       image = new URL(image, baseUrl).toString();
@@ -243,9 +318,14 @@ function normalizeGenericProduct(item: any, baseUrl: string): ScrapedProduct | n
     }
   }
 
-  const category = typeof item.category === 'string' ? item.category : guessCategoryFromName(name);
-  const brand = typeof item.brand === 'string' ? item.brand : item.brand?.name;
-  const description = typeof item.description === 'string' ? item.description : undefined;
+  const category = stringField(item, 'category') || guessCategoryFromName(name);
+  const brandValue = item.brand;
+  const brand = typeof brandValue === 'string'
+    ? brandValue
+    : isRecord(brandValue)
+      ? stringField(brandValue, 'name')
+      : undefined;
+  const description = stringField(item, 'description') || stringField(item, 'rawText') || stringField(item, 'potency');
   const combined = `${name} ${description || ''}`;
 
   // Extract weight from name or description (e.g., "3.5g", "100mg", "1/8 oz").
@@ -253,28 +333,30 @@ function normalizeGenericProduct(item: any, baseUrl: string): ScrapedProduct | n
     combined.match(/(\d\/\d)\s*(oz)\b/i);
   const weight = weightMatch ? `${weightMatch[1]}${weightMatch[2]}` : undefined;
 
-  // Extract THC/CBD from description.
   const thcMatch = combined.match(/THC[\s:]*([\d.]+%|[\d.]+mg)/i);
   const cbdMatch = combined.match(/CBD[\s:]*([\d.]+%|[\d.]+mg)/i);
+  const sourceId = stringField(item, 'sku') || stringField(item, 'slug') || stringField(item, '@id') || name;
+  const availability = offers?.availability;
 
   return {
-    id: String(item.sku || item.name || item['@id'] || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120),
+    id: sourceId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120),
     name,
     price,
-    sku: typeof item.sku === 'string' ? item.sku : undefined,
+    sku: stringField(item, 'sku'),
     category,
     thc: thcMatch ? thcMatch[1] : undefined,
     cbd: cbdMatch ? cbdMatch[1] : undefined,
     image,
     weight,
     brand,
-    inStock: offers?.availability !== 'https://schema.org/OutOfStock' && offers?.availability !== 'OutOfStock',
+    inStock: availability !== 'https://schema.org/OutOfStock' && availability !== 'OutOfStock',
     strain: parseStrain(combined),
   };
 }
 
 async function fetchWebsiteHtml(url: string): Promise<string> {
-  const resp = await fetch(url, {
+  const safeUrl = normalizePublicHttpUrl(url);
+  const resp = await fetch(safeUrl, {
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -286,6 +368,137 @@ async function fetchWebsiteHtml(url: string): Promise<string> {
   return resp.text();
 }
 
+function overseerCrawlBaseUrl(env: MenuImportEnv): string | null {
+  const base = (env.OVERSEER_CRAWL_URL || '').trim();
+  if (!base || !env.OVERSEER_CRAWL_API_KEY) return null;
+  return base.replace(/\/+$/, '');
+}
+
+function cleanOverseerDisplayName(product: OverseerProductCrawlProduct, category: string): string {
+  const raw = product.name.trim();
+  if (!raw.includes('|')) return raw;
+  const brand = (product.brand || '').toLowerCase();
+  const categoryLower = category.toLowerCase();
+  const strainWords = new Set(['indica', 'sativa', 'hybrid']);
+  const parts = raw.split('|')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const lower = part.toLowerCase();
+      if (brand && lower === brand) return false;
+      if (categoryLower && (lower === categoryLower || categoryLower.includes(lower))) return false;
+      if (strainWords.has(lower)) return false;
+      return true;
+    });
+  return parts.length ? parts.join(' ') : raw;
+}
+
+function productFromOverseerProduct(product: OverseerProductCrawlProduct, fallbackCategory?: string): ScrapedProduct | null {
+  if (!product.name || !product.price) return null;
+  const category = product.category || fallbackCategory || guessCategoryFromName(product.name);
+  const sourceId = product.id || product.url || product.name;
+  return {
+    id: sourceId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120),
+    name: cleanOverseerDisplayName(product, category),
+    price: product.price,
+    category,
+    image: product.image,
+    brand: product.brand,
+    description: product.description,
+    thc: product.thc,
+    cbd: product.cbd,
+    weight: product.weight,
+    inStock: product.inStock !== false,
+    strain: parseStrain(`${product.name} ${product.description || ''} ${category}`),
+  };
+}
+
+function productCrawlDutchieSlug(data: OverseerProductCrawlResponse): string | null {
+  const direct = data.dutchie?.slug;
+  if (direct && !DUTCHIE_RESERVED_PATHS.has(direct.toLowerCase())) return direct.toLowerCase();
+  // If the crawl found an embed script (ID only, no slug), try extracting
+  // a slug from the embed URL which may contain the cName path.
+  const embedUrl = data.dutchie?.embedUrl;
+  if (embedUrl) return extractDutchieSlugFromHtml(embedUrl);
+  return null;
+}
+
+function menuResultFromProductCrawl(data: OverseerProductCrawlResponse, sourceUrl: string): MenuImportResult | null {
+  const seen = new Set<string>();
+  const products: ScrapedProduct[] = [];
+  const addProduct = (candidate: OverseerProductCrawlProduct, fallbackCategory?: string) => {
+    const product = productFromOverseerProduct(candidate, fallbackCategory);
+    if (!product || seen.has(product.id)) return;
+    seen.add(product.id);
+    products.push(product);
+  };
+
+  for (const group of data.categories || []) {
+    for (const product of group.products || []) addProduct(product, group.name);
+  }
+  for (const product of data.products || []) addProduct(product);
+
+  if (products.length === 0) return null;
+
+  const categoryMap = new Map<string, ScrapedProduct[]>();
+  for (const product of products) {
+    const category = product.category || guessCategoryFromName(product.name);
+    if (!categoryMap.has(category)) categoryMap.set(category, []);
+    categoryMap.get(category)!.push(product);
+  }
+
+  const categories = Array.from(categoryMap.entries()).map(([name, prods], order) => ({
+    id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    name,
+    order,
+    products: prods,
+  }));
+
+  const warnings = data.warnings?.slice() || [];
+  const crawled = data.discoveredUrls?.length || 0;
+  if (crawled > 0) warnings.push(`Overseer Products Crawl checked ${crawled} page${crawled === 1 ? '' : 's'}.`);
+
+  return {
+    categories,
+    productCount: products.length,
+    dispensaryName: titleCaseFromDomain(humanDomain(sourceUrl)),
+    source: 'overseer-products-crawl',
+    warnings,
+  };
+}
+
+async function fetchOverseerProductsCrawl(
+  url: string,
+  env: MenuImportEnv,
+  preferDutchie: boolean
+): Promise<OverseerProductCrawlResponse | null> {
+  const base = overseerCrawlBaseUrl(env);
+  if (!base) return null;
+  const safeUrl = normalizePublicHttpUrl(url);
+  const resp = await fetch(`${base}/v2/products/crawl`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.OVERSEER_CRAWL_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      url: safeUrl,
+      limit: 40,
+      maxDepth: 1,
+      waitFor: 2000,
+      preferDutchie,
+    }),
+    signal: AbortSignal.timeout(60000),
+  });
+  const body = await resp.json().catch(() => null) as OverseerProductCrawlResponse | { error?: string; message?: string } | null;
+  if (!resp.ok || !body || body.success === false) {
+    const message = body && 'error' in body ? (body.error || body.message) : undefined;
+    throw new Error(message || `Overseer Products Crawl returned ${resp.status}`);
+  }
+  return body as OverseerProductCrawlResponse;
+}
+
+
 export async function scrapeGenericWebsite(url: string): Promise<MenuImportResult> {
   const html = await fetchWebsiteHtml(url);
   const dispensaryName = extractStoreName(html, url);
@@ -293,30 +506,32 @@ export async function scrapeGenericWebsite(url: string): Promise<MenuImportResul
 
   const products: ScrapedProduct[] = [];
   const seen = new Set<string>();
+  const addCandidate = (candidate: unknown) => {
+    const p = normalizeGenericProduct(candidate, url);
+    if (!p || !p.price || seen.has(p.id)) return;
+    seen.add(p.id);
+    products.push(p);
+  };
+
   const ldMatches = html.matchAll(/<script type="application\/ld\+json">([^<]+)<\/script>/g);
   for (const match of ldMatches) {
     try {
-      const data = JSON.parse(match[1]);
+      const data: unknown = JSON.parse(match[1]);
       const items = Array.isArray(data) ? data : [data];
       for (const item of items) {
-        const candidates = item['@type'] === 'Product' ? [item] : [];
-        if (Array.isArray(item.itemListElement)) {
-          for (const el of item.itemListElement) {
-            if (el?.item?.['@type'] === 'Product') candidates.push(el.item);
-          }
-        }
-        for (const prod of candidates) {
-          const p = normalizeGenericProduct(prod, url);
-          if (!p || !p.price) continue;
-          if (seen.has(p.id)) continue;
-          seen.add(p.id);
-          products.push(p);
+        if (!isRecord(item)) continue;
+        if (item['@type'] === 'Product') addCandidate(item);
+        if (!Array.isArray(item.itemListElement)) continue;
+        for (const el of item.itemListElement) {
+          if (!isRecord(el) || !isRecord(el.item) || el.item['@type'] !== 'Product') continue;
+          addCandidate(el.item);
         }
       }
     } catch {
       // ignore malformed JSON-LD
     }
   }
+
 
   if (products.length === 0) {
     throw new Error('No menu products found on this page. Try a Dutchie link or CSV import.');
@@ -353,42 +568,89 @@ export async function scrapeGenericWebsite(url: string): Promise<MenuImportResul
   };
 }
 
+function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    clearTimeout(timer);
+  });
+}
+
 export async function resolveMenuSource(input: string, env: MenuImportEnv): Promise<MenuImportResult> {
   const source = detectMenuSource(input);
   if (source.type === 'invalid') {
     throw new Error(source.error || 'Invalid menu source.');
   }
 
-  // Generic website that may embed Dutchie.
+
+  // Generic website that may embed Dutchie; ask Overseer Products Crawl first so
+  // rendered iframes/scripts are detected before the wizard declares a URL invalid.
   if (source.type === 'website-generic' && source.url) {
-    let websiteError: string | undefined;
+    const errors: string[] = [];
+    try {
+      const crawl = await withTimeout(fetchOverseerProductsCrawl(source.url, env, true), 60000, 'Overseer Products Crawl timed out');
+      if (crawl) {
+        const slug = productCrawlDutchieSlug(crawl);
+        if (slug) {
+          try {
+            return await withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out; trying custom ecommerce crawler.');
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : 'Dutchie import from embedded menu failed');
+            const fallbackCrawl = await withTimeout(fetchOverseerProductsCrawl(source.url, env, false), 60000, 'Overseer Products Crawl ecommerce extraction timed out');
+            const fallbackResult = fallbackCrawl ? menuResultFromProductCrawl(fallbackCrawl, source.url) : null;
+            if (fallbackResult) return { ...fallbackResult, warnings: [...fallbackResult.warnings, ...errors] };
+          }
+        }
+        const productResult = menuResultFromProductCrawl(crawl, source.url);
+        if (productResult) return productResult;
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Overseer Products Crawl failed');
+    }
+
     try {
       const html = await fetchWebsiteHtml(source.url);
       const slug = extractDutchieSlugFromHtml(html);
       if (slug) {
-        return importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`);
+        return await withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out.');
       }
     } catch (err) {
-      websiteError = err instanceof Error ? err.message : 'Website fetch failed';
+      errors.push(err instanceof Error ? err.message : 'Website fetch failed');
     }
     try {
       return { ...await scrapeGenericWebsite(source.url), source: 'website-generic' };
     } catch (err) {
-      const genericError = err instanceof Error ? err.message : 'Generic website scrape failed';
-      // Last resort: return a demo menu seeded from the website URL so the user
-      // still gets a working preview. Only do this for syntactically valid URLs.
-      return demoMenuFromSlug(source.url, 'website-generic', [websiteError, genericError].filter(Boolean) as string[]);
+      errors.push(err instanceof Error ? err.message : 'Generic website scrape failed');
+      throw new Error(`No live menu products found on this website (${errors.join('; ')}). Try a Dutchie link or CSV import.`);
     }
   }
 
-  // Dutchie sources resolve through a slug.
+  // Dutchie sources resolve through a slug, with website crawl fallback when a
+  // known website shortcut still has crawlable ecommerce data.
   if (source.slug) {
-    return importDutchieFromSlug(source.slug, env, source.type);
+    try {
+      return await withTimeout(importDutchieFromSlug(source.slug, env, source.type), 180000, 'Dutchie scraper timed out.');
+    } catch (err) {
+      if (!source.url) throw err;
+      const crawl = await fetchOverseerProductsCrawl(source.url, env, false).catch(() => null);
+      const fallback = crawl ? menuResultFromProductCrawl(crawl, source.url) : null;
+      if (fallback) {
+        const warning = err instanceof Error ? err.message : 'Dutchie import failed';
+        return { ...fallback, warnings: [...fallback.warnings, warning] };
+      }
+      throw err;
+    }
   }
 
   throw new Error(source.error || 'Could not identify a menu source to import.');
 }
 
+function liveImportError(sourceLabel: string, errors: string[]): Error {
+  const details = errors.filter(Boolean).join('; ');
+  return new Error(`Could not import live menu products from ${sourceLabel}${details ? ` (${details})` : ''}. Configure a Dutchie API key or Browserless token, or import a CSV.`);
+}
 function isUsableResult(result: MenuImportResult | undefined): boolean {
   return !!(
     result &&
@@ -398,29 +660,6 @@ function isUsableResult(result: MenuImportResult | undefined): boolean {
   );
 }
 
-async function demoMenuFromSlug(
-  slug: string,
-  sourceLabel: string,
-  priorErrors: string[] = []
-): Promise<MenuImportResult> {
-  const demo = await scrapeDutchieDemo(slug);
-  const errors = priorErrors.filter(Boolean);
-  return {
-    categories: demo.categories,
-    productCount: demo.productCount,
-    dispensaryName: demo.dispensaryName,
-    logo: undefined,
-    source: `${sourceLabel}:demo`,
-    apiUsed: false,
-    demo: true,
-    apiError: errors.join('; ') || undefined,
-    warnings: [
-      errors.length > 0
-        ? `Could not reach Dutchie for real data (${errors.join('; ')}). Showing a sample menu so you can preview the layout. Connect a Dutchie API key or Browserless token to import live data.`
-        : 'Showing a sample menu so you can preview the layout. Connect a Dutchie API key or Browserless token to import live data.',
-    ],
-  };
-}
 
 async function importDutchieFromSlug(
   slug: string,
@@ -429,6 +668,29 @@ async function importDutchieFromSlug(
 ): Promise<MenuImportResult> {
   const errors: string[] = [];
   let result: MenuImportResult | undefined;
+
+  const shouldTryPrivateFirst = sourceLabel === 'dutchie-slug' && !!env.DUTCHIE_API_KEY;
+
+  if (!shouldTryPrivateFirst) {
+    try {
+      const publicResult = await importDutchiePublicMenu(slug);
+      result = {
+        categories: publicResult.categories,
+        productCount: publicResult.productCount,
+        dispensaryName: publicResult.dispensaryName,
+        logo: publicResult.logo,
+        source: sourceLabel,
+        apiUsed: false,
+        warnings: [],
+      };
+      if (isUsableResult(result)) return result;
+      errors.push('Dutchie public API returned no usable products');
+      result = undefined;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Dutchie public API import failed');
+      console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
+    }
+  }
 
   if (env.DUTCHIE_API_KEY) {
     try {
@@ -440,7 +702,7 @@ async function importDutchieFromSlug(
         logo: apiResult.logo,
         source: sourceLabel,
         apiUsed: true,
-        warnings: [],
+        warnings: shouldTryPrivateFirst ? [] : [`Dutchie public GraphQL unavailable; used private API fallback (${errors.join('; ')}).`],
       };
       if (isUsableResult(result)) return result;
       errors.push('Dutchie API returned no usable products');
@@ -451,7 +713,7 @@ async function importDutchieFromSlug(
     }
   }
 
-  if (!result) {
+  if (shouldTryPrivateFirst) {
     try {
       const publicResult = await importDutchiePublicMenu(slug);
       result = {
@@ -471,7 +733,6 @@ async function importDutchieFromSlug(
       console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
     }
   }
-
   if (!result && env.BROWSERLESS_TOKEN) {
     try {
       const scraperResult = await scrapeDutchie(slug, env.BROWSERLESS_TOKEN);
@@ -493,10 +754,5 @@ async function importDutchieFromSlug(
     }
   }
 
-  // Last resort: always return a usable demo menu for any syntactically valid
-  // Dutchie slug, regardless of whether live data is reachable. We intentionally
-  // do NOT attempt a direct fetch to Dutchie pages here: it is frequently
-  // blocked, rate-limited, or returns bot walls, and would only delay the demo
-  // fallback that guarantees a working preview.
-  return demoMenuFromSlug(slug, sourceLabel, errors);
+  throw liveImportError(sourceLabel, errors);
 }

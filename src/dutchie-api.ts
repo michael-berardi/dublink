@@ -386,7 +386,7 @@ async function fetchDutchieGraphQL(query: string, variables: Record<string, unkn
           'Accept-Language': 'en-US,en;q=0.9',
         },
         body: JSON.stringify({ query, variables }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(12000),
       });
       if (!resp.ok) {
         const text = await resp.text().catch(() => '');

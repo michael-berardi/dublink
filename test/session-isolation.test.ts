@@ -83,6 +83,39 @@ describe('session ownership isolation', () => {
     const body = (await res.json()) as { error?: string };
     expect(body.error).toMatch(/owned by another account/i);
   });
+
+  it('rejects unauthenticated import job starts', async () => {
+    const sessionId = `IMPORT-UNAUTH-${unique()}`;
+    const res = await SELF.fetch(`${BASE}/api/import/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'simply-green', session: sessionId }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('validates import job session IDs before starting background work', async () => {
+    const cookie = await signupCookie();
+    const res = await authedFetch('/api/import/jobs', cookie, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: 'simply-green', session: '../bad' }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/invalid session/i);
+  });
+
+  it('returns a clear 404 for missing import jobs owned by the requester', async () => {
+    const sessionId = `IMPORT-MISSING-${unique()}`;
+    const cookie = await signupCookie();
+    const claim = await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' });
+    expect(claim.status).toBe(200);
+    const res = await authedFetch(`/api/import/jobs/missing-job?session=${sessionId}`, cookie);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/import job/i);
+  });
 });
 
 describe('demo widget', () => {

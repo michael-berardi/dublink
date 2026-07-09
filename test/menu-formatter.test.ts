@@ -11,6 +11,7 @@ describe('canonicalCategoryName', () => {
     expect(canonicalCategoryName('Gummies')).toBe('Edibles');
     expect(canonicalCategoryName('CBD Tincture')).toBe('CBD');
     expect(canonicalCategoryName('Bongs')).toBe('Accessories');
+    expect(canonicalCategoryName('Accessories')).toBe('Accessories');
     expect(canonicalCategoryName('Unknown')).toBe('Other');
   });
 });
@@ -147,6 +148,17 @@ describe('TV product selection', () => {
     expect(selected[0].products.map((p) => p.id)).toEqual(['hero', 'mid']);
   });
 
+  it('keeps broad imported menus instead of silently dropping secondary categories', () => {
+    const categories: ScrapedCategory[] = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals'].map((name, index) => ({
+      id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+      name,
+      order: index,
+      products: [{ id: `${index}`, name: `${name} Product`, price: 10 + index, inStock: true }],
+    }));
+    const selected = selectTvProducts(categories);
+    expect(selected.map((cat) => cat.name)).toEqual(['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals']);
+  });
+
   it('uses bestseller wording and source order as popularity signals', () => {
     const categories: ScrapedCategory[] = [
       {
@@ -240,6 +252,27 @@ describe('TV product selection', () => {
     const selected = selectTvProducts(categories, { maxCategories: 2, maxProductsPerCategory: 2 });
     expect(selected.every((cat) => cat.name !== 'Specials')).toBe(true);
   });
+
+  it('preserves imported section names and order when requested', () => {
+    const categories: ScrapedCategory[] = [
+      {
+        id: 'premium-smalls',
+        name: 'Premium Smalls',
+        order: 0,
+        products: [{ id: 'small', name: 'House Smalls', price: 28, inStock: true }],
+      },
+      {
+        id: 'infused-pre-rolls',
+        name: 'Infused Pre-Rolls',
+        order: 1,
+        products: [{ id: 'infused', name: 'Infused Joint', price: 18, inStock: true }],
+      },
+    ];
+
+    const selected = selectTvProducts(categories, { preserveSections: true });
+    expect(selected.map((cat) => cat.name)).toEqual(['Premium Smalls', 'Infused Pre-Rolls']);
+    expect(selected[0].products[0].category).toBeUndefined();
+  });
 });
 
 describe('formatMenu', () => {
@@ -288,6 +321,26 @@ describe('formatMenu', () => {
     expect(result.categories[0].products[0].image).toBe('https://example.com/asset.jpg');
     expect(result.layout.showImages).toBe(true);
     expect(result.warnings.join(' ')).toContain('TV-ready products');
+  });
+
+  it('preserves source sections through TV formatting when requested', () => {
+    const result = formatMenu([
+      {
+        id: 'premium-smalls',
+        name: 'Premium Smalls',
+        order: 0,
+        products: [{ id: 'small', name: 'House Smalls', price: 28, inStock: true }],
+      },
+      {
+        id: 'infused-pre-rolls',
+        name: 'Infused Pre-Rolls',
+        order: 1,
+        products: [{ id: 'infused', name: 'Infused Joint', price: 18, inStock: true }],
+      },
+    ], 'Green Leaf', undefined, { tvOptimize: true, preserveSections: true });
+
+    expect(result.categories.map((cat) => cat.name)).toEqual(['Premium Smalls', 'Infused Pre-Rolls']);
+    expect(result.categories[0].products[0].category).toBe('Premium Smalls');
   });
 
   it('cleans scraped TV product names that start with separators or only contain weights', () => {

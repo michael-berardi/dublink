@@ -352,7 +352,7 @@ async function fetchDutchiePublicGraphQL<T>(url: string, operationName: string, 
   const getResp = await fetch(getUrl, {
     method: 'GET',
     headers: commonHeaders,
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(20000),
   });
 
   // If the server does not recognize the persisted query, fall back to a POST
@@ -379,7 +379,7 @@ async function fetchDutchiePublicGraphQL<T>(url: string, operationName: string, 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ operationName, query, variables, extensions: JSON.parse(extensions) }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(20000),
   });
   if (!postResp.ok) {
     const text = await postResp.text().catch(() => '');
@@ -413,9 +413,11 @@ export async function importDutchiePublicMenu(slug: string): Promise<{ categorie
     cleanImageUrl(dispensary.SpecialLogoImage) ||
     cleanImageUrl(dispensary.bannerImage);
 
-  // 2. Fetch products using the public FilteredProducts query.
-  let products: DutchiePublicProduct[] = [];
-  try {
+  // 2. Prefer products already returned with the dispensary menu sections. Large
+  // Dutchie menus can time out if we immediately make a second all-products
+  // GraphQL request after the store lookup.
+  let products: DutchiePublicProduct[] = dispensary.menuSections?.flatMap((s) => s.products || []) || [];
+  if (!products.length) {
     const productsData = await fetchDutchiePublicGraphQL<{ filteredProducts: { products: DutchiePublicProduct[] } }>(
       DUTCHIE_API2_GRAPHQL_URL,
       'FilteredProducts',
@@ -423,14 +425,6 @@ export async function importDutchiePublicMenu(slug: string): Promise<{ categorie
       { productsFilter: { dispensaryId, pricingType: 'rec', status: 'Active' } }
     );
     products = productsData?.filteredProducts?.products || [];
-  } catch (err) {
-    // If the public product query fails, fall back to menu sections products if present.
-    const sectionProducts = dispensary.menuSections?.flatMap((s) => s.products || []) || [];
-    if (sectionProducts.length) {
-      products = sectionProducts;
-    } else {
-      throw err;
-    }
   }
 
   if (!products.length) {

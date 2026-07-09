@@ -16,6 +16,27 @@ interface StoredSession {
   ownerAccountId?: string;
 }
 
+interface ImportJobStatus {
+  id: string;
+  status: 'queued' | 'running' | 'success' | 'error';
+  stage: number;
+  progress: number;
+  message: string;
+  sourceUrl: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  productCount?: number;
+  categoryCount?: number;
+  photoCount?: number;
+  source?: string;
+  categories?: Array<{ name: string; count: number }>;
+  warnings?: string[];
+  debug?: string[];
+  error?: string;
+  styleProfile?: unknown;
+}
+
 interface WSMessage {
   type: string;
   payload?: unknown;
@@ -131,6 +152,18 @@ export class SessionDurableObject implements DurableObject {
     );
   }
 
+  private isValidImportJobStatus(job: unknown): job is ImportJobStatus {
+    if (!isRecord(job)) return false;
+    const status = job.status;
+    if (status !== 'queued' && status !== 'running' && status !== 'success' && status !== 'error') return false;
+    if (typeof job.id !== 'string' || job.id.length < 8 || job.id.length > 80) return false;
+    if (typeof job.message !== 'string' || typeof job.sourceUrl !== 'string') return false;
+    if (typeof job.startedAt !== 'string' || typeof job.updatedAt !== 'string') return false;
+    if (typeof job.stage !== 'number' || typeof job.progress !== 'number') return false;
+    if (job.progress < 0 || job.progress > 100) return false;
+    return true;
+  }
+
   async fetch(request: Request): Promise<Response> {
     await this.initialize();
 
@@ -171,6 +204,36 @@ export class SessionDurableObject implements DurableObject {
       }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
+    }
+
+    if (url.pathname === '/import-job') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      if (!accountId) return jsonResponse({ error: 'Missing account' }, 400);
+      if (this.ownerAccountId && this.ownerAccountId !== accountId) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
+
+      if (request.method === 'GET') {
+        const job = await this.state.storage.get<ImportJobStatus>('importJob');
+        if (!job) return jsonResponse({ error: 'No import job found' }, 404);
+        return jsonResponse({ job });
+      }
+
+      if (request.method === 'POST') {
+        const data: unknown = await request.json();
+        if (!this.isValidImportJobStatus(data)) {
+          return jsonResponse({ error: 'Invalid import job status' }, 400);
+        }
+        if (!this.ownerAccountId) {
+          this.ownerAccountId = accountId;
+          await this.persistConfig();
+        }
+        await this.state.storage.put('importJob', data);
+        this.broadcast({ type: 'import_job', payload: data });
+        return jsonResponse({ ok: true });
+      }
+
+      return jsonResponse({ error: 'Method not allowed' }, 405);
     }
 
     // Internal import endpoint used by the Worker after Dutchie scrape.
@@ -925,7 +988,7 @@ export class SessionDurableObject implements DurableObject {
       priceTiers: this.sanitizePriceTiers(special.priceTiers),
       specialLabel: typeof special.specialLabel === 'string' ? this.sanitizeString(special.specialLabel) : undefined,
       active: special.active !== false,
-    })).filter((special) => special.title.length > 0);
+    }));
   }
 
   private sanitizeStyleProfile(profile: unknown): ReferenceStyleProfile | undefined {

@@ -20,7 +20,7 @@ import { statusPage } from './html-status';
 import { adminPage } from './html-admin';
 import { widgetPage, widgetJs } from './html-widget';
 import { getStatus } from './status';
-import { resolveMenuSource } from './menu-source';
+import { resolveMenuSource, type MenuImportResult } from './menu-source';
 import { formatMenu, getImportedTemplateStyle } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
 import { analyzeReferenceStyle } from './reference-style';
@@ -48,7 +48,60 @@ export interface Env extends SessionEnv {
   DUBHAVEN_ISSUER?: string;
   DUTCHIE_API_KEY?: string;
   BROWSERLESS_TOKEN?: string;
+  OVERSEER_CRAWL_URL?: string;
+  OVERSEER_CRAWL_API_KEY?: string;
 }
+
+type ImportJobStatus = {
+  id: string;
+  status: 'queued' | 'running' | 'success' | 'error';
+  stage: number;
+  progress: number;
+  message: string;
+  sourceUrl: string;
+  startedAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  productCount?: number;
+  categoryCount?: number;
+  photoCount?: number;
+  source?: string;
+  categories?: Array<{ name: string; count: number }>;
+  warnings?: string[];
+  debug: string[];
+  error?: string;
+  styleProfile?: unknown;
+};
+
+type MenuImportPayload = {
+  dispensaryName: string;
+  logo?: string;
+  categories: Array<{ products?: Array<{ image?: unknown }>; [key: string]: unknown }>;
+  productCount: number;
+  displayCount: number;
+  layout: string;
+  layoutMode: string;
+  fontSize: string;
+  showImages: boolean;
+  showDescription: boolean;
+  showBrand: boolean;
+  showStrain: boolean;
+  showPromos: boolean;
+  theme: string;
+  template: string;
+  primaryColor: string;
+  secondaryColor: string;
+  styleProfile: unknown;
+  showLogo: boolean;
+  tvDemo: boolean;
+};
+
+type MenuImportBuildResult = {
+  responseBody: Record<string, unknown>;
+  bundledPayload: MenuImportPayload;
+  raw: MenuImportResult;
+  warnings: string[];
+};
 
 async function recordEvent(env: Env, event: { type: string; accountId?: string; email?: string; payload?: any }): Promise<void> {
   if (!env.STATS) return;
@@ -130,6 +183,235 @@ function redirectResponse(location: string, cookies?: string[]): Response {
   return new Response(null, { status: 302, headers });
 }
 
+function importJobStatus(job: Omit<ImportJobStatus, 'updatedAt'> & { updatedAt?: string }): ImportJobStatus {
+  return { ...job, updatedAt: job.updatedAt || new Date().toISOString() };
+}
+
+function summarizeImportCategories(categories: Array<{ name?: unknown; products?: unknown[] }>): Array<{ name: string; count: number }> {
+  return categories.map((category) => ({
+    name: typeof category.name === 'string' ? category.name : 'Untitled',
+    count: Array.isArray(category.products) ? category.products.length : 0,
+  }));
+}
+
+function countImportedPhotos(categories: Array<{ products?: Array<{ image?: unknown }> }>): number {
+  return categories.reduce((total, category) => total + (category.products || []).filter((product) => typeof product.image === 'string' && product.image.length > 0).length, 0);
+}
+
+async function setSessionImportJob(env: Env, sessionId: string, accountId: string, job: ImportJobStatus): Promise<void> {
+  const id = env.SESSION.idFromName(sessionId);
+  const session = env.SESSION.get(id);
+  const res = await session.fetch(new Request('https://internal/import-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Account-Id': accountId },
+    body: JSON.stringify(job),
+  }));
+  if (!res.ok) {
+    const details = await res.text().catch(() => '');
+    throw new Error(`Import job status update failed (${res.status})${details ? `: ${details.slice(0, 200)}` : ''}`);
+  }
+}
+
+async function getSessionImportJob(env: Env, sessionId: string, accountId: string): Promise<Response> {
+  const id = env.SESSION.idFromName(sessionId);
+  const session = env.SESSION.get(id);
+  return session.fetch(new Request('https://internal/import-job', {
+    method: 'GET',
+    headers: { 'X-Account-Id': accountId },
+  }));
+}
+
+async function buildMenuImport(
+  env: Env,
+  accountId: string,
+  urlStr: string,
+  styleNotes: string,
+  displayCount: number,
+  report?: (job: Partial<ImportJobStatus> & { message: string; progress: number; stage: number }) => Promise<void>
+): Promise<MenuImportBuildResult> {
+  await report?.({ stage: 1, progress: 18, message: 'Normalized menu source and checking live import routes.' });
+  await report?.({ stage: 1, progress: 26, message: 'Scanning the website for Dutchie embeds and product pages.' });
+  const raw = await resolveMenuSource(urlStr, {
+    DUTCHIE_API_KEY: env.DUTCHIE_API_KEY,
+    BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN,
+    OVERSEER_CRAWL_URL: env.OVERSEER_CRAWL_URL,
+    OVERSEER_CRAWL_API_KEY: env.OVERSEER_CRAWL_API_KEY,
+  });
+  await report?.({
+    stage: 2,
+    progress: 48,
+    message: `Found ${raw.productCount} raw products from ${raw.source}. Formatting for TV readability.`,
+    productCount: raw.productCount,
+    categoryCount: raw.categories.length,
+    source: raw.source,
+    categories: summarizeImportCategories(raw.categories),
+    warnings: raw.warnings,
+  });
+
+
+  const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo, {
+    tvOptimize: true,
+    maxTvCategories: 10,
+    maxTvProductsPerCategory: 8,
+    preserveSections: true,
+  });
+  const style = analyzeReferenceStyle({
+    sourceUrl: urlStr.slice(0, 300),
+    notes: styleNotes,
+    productCount: formatted.productCount,
+    currentDisplayCount: displayCount,
+  });
+  const resolvedTemplate = style.template === 'default' ? formatted.brandStyle.template : style.template;
+  const styleColors = getImportedTemplateStyle(resolvedTemplate);
+  const styleProfile = {
+    ...style.styleProfile,
+    template: resolvedTemplate,
+    summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
+  };
+  const importPayload: MenuImportPayload = {
+    dispensaryName: formatted.dispensaryName,
+    logo: formatted.logo,
+    categories: formatted.categories,
+    productCount: formatted.productCount,
+    displayCount: style.displayCount,
+    layout: style.layout,
+    layoutMode: style.layoutMode,
+    fontSize: style.fontSize,
+    showImages: style.showImages,
+    showDescription: style.showDescription,
+    showBrand: style.showBrand,
+    showStrain: style.showStrain,
+    showPromos: style.showPromos,
+    theme: formatted.layout.theme,
+    template: resolvedTemplate,
+    primaryColor: styleColors.primaryColor,
+    secondaryColor: styleColors.secondaryColor,
+    styleProfile,
+    showLogo: true,
+    tvDemo: raw.demo === true,
+  };
+
+  await report?.({
+    stage: 3,
+    progress: 78,
+    message: `Bundling imported images and preparing ${formatted.categories.length} TV categories.`,
+    productCount: formatted.productCount,
+    categoryCount: formatted.categories.length,
+    categories: summarizeImportCategories(formatted.categories),
+    styleProfile,
+  });
+
+  const bundled = await bundleImportedImages(importPayload, env, accountId);
+  const bundledPayload = bundled.config as MenuImportPayload;
+  const warnings = [...(raw.warnings || []), ...formatted.warnings, ...bundled.warnings];
+
+  return {
+    raw,
+    bundledPayload,
+    warnings,
+    responseBody: {
+      success: true,
+      ...bundledPayload,
+      source: raw.source,
+      apiUsed: raw.apiUsed,
+      apiError: raw.apiError,
+      demo: raw.demo,
+      warnings,
+    },
+  };
+}
+
+async function runMenuImportJob(params: {
+  env: Env;
+  accountId: string;
+  sessionId: string;
+  jobId: string;
+  urlStr: string;
+  styleNotes: string;
+  displayCount: number;
+  startedAt: string;
+}): Promise<void> {
+  const debug: string[] = [];
+  const update = async (patch: Partial<ImportJobStatus> & { message: string; progress: number; stage: number }) => {
+    const line = `${new Date().toISOString()} ${patch.message}`;
+    debug.push(line);
+    await setSessionImportJob(params.env, params.sessionId, params.accountId, importJobStatus({
+      id: params.jobId,
+      status: patch.status || 'running',
+      stage: patch.stage,
+      progress: patch.progress,
+      message: patch.message,
+      sourceUrl: params.urlStr,
+      startedAt: params.startedAt,
+      productCount: patch.productCount,
+      categoryCount: patch.categoryCount,
+      photoCount: patch.photoCount,
+      source: patch.source,
+      categories: patch.categories,
+      warnings: patch.warnings,
+      debug: debug.slice(-12),
+      error: patch.error,
+      styleProfile: patch.styleProfile,
+      completedAt: patch.completedAt,
+    }));
+  };
+
+  try {
+    await update({ stage: 1, progress: 8, message: 'Import job queued. Claiming the display session.' });
+    const built = await buildMenuImport(params.env, params.accountId, params.urlStr, params.styleNotes, params.displayCount, update);
+    await update({
+      stage: 4,
+      progress: 92,
+      message: 'Syncing the formatted TV menu to this display session.',
+      productCount: built.bundledPayload.productCount,
+      categoryCount: built.bundledPayload.categories.length,
+      photoCount: countImportedPhotos(built.bundledPayload.categories),
+      source: built.raw.source,
+      categories: summarizeImportCategories(built.bundledPayload.categories),
+      warnings: built.warnings,
+      styleProfile: built.bundledPayload.styleProfile,
+    });
+
+    const id = params.env.SESSION.idFromName(params.sessionId);
+    const session = params.env.SESSION.get(id);
+    const importRes = await session.fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': params.accountId },
+      body: JSON.stringify(built.bundledPayload),
+    }));
+    if (!importRes.ok) {
+      const details = await importRes.text().catch(() => '');
+      throw new Error(`Session import failed (${importRes.status})${details ? `: ${details.slice(0, 200)}` : ''}`);
+    }
+    await addSessionToAccount(params.env, params.accountId, params.sessionId);
+    await update({
+      status: 'success',
+      stage: 5,
+      progress: 100,
+      message: `Imported ${built.bundledPayload.productCount} TV-ready products across ${built.bundledPayload.categories.length} categories.`,
+      productCount: built.bundledPayload.productCount,
+      categoryCount: built.bundledPayload.categories.length,
+      photoCount: countImportedPhotos(built.bundledPayload.categories),
+      source: built.raw.source,
+      categories: summarizeImportCategories(built.bundledPayload.categories),
+      warnings: built.warnings,
+      styleProfile: built.bundledPayload.styleProfile,
+      completedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Import failed';
+    console.error('Menu import job failed:', message);
+    await update({
+      status: 'error',
+      stage: 2,
+      progress: 100,
+      message,
+      error: message,
+      completedAt: new Date().toISOString(),
+    });
+  }
+}
+
 async function requireAuth(request: Request, env: Env): Promise<{ accountId: string; email: string } | null> {
   const tokenStr = getCookieValue(request, 'dubmenu_auth');
   if (!tokenStr || !env.AUTH_SECRET) return null;
@@ -150,6 +432,52 @@ function appUrl(env: Env, request: Request): string {
     return requestUrl.origin;
   }
   return env.APP_URL || requestUrl.origin;
+}
+
+async function fetchReferenceStyleText(sourceUrl: string): Promise<string> {
+  if (!sourceUrl) return '';
+  let parsed: URL;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch {
+    return '';
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+  const host = parsed.hostname.toLowerCase();
+  if (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    host.endsWith('.local') ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host)
+  ) {
+    return '';
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4500);
+  try {
+    const res = await fetch(parsed.toString(), {
+      headers: { Accept: 'text/html,text/plain;q=0.8,*/*;q=0.2', 'User-Agent': 'DubMenu style analyzer' },
+      signal: controller.signal,
+    });
+    if (!res.ok) return '';
+    const type = res.headers.get('content-type') || '';
+    if (!/text\/html|text\/plain|application\/xhtml\+xml/i.test(type)) return '';
+    const html = (await res.text()).slice(0, 120000);
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1200);
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function tvUrl(env: Env): string {
@@ -358,14 +686,22 @@ ${sections || '<p style="text-align:center;color:#666;">No in-stock products to 
 </html>`;
 }
 
+export function shouldRedirectToHttps(url: URL, requestHost: string, configuredAppUrl?: string): boolean {
+  const host = requestHost.toLowerCase();
+  const localConfiguredOrigin = /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(configuredAppUrl || '');
+  const localRequestHost = /^(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?$/i.test(host);
+  return url.protocol === 'http:' && !localConfiguredOrigin && !localRequestHost;
+}
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const requestHost = (request.headers.get('host') || url.host).toLowerCase();
 
     // Enforce HTTPS for all production hosts. Cloudflare passes http:// requests
     // through to the worker when Always Use HTTPS is not enabled; redirect them
     // with a permanent redirect so search engines index the secure URL.
-    if (url.protocol === 'http:' && !['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(url.hostname)) {
+    if (shouldRedirectToHttps(url, requestHost, env.APP_URL)) {
       url.protocol = 'https:';
       return new Response(null, { status: 301, headers: { Location: url.toString(), ...SECURITY_HEADERS } });
     }
@@ -982,15 +1318,75 @@ export default {
         const body = await request.json() as { sourceUrl?: string; notes?: string; productCount?: number; currentDisplayCount?: number };
         const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim().slice(0, 300) : '';
         const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) : '';
-        return jsonResponse(analyzeReferenceStyle({
+        const fetchedText = await fetchReferenceStyleText(sourceUrl);
+        const combinedNotes = [notes, fetchedText].filter(Boolean).join(' ').slice(0, 500);
+        const result = analyzeReferenceStyle({
           sourceUrl,
-          notes,
+          notes: combinedNotes,
           productCount: typeof body.productCount === 'number' ? body.productCount : 0,
           currentDisplayCount: typeof body.currentDisplayCount === 'number' ? body.currentDisplayCount : 1,
-        }));
+        });
+        if (fetchedText) {
+          result.styleProfile.keywords = Array.from(new Set(['fetched-url', ...result.styleProfile.keywords])).slice(0, 12);
+          result.styleProfile.summary = result.styleProfile.summary.replace('Applied ', 'Applied fetched URL style + ');
+        }
+        return jsonResponse(result);
       } catch {
         return jsonResponse({ error: 'Invalid style analysis request' }, 400);
       }
+    }
+
+    if (path === '/api/import/jobs' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account || !isSubscriptionActive(account)) {
+        return jsonResponse({ error: 'Active subscription required' }, 403);
+      }
+      try {
+        const body = await request.json() as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
+        const urlStr = (body.url || '').trim();
+        const sessionId = (body.session || '').trim();
+        if (!urlStr) return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
+        if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
+
+        const displayCount = Math.max(1, Math.min(4, typeof body.displayCount === 'number' ? Math.floor(body.displayCount) : 1));
+        const styleNotes = typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '';
+        const jobId = crypto.randomUUID();
+        const startedAt = new Date().toISOString();
+        await setSessionImportJob(env, sessionId, auth.accountId, importJobStatus({
+          id: jobId,
+          status: 'queued',
+          stage: 1,
+          progress: 4,
+          message: 'Import job queued. Preparing to read the live menu source.',
+          sourceUrl: urlStr,
+          startedAt,
+          debug: [`${startedAt} Import job queued for ${urlStr.slice(0, 160)}`],
+        }));
+
+        ctx.waitUntil(runMenuImportJob({ env, accountId: auth.accountId, sessionId, jobId, urlStr, styleNotes, displayCount, startedAt }));
+        return jsonResponse({ success: true, jobId, status: 'queued', statusUrl: `/api/import/jobs/${encodeURIComponent(jobId)}?session=${encodeURIComponent(sessionId)}` }, 202);
+      } catch {
+        return jsonResponse({ error: 'Invalid import job request' }, 400);
+      }
+    }
+
+    if (path.startsWith('/api/import/jobs/') && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account || !isSubscriptionActive(account)) {
+        return jsonResponse({ error: 'Active subscription required' }, 403);
+      }
+      const jobId = path.split('/')[4] || '';
+      const sessionId = url.searchParams.get('session') || '';
+      if (!jobId || !sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid import job request' }, 400);
+      const res = await getSessionImportJob(env, sessionId, auth.accountId);
+      const data = await res.json() as { job?: ImportJobStatus; error?: string };
+      if (!res.ok) return jsonResponse(data, res.status);
+      if (!data.job || data.job.id !== jobId) return jsonResponse({ error: 'Import job not found' }, 404);
+      return jsonResponse({ success: true, job: data.job });
     }
 
     if (path === '/api/scrape-dutchie' && request.method === 'POST') {
@@ -1003,80 +1399,22 @@ export default {
       try {
         const body = await request.json() as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
         const urlStr = (body.url || '').trim();
-        if (!urlStr) {
-          return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
-        }
+        if (!urlStr) return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
 
-        const raw = await resolveMenuSource(urlStr, {
-          DUTCHIE_API_KEY: env.DUTCHIE_API_KEY,
-          BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN,
-        });
-
-        const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo, {
-          tvOptimize: true,
-          maxTvCategories: 6,
-          maxTvProductsPerCategory: 8,
-        });
-        const style = analyzeReferenceStyle({
-          sourceUrl: urlStr.slice(0, 300),
-          notes: typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '',
-          productCount: formatted.productCount,
-          currentDisplayCount: typeof body.displayCount === 'number' ? body.displayCount : formatted.layout.displayCount,
-        });
-        const resolvedTemplate = style.template === 'default' ? formatted.brandStyle.template : style.template;
-        const styleColors = getImportedTemplateStyle(resolvedTemplate);
-        const styleProfile = {
-          ...style.styleProfile,
-          template: resolvedTemplate,
-          summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
-        };
-        const importPayload = {
-          dispensaryName: formatted.dispensaryName,
-          logo: formatted.logo,
-          categories: formatted.categories,
-          productCount: formatted.productCount,
-          displayCount: style.displayCount,
-          layout: style.layout,
-          layoutMode: style.layoutMode,
-          fontSize: style.fontSize,
-          showImages: style.showImages,
-          showDescription: style.showDescription,
-          showBrand: style.showBrand,
-          showStrain: style.showStrain,
-          showPromos: style.showPromos,
-          theme: formatted.layout.theme,
-          template: resolvedTemplate,
-          primaryColor: styleColors.primaryColor,
-          secondaryColor: styleColors.secondaryColor,
-          styleProfile,
-          showLogo: true,
-          tvDemo: raw.demo === true,
-        };
-
-        const bundled = await bundleImportedImages(importPayload, env, auth.accountId);
-        const bundledPayload = bundled.config;
-
-
+        const displayCount = Math.max(1, Math.min(4, typeof body.displayCount === 'number' ? Math.floor(body.displayCount) : 1));
+        const styleNotes = typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '';
+        const built = await buildMenuImport(env, auth.accountId, urlStr, styleNotes, displayCount);
         if (body.session && SESSION_ID_REGEX.test(body.session)) {
           const id = env.SESSION.idFromName(body.session);
           const session = env.SESSION.get(id);
           await session.fetch(new Request('https://internal/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
-            body: JSON.stringify(bundledPayload),
+            body: JSON.stringify(built.bundledPayload),
           }));
           await addSessionToAccount(env, auth.accountId, body.session);
         }
-
-        return jsonResponse({
-          success: true,
-          ...bundledPayload,
-          source: raw.source,
-          apiUsed: raw.apiUsed,
-          apiError: raw.apiError,
-          demo: raw.demo,
-          warnings: [...(raw.warnings || []), ...formatted.warnings, ...bundled.warnings],
-        });
+        return jsonResponse(built.responseBody);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Import failed';
         console.error('Menu import failed:', message);

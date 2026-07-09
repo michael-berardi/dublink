@@ -24,6 +24,12 @@ export function configPage(sessionId: string, origin: string): string {
     .card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:1rem;padding:1.1rem;margin-bottom:0.75rem;box-shadow:0 1px 0 rgba(255,255,255,0.04) inset;}
     .primary-card{background:linear-gradient(180deg,rgba(16,185,129,0.14),rgba(28,28,30,0.96));border-color:rgba(16,185,129,0.24);}
     .card-title{font-size:0.75rem;font-weight:760;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem;}
+    .card-title-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1rem;}
+    .card-title-row .card-title{margin-bottom:0;}
+    .text-action{appearance:none;background:var(--surface2);border:1px solid var(--border);border-radius:999px;color:var(--primary);cursor:pointer;font-family:inherit;font-size:0.75rem;font-weight:760;padding:0.4rem 0.65rem;white-space:nowrap;}
+    .text-action:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
+    .upload-row{display:flex;align-items:center;gap:0.5rem;}
+    .upload-row input{min-width:0;flex:1;}
     .field{margin-bottom:1rem;}
     .field:last-child{margin-bottom:0;}
     .field label{display:block;font-size:0.75rem;font-weight:600;color:var(--muted);margin-bottom:0.375rem;text-transform:uppercase;letter-spacing:0.04em;}
@@ -110,13 +116,14 @@ export function configPage(sessionId: string, origin: string): string {
     .screenset-tv-url{font-size:0.75rem;color:var(--muted);flex:1;word-break:break-all;}
     .screen-layout-select{background:var(--surface);border:1px solid var(--border);border-radius:0.45rem;color:var(--text);font-size:0.75rem;padding:0.45rem 0.5rem;max-width:8rem;}
     .helper{font-size:0.8125rem;color:var(--muted);line-height:1.45;margin-top:0.4rem;}
-    .import-status{font-size:0.875rem;color:var(--muted);margin-top:0.75rem;min-height:1.2rem;line-height:1.45;}
+    .import-status{font-size:0.875rem;color:var(--muted);margin-top:0.75rem;min-height:1.2rem;line-height:1.45;display:flex;align-items:center;gap:0.5rem;}
     .import-status.ok{color:var(--primary);}
     .import-status.err{color:var(--danger);}
+    .import-spinner{width:1rem;height:1rem;border-radius:999px;border:2px solid rgba(16,185,129,0.2);border-top-color:var(--primary);animation:spin 0.8s linear infinite;flex-shrink:0;}
     .import-progress{display:none;margin-top:0.875rem;border:1px solid var(--border);border-radius:0.75rem;background:var(--surface2);overflow:hidden;}
     .import-progress.active{display:block;}
-    .import-progress-bar{height:4px;background:rgba(16,185,129,0.18);}
-    .import-progress-fill{height:100%;width:0%;background:var(--primary);transition:width 0.45s ease;}
+    .import-progress-bar{height:5px;background:rgba(16,185,129,0.18);}
+    .import-progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--primary),#86efac);transition:width 0.45s ease;}
     .import-steps{display:grid;gap:0.45rem;padding:0.85rem;}
     .import-step{display:flex;align-items:center;gap:0.55rem;color:var(--muted);font-size:0.8125rem;}
     .import-step-dot{width:0.55rem;height:0.55rem;border-radius:999px;background:var(--border);flex-shrink:0;}
@@ -130,6 +137,10 @@ export function configPage(sessionId: string, origin: string): string {
     .import-result-stat strong{display:block;color:var(--text);font-size:1.15rem;line-height:1;}
     .import-result-stat span{display:block;color:var(--muted);font-size:0.72rem;margin-top:0.25rem;}
     .import-warning{font-size:0.8125rem;color:#fbbf24;line-height:1.4;}
+    .import-debug{margin-top:0.65rem;border-top:1px solid var(--border);padding-top:0.65rem;color:var(--muted);font-size:0.75rem;line-height:1.45;}
+    .import-debug summary{cursor:pointer;color:var(--text);font-weight:650;}
+    .import-debug ul{margin:0.5rem 0 0;padding-left:1rem;}
+    @keyframes spin{to{transform:rotate(360deg);}}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
     .skip-link{position:absolute;left:-9999px;top:0.5rem;z-index:200;background:var(--primary);color:#000;padding:0.5rem 1rem;border-radius:0.375rem;font-weight:700;font-size:0.875rem;}
     .skip-link:focus{left:0.5rem;}
@@ -322,7 +333,7 @@ export function configPage(sessionId: string, origin: string): string {
         </div>
         <div class="field">
           <label for="wizardDisplayCount">TV displays</label>
-          <select id="wizardDisplayCount"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select>
+          <select id="wizardDisplayCount" onchange="this.dataset.userSet='1';var target=document.getElementById('dutchieDisplayCount');if(target)target.value=this.value;"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select>
         </div>
         <button class="btn btn-primary" id="setupWizardBtn" type="submit" style="width:100%;">Build My TV Menu</button>
       </form>
@@ -363,7 +374,15 @@ export function configPage(sessionId: string, origin: string): string {
   <h2 class="card-title">Branding</h2>
   <div class="field"><label for="dispensaryName">Dispensary Name</label><input type="text" id="dispensaryName" placeholder="My Dispensary" oninput="debounceConfig('dispensaryName',this.value)"></div>
   <div class="grid-2">
-    <div class="field"><label for="logoUrl">Logo URL</label><input type="url" id="logoUrl" placeholder="https://..." oninput="debounceConfig('logo',this.value)"></div>
+    <div class="field">
+      <label for="logoUrl">Logo</label>
+      <div class="upload-row">
+        <input type="url" id="logoUrl" placeholder="/api/uploads/..." oninput="debounceConfig('logo',this.value)">
+        <label for="logoFile" class="lib-btn">Upload</label>
+        <input type="file" id="logoFile" accept="image/*" onchange="uploadLogoImage(this)" style="display:none;">
+      </div>
+      <div class="helper">Upload stores the logo in DubMenu and sends it to the TV immediately.</div>
+    </div>
     <div class="field"><label for="primaryColor">Accent Color</label><input type="color" id="primaryColor" value="#10b981" onchange="debounceConfig('primaryColor',this.value)"></div>
   </div>
   <div class="actions" style="margin-top:0;">
@@ -383,7 +402,7 @@ export function configPage(sessionId: string, origin: string): string {
       <div class="helper">The wizard imports products, scans store title/logo, maps categories, chooses a TV-safe visual theme, and picks the strongest layout for the display wall.</div>
     </div>
     <div class="field"><label for="dutchieStyleNotes">Visual direction</label><textarea id="dutchieStyleNotes" rows="2" placeholder="Example: dense green TV price board, daily deals rail, no photos"></textarea></div>
-    <div class="field"><label for="dutchieDisplayCount">TV displays</label><select id="dutchieDisplayCount"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select></div>
+    <div class="field"><label for="dutchieDisplayCount">TV displays</label><select id="dutchieDisplayCount" onchange="this.dataset.userSet='1'"><option value="1">1 display</option><option value="2">2 displays</option><option value="3">3 displays</option><option value="4">4 displays</option></select></div>
     <button class="btn btn-primary" id="dutchieImportBtn" type="submit" style="width:100%;">Build TV Menu</button>
   </form>
   <div class="import-status" id="dutchieStatus" aria-live="polite"></div>
@@ -472,7 +491,7 @@ export function configPage(sessionId: string, origin: string): string {
   <h2 class="card-title">Layout</h2>
   <div class="field">
     <label for="layout">Default Layout</label>
-    <select id="layout" onchange="debounceConfig('layout',this.value)">
+    <select id="layout" onchange="sendConfig('layout',this.value)">
       <option value="auto">Auto (grid)</option>
       <option value="grid">Grid</option>
       <option value="list">Price List</option>
@@ -486,15 +505,15 @@ export function configPage(sessionId: string, origin: string): string {
   </div>
   <div class="grid-2">
     <div class="field"><label for="currency">Currency</label><input type="text" id="currency" value="$" maxlength="3" onchange="debounceConfig('currency',this.value)"></div>
-    <div class="field"><label for="fontSize">Text Size</label><select id="fontSize" onchange="debounceConfig('fontSize',this.value)"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+    <div class="field"><label for="fontSize">Text Size</label><select id="fontSize" onchange="sendConfig('fontSize',this.value)"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
   </div>
   <div class="toggle-row"><span id="lbl-showStrain">Show Strain Type</span><button type="button" class="switch" id="showStrain" role="switch" aria-checked="false" aria-labelledby="lbl-showStrain" onclick="toggleSwitch(this,'showStrain')"></button></div>
   <div class="toggle-row"><span id="lbl-showBrandWeight">Show Brand & Weight</span><button type="button" class="switch" id="showBrandWeight" role="switch" aria-checked="false" aria-labelledby="lbl-showBrandWeight" onclick="toggleSwitch(this);updateBrandWeight()"></button></div>
   <div class="toggle-row"><span id="lbl-showImages">Show Product Images</span><button type="button" class="switch" id="showImages" role="switch" aria-checked="false" aria-labelledby="lbl-showImages" onclick="toggleSwitch(this,'showImages')"></button></div>
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
-  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Scroll Menu</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('scrollSpeedField').style.display=this.classList.contains('on')?'block':'none'"></button></div>
+  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Scroll Menu</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('scrollSpeedField').style.display=this.classList.contains('on')?'block':'none';showToast(this.classList.contains('on')?'Auto-scroll on':'Auto-scroll off')"></button></div>
   <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Scroll Speed</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
-  <div class="field"><label for="customFont">Custom Font (Google Fonts)</label><input type="text" id="customFont" placeholder="e.g. Inter, Poppins, Oswald" oninput="debounceConfig('customFont',this.value)"></div>
+  <div class="field"><label for="customFont">Custom Font Style</label><input type="text" id="customFont" placeholder="e.g. bold serif, condensed, mono" oninput="debounceConfig('customFont',this.value)"><div class="helper">Supports style cues like bold serif, mono, slab serif, or condensed.</div></div>
 </div>
 <div class="card">
   <h2 class="card-title">Template Intelligence</h2>
@@ -532,7 +551,7 @@ export function configPage(sessionId: string, origin: string): string {
 </div>
 
 <div class="card">
-  <h2 class="card-title">Specials Section</h2>
+  <div class="card-title-row"><h2 class="card-title">Specials Section</h2><button class="text-action" type="button" onclick="ensureSpecialsOpen(event)">Open / Add</button></div>
   <div id="specialsList"></div>
   <button class="btn btn-secondary btn-sm" type="button" style="margin-top:0.5rem;" onclick="addSpecial()">+ Add Special</button>
   <div style="font-size:0.75rem;color:var(--muted);margin-top:0.5rem;">These display as a dedicated TV category before products. Use them for brand promos, BOGO offers, staff picks, and non-product discounts.</div>
@@ -832,6 +851,16 @@ function renderSpecials(){
 function saveSpecials(){
   sendConfig('specials',config.specials||[]);
 }
+function ensureSpecialsOpen(ev){
+  if(ev&&ev.stopPropagation)ev.stopPropagation();
+  if(!config.specials||!config.specials.length){
+    addSpecial();
+  }
+  setTimeout(function(){
+    var first=document.querySelector('#specialsList .sp-title');
+    if(first){first.focus();first.scrollIntoView({block:'center',behavior:'smooth'});}
+  },0);
+}
 function addSpecial(){
   if(!config.specials)config.specials=[];
   config.specials.push({id:Date.now().toString(),title:'',description:'',brand:'',image:'',active:true});
@@ -872,7 +901,7 @@ function updateSetupWizard(){
   wizard.classList.toggle('active',need);
   document.body.classList.toggle('wizard-body-lock',need);
   var display=document.getElementById('wizardDisplayCount');
-  if(display && config && typeof config.displayCount==='number')display.value=String(Math.max(1,Math.min(4,config.displayCount)));
+  if(display && config && typeof config.displayCount==='number' && display.dataset.userSet!=='1')display.value=String(Math.max(1,Math.min(4,config.displayCount)));
   if(!need)renderSetupWizardQuality();
 }
 async function runSetupWizard(){
@@ -911,6 +940,11 @@ function resetDutchieImportUi(){
     step.classList.remove('active','done');
   });
 }
+function setImportStatus(el,message,state,loading){
+  if(!el)return;
+  el.className='import-status '+(state||'');
+  el.innerHTML=(loading?'<span class="import-spinner" aria-hidden="true"></span>':'')+'<span>'+escapeHtml(message||'')+'</span>';
+}
 function setDutchieImportStage(stage, pct){
   var progress=document.getElementById('dutchieProgress');
   var fill=document.getElementById('dutchieProgressFill');
@@ -930,9 +964,9 @@ function imageCountFromImport(data){
 function renderDutchieImportResults(data){
   var results=document.getElementById('dutchieResults');
   if(!results)return;
-  var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:0);},0));
-  var categoryCount=(data.categories||[]).length;
-  var imageCount=imageCountFromImport(data);
+  var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:(c.count||0));},0));
+  var categoryCount=data.categoryCount||((data.categories||[]).length);
+  var imageCount=data.photoCount||imageCountFromImport(data);
   var warnings=(data.warnings||[]).filter(Boolean);
   var sourceLabel=data.source?String(data.source).replace(/-/g,' '):'menu source';
   var warningHtml='';
@@ -942,12 +976,76 @@ function renderDutchieImportResults(data){
   if(warnings.length){
     warningHtml+='<div class="import-warning">'+escapeHtml(warnings[0])+'</div>';
   }
+  var debug=(data.debug||[]).filter(Boolean);
+  var debugHtml=debug.length?'<details class="import-debug"><summary>Import debug log</summary><ul>'+debug.map(function(line){return '<li>'+escapeHtml(line)+'</li>';}).join('')+'</ul></details>':'';
   results.innerHTML='<div class="import-result-grid">'+
     '<div class="import-result-stat"><strong>'+count+'</strong><span>products</span></div>'+
     '<div class="import-result-stat"><strong>'+categoryCount+'</strong><span>categories</span></div>'+
     '<div class="import-result-stat"><strong>'+imageCount+'</strong><span>photos</span></div>'+
-    '</div><div class="helper">Source: '+escapeHtml(sourceLabel)+'. Product photos are used when imported; missing-photo products render as clean text rows, not icons.</div>'+warningHtml;
+    '</div><div class="helper">Source: '+escapeHtml(sourceLabel)+'. Product photos are used when imported; missing-photo products render as clean text rows, not icons.</div>'+warningHtml+debugHtml;
   results.className='import-results active';
+}
+async function readImportJob(statusUrl){
+  var res=await fetch(statusUrl,{method:'GET',headers:{'Accept':'application/json'}});
+  var data={};
+  try{data=await res.json();}catch{}
+  if(!res.ok||!data.success)throw new Error(data.error||'Could not read import job status.');
+  return data.job;
+}
+async function pollImportJob(statusUrl,onUpdate){
+  var started=Date.now();
+  var lastSignature='';
+  var lastChange=Date.now();
+  while(Date.now()-started<120000){
+    var job=await readImportJob(statusUrl);
+    var signature=[job.status,job.stage,job.progress,job.updatedAt,job.message].join('|');
+    if(signature!==lastSignature){lastSignature=signature;lastChange=Date.now();}
+    onUpdate(job);
+    if(job.status==='success')return job;
+    if(job.status==='error')throw new Error(job.error||job.message||'Import failed');
+    if(Date.now()-lastChange>60000)throw new Error('Import job stalled while scanning the website.');
+    var sleep=Promise.withResolvers();setTimeout(sleep.resolve,1200);await sleep.promise;
+  }
+  throw new Error('Import timed out after 2 minutes. Trying the direct importer.');
+}
+
+async function runDirectMenuImport(payload,onUpdate){
+  onUpdate({status:'running',stage:2,progress:35,message:'Import job stalled; running the direct website importer now.'});
+  var controller=new AbortController();
+  var timer=setTimeout(function(){controller.abort();},240000);
+  try{
+    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
+    var data={};
+    try{data=await res.json();}catch{}
+    if(!res.ok||!data.success)throw new Error(data.error||'Direct import failed');
+    var categories=Array.isArray(data.categories)?data.categories:[];
+    var count=typeof data.productCount==='number'?data.productCount:categories.reduce(function(total,cat){return total+((cat.products||[]).length);},0);
+    return {
+      status:'success',
+      stage:5,
+      progress:100,
+      message:'Imported '+count+' TV-ready products across '+categories.length+' categories.',
+      productCount:count,
+      categoryCount:categories.length,
+      photoCount:categories.reduce(function(total,cat){return total+((cat.products||[]).filter(function(p){return !!p.image;}).length);},0),
+      source:data.source||'menu source',
+      categories:categories.map(function(cat){return {name:cat.name||'Untitled',count:(cat.products||[]).length};}),
+      warnings:data.warnings||[],
+      styleProfile:data.styleProfile,
+      completedAt:new Date().toISOString()
+    };
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function finishMenuImport(finalJob,status){
+  setDutchieImportStage(5,100);
+  setImportStatus(status,'Imported '+(finalJob.productCount||0)+' products across '+(finalJob.categoryCount||0)+' categories. Open the TV preview to verify the synced board.','ok',false);
+  renderDutchieImportResults(finalJob);
+  showToast('Menu imported');
+  renderSetupWizardQuality(finalJob);
+  updateSetupWizard();
 }
 
 async function importDutchie(){
@@ -957,8 +1055,7 @@ async function importDutchie(){
   // Read the value directly from the input element so iOS autofill/paste is captured.
   var rawUrl=(input && input.value || '').trim();
   if(!rawUrl){
-    status.textContent='Paste a menu URL or store slug first.';
-    status.className='import-status err';
+    setImportStatus(status,'Paste a menu URL or store slug first.','err',false);
     if(input) input.focus();
     return false;
   }
@@ -969,53 +1066,50 @@ async function importDutchie(){
   }
   if(input) input.value=url;
   var isValidUrl=false;
-  try{ isValidUrl=!!new URL(url); }catch(e){}
+  try{ isValidUrl=!!new URL(url); }catch{}
   if(!isSlug && !isValidUrl){
-    status.textContent='Enter a valid URL, Dutchie link, or store slug.';
-    status.className='import-status err';
+    setImportStatus(status,'Enter a valid URL, Dutchie link, or store slug.','err',false);
     return false;
   }
   resetDutchieImportUi();
   btn.disabled=true;
-  btn.textContent='Importing...';
-  status.textContent='Starting import. Keep this tab open while DubMenu reads the menu.';
-  status.className='import-status';
-  setDutchieImportStage(1,18);
-  var stageTimer=setTimeout(function(){setDutchieImportStage(2,44);status.textContent='Finding Dutchie data or browser-rendered product cards...';},900);
-  var syncTimer=setTimeout(function(){setDutchieImportStage(3,72);status.textContent='Formatting products, photos, pricing, and TV layout...';},4200);
-  var controller=new AbortController();
-  var importTimeout=setTimeout(function(){controller.abort();},90000);
+  btn.textContent='Import running...';
+  setImportStatus(status,'Starting an import job. Keep this tab open; progress will update here.','',true);
+  setDutchieImportStage(1,8);
   var styleNotesEl=document.getElementById('dutchieStyleNotes');
   var displayCountEl=document.getElementById('dutchieDisplayCount');
   var displayCount=parseInt(displayCountEl&&displayCountEl.value||'1',10);
   var payload={url:url,session:SESSION_ID,styleNotes:(styleNotesEl&&styleNotesEl.value||'').trim(),displayCount:Math.max(1,Math.min(4,isNaN(displayCount)?1:displayCount))};
   try{
-    var res=await fetch('/api/scrape-dutchie',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:controller.signal});
-    var data={};
-    try{data=await res.json();}catch(parseErr){throw new Error('Import returned an unreadable response. Try a Dutchie store URL or store slug.');}
-    if(!res.ok||!data.success)throw new Error(data.error||'Import failed');
-    setDutchieImportStage(4,92);
-    var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:0);},0));
-    var categoryCount=(data.categories||[]).length;
-    status.textContent='Imported '+count+' products across '+categoryCount+' categories. Open the TV preview to verify the synced board.';
-    status.className='import-status ok'+(data.demo?' err':'');
-    renderDutchieImportResults(data);
-    setDutchieImportStage(5,100);
-    showToast(data.demo?'Demo menu imported':'Menu imported');
-    renderSetupWizardQuality(data);
-    updateSetupWizard();
+    var startRes=await fetch('/api/import/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var startData={};
+    try{startData=await startRes.json();}catch{}
+    if(!startRes.ok||!startData.success)throw new Error(startData.error||'Could not start import job');
+    var finalJob=await pollImportJob(startData.statusUrl,function(job){
+      setDutchieImportStage(job.stage||1,job.progress||8);
+      setImportStatus(status,job.message||'Import running...','',job.status!=='success'&&job.status!=='error');
+      renderDutchieImportResults(job);
+    });
+    finishMenuImport(finalJob,status);
     return true;
   }catch(err){
-    status.textContent=(err&&err.name==='AbortError')?'Import timed out. Try the store slug, or use a smaller source menu if this Dutchie page is very large.':(err&&err.message?err.message:'Import failed');
-    status.className='import-status err';
-    setDutchieImportStage(2,100);
-    showToast('Menu import failed');
-    return false;
-
+    try{
+      var fallbackJob=await runDirectMenuImport(payload,function(job){
+        setDutchieImportStage(job.stage||2,job.progress||35);
+        setImportStatus(status,job.message||'Running direct importer...','',true);
+        renderDutchieImportResults(job);
+      });
+      finishMenuImport(fallbackJob,status);
+      return true;
+    }catch(fallbackErr){
+      var primaryMessage=err&&err.message?err.message:'Import failed';
+      var fallbackMessage=fallbackErr&&fallbackErr.message?fallbackErr.message:'Direct import failed';
+      setImportStatus(status,primaryMessage+' '+fallbackMessage,'err',false);
+      setDutchieImportStage(2,100);
+      showToast('Menu import failed');
+      return false;
+    }
   }finally{
-    clearTimeout(stageTimer);
-    clearTimeout(syncTimer);
-    clearTimeout(importTimeout);
     btn.disabled=false;
     btn.textContent='Build TV Menu';
   }
@@ -1136,7 +1230,7 @@ function render(){
   renderStyleProfile();
   updateSetupWizard();
   var wizardDisplays=document.getElementById('dutchieDisplayCount');
-  if(wizardDisplays && typeof config.displayCount==='number')wizardDisplays.value=String(Math.max(1,Math.min(4,config.displayCount)));
+  if(wizardDisplays && typeof config.displayCount==='number' && wizardDisplays.dataset.userSet!=='1')wizardDisplays.value=String(Math.max(1,Math.min(4,config.displayCount)));
   document.getElementById('layout').value=config.layout||'auto';
   document.getElementById('promoBannerText').value=config.promoBanner?(config.promoBanner.text||''):'';
   document.getElementById('promoBannerBg').value=config.promoBanner?(config.promoBanner.bgColor||'#10b981'):'#10b981';
@@ -1255,6 +1349,25 @@ function uploadProductImage(input,cid,pid){
       showToast('Image uploaded & saved');
     })
     .catch(function(err){showToast(err.message||'Upload failed');});
+}
+function uploadLogoImage(input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+  var fd=new FormData();
+  fd.append('file',file);
+  fetch('/api/upload',{method:'POST',body:fd})
+    .then(function(r){if(!r.ok)throw new Error('Logo upload failed');return r.json();})
+    .then(function(data){
+      var url=data.url;
+      if(!url)throw new Error('Logo upload failed');
+      var logoField=document.getElementById('logoUrl');
+      logoField.value=url;
+      var aid=extractAccountId(url);if(aid)ACCOUNT_ID=aid;
+      sendConfig('logo',url);
+      showToast('Logo uploaded & sent to TV');
+      input.value='';
+    })
+    .catch(function(err){showToast(err.message||'Logo upload failed');});
 }
 function renderCategories(){
   var list=document.getElementById('categoryList');
