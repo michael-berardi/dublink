@@ -44,6 +44,7 @@ export interface Env extends SessionEnv {
   STATS?: DurableObjectBinding;
   DOMAINS?: DurableObjectBinding;
   UPLOADS?: R2Bucket;
+  ASSETS?: Fetcher;
   DUBHAVEN_AUTH_URL?: string;
   DUBHAVEN_ACCOUNT_SECRET?: string;
   DUBHAVEN_ISSUER?: string;
@@ -791,6 +792,10 @@ export default {
       return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0a0f0d"/><rect x="10" y="12" width="44" height="32" rx="5" fill="none" stroke="#10b981" stroke-width="5"/><path d="M22 53h20M32 44v9" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round"/></svg>', {
         headers: { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400', ...SECURITY_HEADERS },
       });
+    }
+
+    if (path === '/og-image.png' && env.ASSETS) {
+      return env.ASSETS.fetch(request);
     }
 
     // Custom domains only serve verified mappings. The well-known challenge

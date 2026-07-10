@@ -8,6 +8,10 @@ routes = [
   { pattern = "tv.dubmenu.com", custom_domain = true },
 ]
 
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [vars]
 STRIPE_PRICE_ID = "price_1ToXsZIS4hxpOM6xRO0sMxTw"
 APP_URL = "https://dubmenu.com"

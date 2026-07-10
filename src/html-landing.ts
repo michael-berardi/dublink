@@ -22,31 +22,31 @@ export function landingPage(origin: string): string {
   <meta property="og:title" content="DubMenu — Digital Menu Boards for Cannabis Dispensaries">
   <meta property="og:description" content="Turn any TV into a real-time cannabis menu board. Scan to configure from your phone. No app, no install, no hassle.">
   <meta property="og:url" content="${safeOrigin}/">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image" content="${safeOrigin}/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="DubMenu digital menu boards for dispensaries">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="DubMenu — Digital Menu Boards for Cannabis Dispensaries">
   <meta name="twitter:description" content="Turn any TV into a real-time cannabis menu board. Scan to configure from your phone. No app, no install, no hassle.">
+  <meta name="twitter:image" content="${safeOrigin}/og-image.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
+    "@type": "Organization",
     "name": "DubMenu",
-    "description": "Digital menu boards for cannabis dispensaries. Turn any TV into a real-time menu board controlled from your phone.",
-    "applicationCategory": "BusinessApplication",
-    "operatingSystem": "Any",
-    "offers": {
-      "@type": "Offer",
-      "price": "99",
-      "priceCurrency": "USD",
-      "priceValidUntil": "2027-12-31",
-      "availability": "https://schema.org/InStock"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "DubHaven",
-      "url": "https://dubhaven.com"
+    "url": "${safeOrigin}/",
+    "logo": "${safeOrigin}/og-image.png",
+    "sameAs": [
+      "https://dubhaven.com"
+    ],
+    "mainEntityOfPage": {
+      "@type": "WebSite",
+      "name": "DubMenu",
+      "url": "${safeOrigin}/"
     }
   }
   </script>
