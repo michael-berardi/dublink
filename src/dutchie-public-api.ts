@@ -1,7 +1,14 @@
 import type { ScrapedCategory, ScrapedProduct } from './dutchie-scraper';
 
 const DUTCHIE_GRAPHQL_URL = 'https://dutchie.com/graphql';
-const DUTCHIE_API2_GRAPHQL_URL = 'https://dutchie.com/api-2/graphql';
+const DUTCHIE_PRODUCTS_GRAPHQL_URL = 'https://dutchie.com/api-4/graphql';
+const DUTCHIE_PRODUCTS_PER_PAGE = 100;
+const DUTCHIE_MAX_PRODUCT_PAGES = 20;
+
+export interface DutchiePublicBrandStyle {
+  primaryColor?: string;
+  secondaryColor?: string;
+}
 
 interface DutchiePublicDispensary {
   id?: string;
@@ -21,23 +28,46 @@ interface DutchiePublicDispensary {
     category?: string;
     label?: string;
     linkLabel?: string;
-    products?: DutchiePublicProduct[];
+    products?: string[];
   }>;
+  webCustomizationSettingsV2?: {
+    colors?: {
+      buttonsLinks?: string;
+      navBar?: string;
+      staffPickTag?: string;
+      discountTag?: string;
+    };
+    fonts?: {
+      body?: string;
+      heading?: string;
+    };
+  };
 }
+
+type DutchiePotency = { value?: number; unit?: string; range?: number[] } | number | string;
 
 interface DutchiePublicProduct {
   id?: string;
   name?: string;
-  brand?: string;
+  Name?: string;
+  brand?: string | { name?: string; imageUrl?: string };
+  brandName?: string;
   category?: string;
   type?: string;
+  subcategory?: string;
   strainType?: string;
-  thc?: { value?: number; unit?: string } | number | string;
-  cbd?: { value?: number; unit?: string } | number | string;
+  thc?: DutchiePotency;
+  cbd?: DutchiePotency;
+  THC?: DutchiePotency;
+  CBD?: DutchiePotency;
+  THCContent?: DutchiePotency;
+  CBDContent?: DutchiePotency;
   description?: string;
   image?: string;
+  Image?: string;
   images?: Array<{ url?: string; active?: boolean }>;
   recPrices?: number[];
+  recSpecialPrices?: number[];
   Prices?: number[];
   prices?: number[];
   medicalPrices?: number[];
@@ -48,25 +78,27 @@ interface DutchiePublicProduct {
   originalPrice?: number;
   retailPrice?: number;
   listPrice?: number;
-  special?: boolean;
+  special?: boolean | string;
   specials?: Array<{ name?: string; title?: string; label?: string; description?: string }>;
   discount?: string | number | { label?: string; description?: string; name?: string };
   deal?: string | { label?: string; description?: string; name?: string };
+  collectionCardBadge?: { title?: string };
+  featured?: { current?: boolean };
+  Status?: string;
   Options?: string[];
   options?: string[];
   POSMetaData?: {
     canonicalCategory?: string;
     canonicalBrandName?: string;
     canonicalImgUrl?: string;
-    children?: Array<{ recPrice?: number; price?: number; option?: string }>;
+    children?: Array<{ recPrice?: number; price?: number; option?: string; quantityAvailable?: number }>;
   };
   posMetadata?: {
     canonicalCategory?: string;
     canonicalBrandName?: string;
     canonicalImgUrl?: string;
-    children?: Array<{ recPrice?: number; price?: number; option?: string }>;
+    children?: Array<{ recPrice?: number; price?: number; option?: string; quantityAvailable?: number }>;
   };
-  // V2 public API fields observed in the browser.
   cannabinoids?: Array<{ name?: string; value?: number; unit?: string }>;
   weights?: Array<{ value?: number; unit?: string; price?: number }>;
   variants?: Array<{ option?: string; recPrice?: number; price?: number }>;
@@ -91,9 +123,13 @@ function potencyValue(content: unknown): string | undefined {
   if (typeof content === 'string') return content;
   if (typeof content === 'number') return `${content}%`;
   if (!isRecord(content)) return undefined;
-  const value = content.value;
+  const range = Array.isArray(content.range) ? content.range : [];
+  const value = typeof content.value === 'number'
+    ? content.value
+    : range.find((item): item is number => typeof item === 'number');
   if (typeof value !== 'number') return undefined;
-  return content.unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
+  const unit = String(content.unit || '').toUpperCase();
+  return unit.includes('MILLIGRAM') ? `${value}mg` : `${value}%`;
 }
 
 function cleanImageUrl(url: string | undefined): string | undefined {
@@ -109,6 +145,12 @@ function cleanImageUrl(url: string | undefined): string | undefined {
   }
 }
 
+function normalizeHexColor(value: string | undefined): string | undefined {
+  const color = value?.trim().toLowerCase();
+  if (!color || !/^#[0-9a-f]{6}$/.test(color)) return undefined;
+  return color;
+}
+
 function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
   const lower = text.toLowerCase();
   if (lower.includes('indica')) return 'indica';
@@ -120,15 +162,33 @@ function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
 function normalizeCategory(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const lower = value.toLowerCase();
-  if (lower.includes('flower')) return 'Flower';
-  if (lower.includes('pre-roll') || lower.includes('preroll')) return 'Pre-Rolls';
-  if (lower.includes('vape') || lower.includes('vaporizer')) return 'Vapes';
+  if (lower.includes('flower') || lower.includes('clone') || lower.includes('seed')) return 'Flower';
+  if (lower.includes('pre-roll') || lower.includes('preroll') || lower.includes('joint')) return 'Pre-Rolls';
+  if (lower.includes('vape') || lower.includes('vaporizer') || lower.includes('inhaler')) return 'Vapes';
   if (lower.includes('concentrate') || lower.includes('extract')) return 'Concentrates';
-  if (lower.includes('edible')) return 'Edibles';
-  if (lower.includes('tincture')) return 'Tinctures';
-  if (lower.includes('topical')) return 'Topicals';
+  if (
+    lower.includes('edible') ||
+    lower.includes('beverage') ||
+    lower.includes('drink') ||
+    lower.includes('capsule') ||
+    lower.includes('tablet') ||
+    lower.includes('pill') ||
+    lower.includes('oral')
+  ) return 'Edibles';
+  if (lower.includes('tincture') || lower.includes('sublingual')) return 'Tinctures';
+  if (
+    lower.includes('topical') ||
+    lower.includes('transdermal') ||
+    lower.includes('suppository') ||
+    lower.includes('patch')
+  ) return 'Topicals';
   if (lower === 'cbd' || lower.includes('cbd')) return 'CBD';
-  if (lower.includes('accessor')) return 'Accessories';
+  if (
+    lower.includes('accessor') ||
+    lower.includes('apparel') ||
+    lower.includes('merch') ||
+    lower.includes('gear')
+  ) return 'Accessories';
   return undefined;
 }
 
@@ -165,8 +225,40 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
+function decodeHtmlEntities(value: string): string {
+  const named: Record<string, string> = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"',
+  };
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) => {
+      const codePoint = Number.parseInt(hex, 16);
+      return Number.isFinite(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
+    })
+    .replace(/&#(\d+);/g, (match, decimal: string) => {
+      const codePoint = Number.parseInt(decimal, 10);
+      return Number.isFinite(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
+    })
+    .replace(/&([a-z]+);/gi, (match, name: string) => named[name.toLowerCase()] ?? match);
+}
+
 function cleanDescription(value: string | undefined): string | undefined {
-  const description = value?.replace(/\s+/g, ' ').trim().slice(0, 500);
+  if (!value) return undefined;
+  const description = decodeHtmlEntities(
+    value
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, ' ')
+      .replace(/<\/(?:p|li|div|h[1-6])>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500);
   return description || undefined;
 }
 
@@ -179,31 +271,40 @@ function formatTierPrice(value: number): string {
 function tierLabel(value: unknown): string | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const raw = String(value).trim();
-  if (!raw) return undefined;
+  if (!raw || /^(?:n\/?a|none|default|unit)$/i.test(raw)) return undefined;
   return cleanWeight(raw) || raw;
 }
 
 function productPriceTiers(product: DutchiePublicProduct): ImportedPriceTier[] | undefined {
-  const tiers: ImportedPriceTier[] = [];
-  const seen = new Set<string>();
+  const tierByLabel = new Map<string, { label: string; price: number }>();
   const addTier = (labelValue: unknown, priceValue: unknown) => {
     const price = firstNumber(priceValue);
     const label = tierLabel(labelValue);
     if (!label || !price) return;
-    const key = `${label.toLowerCase()}|${price}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    tiers.push({ label, price: formatTierPrice(price) });
+    const key = label.toLowerCase();
+    const existing = tierByLabel.get(key);
+    if (!existing || price < existing.price) {
+      tierByLabel.set(key, { label, price });
+    }
   };
 
-  const labels = product.options || product.Options || product.weights?.map((w) => `${w.value}${w.unit || 'g'}`) || [];
-  const prices = product.recPrices || product.prices || product.Prices || product.medicalPrices || [];
-  prices.forEach((price, index) => addTier(labels[index], price));
+  const labels = product.options || product.Options || product.weights?.map((weight) => `${weight.value}${weight.unit || 'g'}`) || [];
+  const basePrices = product.recPrices || product.prices || product.Prices || product.medicalPrices || [];
+  const specialPrices = product.recSpecialPrices || [];
+  basePrices.forEach((price, index) => {
+    const specialPrice = firstNumber(specialPrices[index]);
+    addTier(labels[index], specialPrice && specialPrice < price ? specialPrice : price);
+  });
   product.weights?.forEach((weight) => addTier(`${weight.value}${weight.unit || 'g'}`, weight.price));
   product.variants?.forEach((variant) => addTier(variant.option, variant.recPrice || variant.price));
   product.POSMetaData?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
   product.posMetadata?.children?.forEach((child) => addTier(child.option, child.recPrice || child.price));
-  return tiers.length > 1 ? tiers : undefined;
+
+  if (tierByLabel.size <= 1) return undefined;
+  return Array.from(tierByLabel.values(), ({ label, price }) => ({
+    label,
+    price: formatTierPrice(price),
+  }));
 }
 
 function extractCannabinoid(product: DutchiePublicProduct, name: string): string | undefined {
@@ -231,7 +332,8 @@ function dealLabelText(product: DutchiePublicProduct): string {
     : product.deal
       ? [product.deal.label, product.deal.name, product.deal.description].filter(Boolean).join(' ')
       : '';
-  return `${specialText} ${discountText} ${dealText} ${product.description || ''}`.trim();
+  const currentSpecial = typeof product.special === 'string' ? product.special : '';
+  return `${specialText} ${discountText} ${dealText} ${currentSpecial} ${product.collectionCardBadge?.title || ''} ${product.description || ''}`.trim();
 }
 
 function dealLabel(product: DutchiePublicProduct, originalPrice?: number): string | undefined {
@@ -246,7 +348,7 @@ function dealLabel(product: DutchiePublicProduct, originalPrice?: number): strin
 }
 
 function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
-  const rawName = String(p.name || 'Product');
+  const rawName = String(p.name || p.Name || 'Product');
   const category = guessCategory(
     rawName,
     normalizeCategory(p.category) ||
@@ -254,7 +356,11 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
       normalizeCategory(p.posMetadata?.canonicalCategory) ||
       p.type
   );
-  const brand = p.brand || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName;
+  const brand = (
+    typeof p.brand === 'string'
+      ? p.brand
+      : p.brand?.name
+  ) || p.brandName || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName;
   const basePrice =
     firstNumber(p.recPrices) ||
     firstNumber(p.prices) ||
@@ -267,20 +373,35 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     firstNumber(p.posMetadata?.children?.[0]?.recPrice) ||
     firstNumber(p.posMetadata?.children?.[0]?.price);
   if (!basePrice) return null;
-  const dealPrice = firstNumber([p.salePrice, p.specialPrice, p.discountPrice, p.discountedPrice]);
+  const dealPrice =
+    firstNumber(p.recSpecialPrices) ||
+    firstNumber([p.salePrice, p.specialPrice, p.discountPrice, p.discountedPrice]);
   const explicitOriginalPrice = firstNumber([p.originalPrice, p.retailPrice, p.listPrice]);
   const price = dealPrice && dealPrice < basePrice ? dealPrice : basePrice;
-  const originalPrice = explicitOriginalPrice && explicitOriginalPrice > price ? explicitOriginalPrice : dealPrice && dealPrice < basePrice ? basePrice : undefined;
+  const originalPrice = explicitOriginalPrice && explicitOriginalPrice > price
+    ? explicitOriginalPrice
+    : dealPrice && dealPrice < basePrice
+      ? basePrice
+      : undefined;
   const specialLabel = dealLabel(p, originalPrice);
   const image = cleanImageUrl(
     p.image ||
+      p.Image ||
       p.images?.find((img) => img?.active !== false)?.url ||
       p.POSMetaData?.canonicalImgUrl ||
       p.posMetadata?.canonicalImgUrl
   );
   const strain = parseStrain(String(p.strainType || rawName));
-  const thc = potencyValue(p.thc) || extractCannabinoid(p, 'THC') || undefined;
-  const cbd = potencyValue(p.cbd) || extractCannabinoid(p, 'CBD') || undefined;
+  const thc =
+    potencyValue(p.thc) ||
+    potencyValue(p.THC) ||
+    potencyValue(p.THCContent) ||
+    extractCannabinoid(p, 'THC');
+  const cbd =
+    potencyValue(p.cbd) ||
+    potencyValue(p.CBD) ||
+    potencyValue(p.CBDContent) ||
+    extractCannabinoid(p, 'CBD');
   const rawWeight =
     Array.isArray(p.options) ? p.options[0] :
     Array.isArray(p.Options) ? p.Options[0] :
@@ -288,9 +409,9 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     p.POSMetaData?.children?.[0]?.option ||
     p.posMetadata?.children?.[0]?.option ||
     p.variants?.[0]?.option;
-  const weight = cleanWeight(rawWeight || parseWeight(rawName));
+  const weight = cleanWeight(parseWeight(rawName) || rawWeight);
   return {
-    id: String(p.id || p.name || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, '-'),
+    id: String(p.id || p.name || p.Name || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, '-'),
     name: rawName.replace(/\s+/g, ' ').trim(),
     price,
     originalPrice,
@@ -302,9 +423,9 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     weight,
     brand,
     description: cleanDescription(p.description),
-    inStock: true,
+    inStock: !p.Status || p.Status.toLowerCase() === 'active',
     strain,
-    special: Boolean(p.special || specialLabel || originalPrice),
+    special: Boolean(p.special || specialLabel || originalPrice || p.featured?.current),
     specialLabel,
     priceTiers: productPriceTiers(p),
   };
@@ -332,109 +453,406 @@ function toCategories(products: ScrapedProduct[]): ScrapedCategory[] {
     }));
 }
 
-async function sha256Hash(text: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+const DUTCHIE_PRODUCT_FIELDS = `
+  id
+  Name
+  description
+  brandName
+  brand { name imageUrl }
+  type
+  subcategory
+  strainType
+  THCContent { unit range }
+  CBDContent { unit range }
+  Image
+  images { url active }
+  Options
+  Prices
+  recPrices
+  medicalPrices
+  recSpecialPrices
+  special
+  POSMetaData {
+    canonicalCategory
+    canonicalBrandName
+    canonicalImgUrl
+    children { option recPrice price quantityAvailable }
+  }
+  Status
+  featured { current }
+  collectionCardBadge { title }
+`;
+
+const CONSUMER_DISPENSARIES_QUERY = `
+  query ConsumerDispensaries($dispensaryFilter: dispensariesFilterInput!) {
+    filteredDispensaries(filter: $dispensaryFilter) {
+      id
+      name
+      cName
+      description
+      address
+      phone
+      listImage
+      bannerImage
+      logoImage
+      embeddedLogoImage
+      embedBackUrl
+      embeddedMenuUrl
+      SpecialLogoImage
+      menuSections { category label linkLabel products }
+      webCustomizationSettingsV2 {
+        colors { buttonsLinks navBar staffPickTag discountTag }
+        fonts { body heading }
+      }
+    }
+  }
+`;
+
+const FILTERED_PRODUCTS_QUERY = `
+  query FilteredProducts(
+    $productsFilter: productsFilterInput!
+    $page: Int
+    $perPage: Int
+    $includeEnterpriseSpecials: Boolean = false
+  ) {
+    filteredProducts(
+      filter: $productsFilter
+      page: $page
+      perPage: $perPage
+      includeEnterpriseSpecials: $includeEnterpriseSpecials
+    ) {
+      products { ${DUTCHIE_PRODUCT_FIELDS} }
+      queryInfo { totalCount totalPages }
+    }
+  }
+`;
+
+function readString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
-async function fetchDutchiePublicGraphQL<T>(url: string, operationName: string, query: string, variables: Record<string, unknown>): Promise<T> {
-  const hash = await sha256Hash(query);
-  const extensions = JSON.stringify({
-    persistedQuery: { version: 1, sha256Hash: hash },
-  });
+function readBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
 
-  // Try the persisted-query GET first. Dutchie's own frontend uses this shape.
-  const getUrl = `${url}?operationName=${encodeURIComponent(operationName)}&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(extensions)}`;
-  const commonHeaders = {
-    'Accept': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Referer': 'https://dutchie.com/embedded-menu',
-    'Origin': 'https://dutchie.com',
+function readStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+function readNumberArray(record: Record<string, unknown>, key: string): number[] | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is number => typeof item === 'number' && Number.isFinite(item));
+}
+
+function readRecord(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
+  const value = record[key];
+  return isRecord(value) ? value : undefined;
+}
+
+function readRecordArray(record: Record<string, unknown>, key: string): Array<Record<string, unknown>> | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.filter(isRecord);
+}
+
+function parsePotency(record: Record<string, unknown>, key: string): DutchiePublicProduct['THCContent'] {
+  const value = record[key];
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (!isRecord(value)) return undefined;
+  const numericValue = typeof value.value === 'number' ? value.value : undefined;
+  return {
+    value: numericValue,
+    unit: readString(value, 'unit'),
+    range: readNumberArray(value, 'range'),
   };
-  const getResp = await fetch(getUrl, {
-    method: 'GET',
-    headers: commonHeaders,
-    signal: AbortSignal.timeout(20000),
-  });
+}
 
-  // If the server does not recognize the persisted query, fall back to a POST
-  // with the full query text. This is standard Apollo APQ behavior and is
-  // more resilient if Dutchie changes their registered query list.
-  const getData = getResp.ok ? ((await getResp.json().catch(() => ({}))) as { data?: T; errors?: Array<{ message: string }> }) : undefined;
-  const needsRetry = !getResp.ok || (getData?.errors?.some((e) => e?.message?.includes('PersistedQueryNotFound')) ?? false);
+function parsePosMetadata(record: Record<string, unknown>, key: string): DutchiePublicProduct['POSMetaData'] {
+  const metadata = readRecord(record, key);
+  if (!metadata) return undefined;
+  const children = readRecordArray(metadata, 'children')?.map((child) => ({
+    recPrice: typeof child.recPrice === 'number' ? child.recPrice : undefined,
+    price: typeof child.price === 'number' ? child.price : undefined,
+    option: readString(child, 'option'),
+    quantityAvailable: typeof child.quantityAvailable === 'number' ? child.quantityAvailable : undefined,
+  }));
+  return {
+    canonicalCategory: readString(metadata, 'canonicalCategory'),
+    canonicalBrandName: readString(metadata, 'canonicalBrandName'),
+    canonicalImgUrl: readString(metadata, 'canonicalImgUrl'),
+    children,
+  };
+}
 
-  if (!needsRetry) {
-    if (!getResp.ok) {
-      const text = await getResp.text().catch(() => '');
-      throw new Error(`Dutchie public GraphQL returned ${getResp.status}${text ? ': ' + text.slice(0, 200) : ''}`);
-    }
-    if (getData?.errors && getData.errors.length > 0) {
-      throw new Error(getData.errors[0].message);
-    }
-    return getData!.data as T;
+function parsePublicProduct(value: unknown): DutchiePublicProduct | undefined {
+  if (!isRecord(value)) return undefined;
+  const brandValue = value.brand;
+  const brand = typeof brandValue === 'string'
+    ? brandValue
+    : isRecord(brandValue)
+      ? { name: readString(brandValue, 'name'), imageUrl: readString(brandValue, 'imageUrl') }
+      : undefined;
+  const images = readRecordArray(value, 'images')?.map((image) => ({
+    url: readString(image, 'url'),
+    active: readBoolean(image, 'active'),
+  }));
+  const badge = readRecord(value, 'collectionCardBadge');
+  const featured = readRecord(value, 'featured');
+  const specialValue = value.special;
+  const special = typeof specialValue === 'boolean' || typeof specialValue === 'string'
+    ? specialValue
+    : undefined;
+  return {
+    id: readString(value, 'id'),
+    name: readString(value, 'name'),
+    Name: readString(value, 'Name'),
+    brand,
+    brandName: readString(value, 'brandName'),
+    category: readString(value, 'category'),
+    type: readString(value, 'type'),
+    subcategory: readString(value, 'subcategory'),
+    strainType: readString(value, 'strainType'),
+    thc: parsePotency(value, 'thc'),
+    cbd: parsePotency(value, 'cbd'),
+    THC: parsePotency(value, 'THC'),
+    CBD: parsePotency(value, 'CBD'),
+    THCContent: parsePotency(value, 'THCContent'),
+    CBDContent: parsePotency(value, 'CBDContent'),
+    description: readString(value, 'description'),
+    image: readString(value, 'image'),
+    Image: readString(value, 'Image'),
+    images,
+    recPrices: readNumberArray(value, 'recPrices'),
+    recSpecialPrices: readNumberArray(value, 'recSpecialPrices'),
+    Prices: readNumberArray(value, 'Prices'),
+    prices: readNumberArray(value, 'prices'),
+    medicalPrices: readNumberArray(value, 'medicalPrices'),
+    special,
+    collectionCardBadge: badge ? { title: readString(badge, 'title') } : undefined,
+    featured: featured ? { current: readBoolean(featured, 'current') } : undefined,
+    Status: readString(value, 'Status'),
+    Options: readStringArray(value, 'Options'),
+    options: readStringArray(value, 'options'),
+    POSMetaData: parsePosMetadata(value, 'POSMetaData'),
+    posMetadata: parsePosMetadata(value, 'posMetadata'),
+    sku: readString(value, 'sku'),
+  };
+}
+
+function parseDispensaryData(value: unknown): { filteredDispensaries: DutchiePublicDispensary[] } {
+  if (!isRecord(value) || !Array.isArray(value.filteredDispensaries)) {
+    throw new Error('Dutchie ConsumerDispensaries returned an invalid response shape.');
   }
+  const filteredDispensaries = value.filteredDispensaries
+    .filter(isRecord)
+    .map((dispensary) => {
+      const settings = readRecord(dispensary, 'webCustomizationSettingsV2');
+      const colors = settings ? readRecord(settings, 'colors') : undefined;
+      const fonts = settings ? readRecord(settings, 'fonts') : undefined;
+      return {
+        id: readString(dispensary, 'id'),
+        name: readString(dispensary, 'name'),
+        cName: readString(dispensary, 'cName'),
+        description: readString(dispensary, 'description'),
+        address: readString(dispensary, 'address'),
+        phone: readString(dispensary, 'phone'),
+        listImage: readString(dispensary, 'listImage'),
+        bannerImage: readString(dispensary, 'bannerImage'),
+        logoImage: readString(dispensary, 'logoImage'),
+        embeddedLogoImage: readString(dispensary, 'embeddedLogoImage'),
+        embedBackUrl: readString(dispensary, 'embedBackUrl'),
+        embeddedMenuUrl: readString(dispensary, 'embeddedMenuUrl'),
+        SpecialLogoImage: readString(dispensary, 'SpecialLogoImage'),
+        webCustomizationSettingsV2: settings ? {
+          colors: colors ? {
+            buttonsLinks: readString(colors, 'buttonsLinks'),
+            navBar: readString(colors, 'navBar'),
+            staffPickTag: readString(colors, 'staffPickTag'),
+            discountTag: readString(colors, 'discountTag'),
+          } : undefined,
+          fonts: fonts ? {
+            body: readString(fonts, 'body'),
+            heading: readString(fonts, 'heading'),
+          } : undefined,
+        } : undefined,
+      };
+    });
+  return { filteredDispensaries };
+}
 
-  const postResp = await fetch(url, {
+function parseFilteredProductsData(value: unknown): FilteredProductsData {
+  if (!isRecord(value)) {
+    throw new Error('Dutchie FilteredProducts returned an invalid response shape.');
+  }
+  const filtered = readRecord(value, 'filteredProducts');
+  if (!filtered) {
+    throw new Error('Dutchie FilteredProducts returned an invalid response shape.');
+  }
+  const rawProducts = Array.isArray(filtered.products) ? filtered.products : [];
+  const products = rawProducts
+    .map(parsePublicProduct)
+    .filter((product): product is DutchiePublicProduct => product !== undefined);
+  const queryInfo = readRecord(filtered, 'queryInfo');
+  return {
+    filteredProducts: {
+      products,
+      queryInfo: queryInfo ? {
+        totalCount: typeof queryInfo.totalCount === 'number' ? queryInfo.totalCount : undefined,
+        totalPages: typeof queryInfo.totalPages === 'number' ? queryInfo.totalPages : undefined,
+      } : undefined,
+    },
+  };
+}
+
+type FilteredProductsData = {
+  filteredProducts?: {
+    products?: DutchiePublicProduct[];
+    queryInfo?: {
+      totalCount?: number;
+      totalPages?: number;
+    };
+  };
+};
+
+async function fetchDutchiePublicGraphQL<T>(
+  url: string,
+  operationName: string,
+  query: string,
+  variables: Record<string, unknown>,
+  parseData: (value: unknown) => T
+): Promise<T> {
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
-      ...commonHeaders,
+      'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Referer': 'https://dutchie.com/embedded-menu',
+      'Origin': 'https://dutchie.com',
     },
-    body: JSON.stringify({ operationName, query, variables, extensions: JSON.parse(extensions) }),
+    body: JSON.stringify({ operationName, query, variables }),
     signal: AbortSignal.timeout(20000),
   });
-  if (!postResp.ok) {
-    const text = await postResp.text().catch(() => '');
-    throw new Error(`Dutchie public GraphQL returned ${postResp.status}${text ? ': ' + text.slice(0, 200) : ''}`);
+  const body = await response.text();
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    throw new Error(`Dutchie ${operationName} returned ${response.status}: ${body.slice(0, 200) || 'invalid JSON'}`);
   }
-  const postData = (await postResp.json()) as { data?: T; errors?: Array<{ message: string }> };
-  if (postData.errors && postData.errors.length > 0) {
-    throw new Error(postData.errors[0].message);
+  if (!isRecord(payload)) {
+    throw new Error(`Dutchie ${operationName} returned ${response.status}: invalid JSON object`);
   }
-  return postData.data as T;
+  const errors = Array.isArray(payload.errors)
+    ? payload.errors
+        .filter(isRecord)
+        .map((error) => readString(error, 'message'))
+        .filter((message): message is string => Boolean(message))
+    : [];
+  if (!response.ok || errors.length) {
+    const details = errors.join('; ') || body.slice(0, 200);
+    throw new Error(`Dutchie ${operationName} returned ${response.status}${details ? `: ${details}` : ''}`);
+  }
+  if (!('data' in payload)) {
+    throw new Error(`Dutchie ${operationName} returned no data.`);
+  }
+  return parseData(payload.data);
 }
 
-export async function importDutchiePublicMenu(slug: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number; logo?: string }> {
-  // 1. Resolve dispensary by slug using the public ConsumerDispensaries query.
-  const dispensaryData = await fetchDutchiePublicGraphQL<{ filteredDispensaries: DutchiePublicDispensary[] }>(
+export async function importDutchiePublicMenu(slug: string): Promise<{
+  categories: ScrapedCategory[];
+  dispensaryName: string;
+  productCount: number;
+  logo?: string;
+  brandStyle?: DutchiePublicBrandStyle;
+}> {
+  const dispensaryData = await fetchDutchiePublicGraphQL(
     DUTCHIE_GRAPHQL_URL,
     'ConsumerDispensaries',
-    'query ConsumerDispensaries($dispensaryFilter: DispensaryFilter!) { filteredDispensaries(dispensaryFilter: $dispensaryFilter) { id name cName description address phone listImage bannerImage logoImage embeddedLogoImage embedBackUrl embeddedMenuUrl menuSections { category label linkLabel products { id name brand category type strainType thc { value unit } cbd { value unit } description image images { url active } recPrices Prices medicalPrices Options POSMetaData { canonicalCategory canonicalBrandName canonicalImgUrl children { recPrice price option } } } } } }',
-    { dispensaryFilter: { cNameOrID: slug } }
+    CONSUMER_DISPENSARIES_QUERY,
+    { dispensaryFilter: { cNameOrID: slug } },
+    parseDispensaryData
   );
   const dispensary = dispensaryData?.filteredDispensaries?.[0];
-  if (!dispensary) {
+  if (!dispensary?.id) {
     throw new Error(`Could not find Dutchie dispensary for slug "${slug}" via public API.`);
   }
-  const dispensaryId = dispensary.id;
-  const dispensaryName = dispensary.name || slug.split(/[-_]/).map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+  const dispensaryName = dispensary.name || slug.split(/[-_]/).map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   const logo =
     cleanImageUrl(dispensary.logoImage) ||
     cleanImageUrl(dispensary.embeddedLogoImage) ||
     cleanImageUrl(dispensary.listImage) ||
     cleanImageUrl(dispensary.SpecialLogoImage) ||
     cleanImageUrl(dispensary.bannerImage);
+  const primaryColor = normalizeHexColor(dispensary.webCustomizationSettingsV2?.colors?.buttonsLinks);
+  const secondaryColor = normalizeHexColor(dispensary.webCustomizationSettingsV2?.colors?.navBar);
+  const brandStyle = primaryColor || secondaryColor
+    ? { primaryColor, secondaryColor }
+    : undefined;
 
-  // 2. Prefer products already returned with the dispensary menu sections. Large
-  // Dutchie menus can time out if we immediately make a second all-products
-  // GraphQL request after the store lookup.
-  let products: DutchiePublicProduct[] = dispensary.menuSections?.flatMap((section) =>
-    (section.products || []).map((product) => product.category
-      ? product
-      : { ...product, category: section.category || section.label })
-  ) || [];
-  if (!products.length) {
-    const productsData = await fetchDutchiePublicGraphQL<{ filteredProducts: { products: DutchiePublicProduct[] } }>(
-      DUTCHIE_API2_GRAPHQL_URL,
-      'FilteredProducts',
-      'query FilteredProducts($productsFilter: ProductsFilter!) { filteredProducts(productsFilter: $productsFilter) { products { id name brand category type strainType thc { value unit } cbd { value unit } description image images { url active } recPrices Prices medicalPrices Options POSMetaData { canonicalCategory canonicalBrandName canonicalImgUrl children { recPrice price option } } } } }',
-      { productsFilter: { dispensaryId, pricingType: 'rec', status: 'Active' } }
+  const productsFilter = {
+    dispensaryId: dispensary.id,
+    pricingType: 'rec',
+    strainTypes: [],
+    subcategories: [],
+    Status: 'Active',
+    types: [],
+    useCache: true,
+    isDefaultSort: true,
+    sortBy: 'popular',
+    sortDirection: 1,
+    bypassOnlineThresholds: false,
+    isKioskMenu: false,
+    removeProductsBelowOptionThresholds: true,
+    platformType: 'ONLINE_MENU',
+    preOrderType: null,
+  };
+  const firstPage = await fetchDutchiePublicGraphQL(
+    DUTCHIE_PRODUCTS_GRAPHQL_URL,
+    'FilteredProducts',
+    FILTERED_PRODUCTS_QUERY,
+    {
+      productsFilter,
+      page: 0,
+      perPage: DUTCHIE_PRODUCTS_PER_PAGE,
+      includeEnterpriseSpecials: false,
+    },
+    parseFilteredProductsData
+  );
+  const firstResult = firstPage.filteredProducts;
+  const totalPages = Math.max(
+    1,
+    Math.min(DUTCHIE_MAX_PRODUCT_PAGES, firstResult?.queryInfo?.totalPages || 1)
+  );
+  const products = [...(firstResult?.products || [])];
+  for (let page = 1; page < totalPages; page += 4) {
+    const pageNumbers = Array.from(
+      { length: Math.min(4, totalPages - page) },
+      (_, index) => page + index
     );
-    products = productsData?.filteredProducts?.products || [];
+    const pageResults = await Promise.all(pageNumbers.map((pageNumber) =>
+      fetchDutchiePublicGraphQL(
+        DUTCHIE_PRODUCTS_GRAPHQL_URL,
+        'FilteredProducts',
+        FILTERED_PRODUCTS_QUERY,
+        {
+          productsFilter,
+          page: pageNumber,
+          perPage: DUTCHIE_PRODUCTS_PER_PAGE,
+          includeEnterpriseSpecials: false,
+        },
+        parseFilteredProductsData
+      )
+    ));
+    for (const pageResult of pageResults) {
+      products.push(...(pageResult.filteredProducts?.products || []));
+    }
   }
 
   if (!products.length) {
@@ -443,19 +861,27 @@ export async function importDutchiePublicMenu(slug: string): Promise<{ categorie
 
   const scrapedProducts: ScrapedProduct[] = [];
   const seen = new Set<string>();
-  for (const p of products) {
-    const product = toProduct(p);
-    if (!product) continue;
-    if (seen.has(product.id)) continue;
+  for (const sourceProduct of products) {
+    const product = toProduct(sourceProduct);
+    if (!product || seen.has(product.id)) continue;
     seen.add(product.id);
     scrapedProducts.push(product);
   }
 
   const categories = toCategories(scrapedProducts);
-  const pricedCount = categories.reduce((total, category) => total + category.products.filter((product) => product.price > 0).length, 0);
+  const pricedCount = categories.reduce(
+    (total, category) => total + category.products.filter((product) => product.price > 0).length,
+    0
+  );
   if (pricedCount === 0) {
     throw new Error('Dutchie public import did not return priced products.');
   }
 
-  return { categories, dispensaryName, productCount: scrapedProducts.length, logo };
+  return {
+    categories,
+    dispensaryName,
+    productCount: scrapedProducts.length,
+    logo,
+    brandStyle,
+  };
 }

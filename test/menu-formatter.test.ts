@@ -375,6 +375,27 @@ describe('formatMenu', () => {
     expect(result.categories[0].products.map((p) => p.name)).toEqual(['Black Zskittles', 'ayrloom 2g']);
   });
 
+  it('title-cases all-uppercase imported product names while preserving cannabis acronyms', () => {
+    const result = formatMenu([
+      {
+        id: 'vapes',
+        name: 'Vapes',
+        order: 0,
+        products: [
+          { id: 'all-in-one', name: 'WATERMELON KUSH DISTILLATE ALL-IN-ONE', price: 21.6, inStock: true },
+          { id: 'topical', name: 'CBD TOPICAL ROLL-ON (1:1 CBD:THC)', price: 38, inStock: true },
+          { id: 'tincture', name: 'BLUEBERRY TINCUTRE 2OZ', price: 29, inStock: true },
+        ],
+      },
+    ], 'Green Leaf');
+
+    expect(result.categories[0].products.map((product) => product.name)).toEqual([
+      'Watermelon Kush Distillate All-In-One',
+      'CBD Topical Roll-On (1:1 CBD:THC)',
+      'Blueberry Tincture 2oz',
+    ]);
+  });
+
   it('keeps dense TV imports in text-first mode instead of forcing product photos', () => {
     const products = Array.from({ length: 96 }, (_, index) => ({
       id: `p-${index}`,

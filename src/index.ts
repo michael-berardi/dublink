@@ -23,7 +23,7 @@ import { getStatus } from './status';
 import { resolveMenuSource, type MenuImportResult } from './menu-source';
 import { formatMenu, getImportedTemplateStyle } from './menu-formatter';
 import { importMenuFromCSV } from './csv-import';
-import { analyzeReferenceStyle } from './reference-style';
+import { analyzeReferenceStyle, resolveImportedPresentation } from './reference-style';
 import { createStarterConfig, createDemoConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload, bundleImportedImages } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, cancelSubscription } from './stripe';
@@ -51,6 +51,7 @@ export interface Env extends SessionEnv {
   BROWSERLESS_TOKEN?: string;
   OVERSEER_CRAWL_URL?: string;
   OVERSEER_CRAWL_API_KEY?: string;
+  TEST_MODE?: string;
 }
 
 type ImportJobStatus = {
@@ -293,10 +294,18 @@ async function buildMenuImport(
     currentDisplayCount: displayCount,
     currentShowImages: formatted.layout.showImages,
   });
-  const resolvedTemplate = style.template === 'default' ? formatted.brandStyle.template : style.template;
+  const presentation = resolveImportedPresentation(
+    style,
+    styleNotes,
+    Boolean(raw.brandStyle),
+    formatted.brandStyle.template,
+  );
+  const resolvedLayout = presentation.layout;
+  const resolvedTemplate = presentation.template;
   const styleColors = getImportedTemplateStyle(resolvedTemplate);
   const styleProfile = {
     ...style.styleProfile,
+    layout: resolvedLayout,
     template: resolvedTemplate,
     summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
   };
@@ -306,7 +315,7 @@ async function buildMenuImport(
     categories: formatted.categories,
     productCount: formatted.productCount,
     displayCount: style.displayCount,
-    layout: style.layout,
+    layout: resolvedLayout,
     layoutMode: style.layoutMode,
     fontSize: style.fontSize,
     showImages: style.showImages,
@@ -316,8 +325,8 @@ async function buildMenuImport(
     showPromos: style.showPromos,
     theme: formatted.layout.theme,
     template: resolvedTemplate,
-    primaryColor: styleColors.primaryColor,
-    secondaryColor: styleColors.secondaryColor,
+    primaryColor: raw.brandStyle?.primaryColor || styleColors.primaryColor,
+    secondaryColor: raw.brandStyle?.secondaryColor || styleColors.secondaryColor,
     styleProfile,
     showLogo: true,
     tvDemo: raw.demo === true,
@@ -882,7 +891,7 @@ export default {
     }
 
 
-    if (path === '/api/test/activate-trial' && request.method === 'POST' && env.APP_URL && (env.APP_URL.startsWith('http://localhost:') || env.APP_URL.startsWith('http://127.0.0.1:'))) {
+    if (path === '/api/test/activate-trial' && request.method === 'POST' && env.TEST_MODE === 'true') {
       const auth = await requireAuth(request, env);
       if (!auth) return redirectResponse(`${origin}/login`);
       await updateAccountStripe(env, auth.accountId, { subscriptionStatus: 'trialing', trialEndsAt: Date.now() + 14 * 24 * 60 * 60 * 1000 });

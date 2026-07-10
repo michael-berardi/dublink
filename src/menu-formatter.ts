@@ -120,11 +120,20 @@ function normalizeProductName(name: string): string {
     .slice(0, 40);
 }
 
+function titleCaseAllCapsProductName(value: string): string {
+  if (!/[A-Z]/.test(value) || value !== value.toUpperCase()) return value;
+  return value
+    .toLowerCase()
+    .replace(/\b([a-z])/g, (match) => match.toUpperCase())
+    .replace(/\bTincutre\b/g, 'Tincture')
+    .replace(/\b(thc|cbd|cbg|cbn|og)\b/gi, (match) => match.toUpperCase());
+}
+
 function cleanProductDisplayName(product: ScrapedProduct, categoryName: string): string {
   const raw = product.name.replace(/\s+/g, ' ').replace(/^\s*\|+\s*/, '').replace(/\s*\|+\s*$/, '').trim();
-  if (!/^[.]?\d+(?:\.\d+)?\s*(g|mg|ml|oz|ct)$/i.test(raw)) return raw;
+  if (!/^[.]?\d+(?:\.\d+)?\s*(g|mg|ml|oz|ct)$/i.test(raw)) return titleCaseAllCapsProductName(raw);
   const fallbackPrefix = (product.brand || categoryName).replace(/\s+/g, ' ').trim();
-  return fallbackPrefix ? `${fallbackPrefix} ${raw}` : raw;
+  return titleCaseAllCapsProductName(fallbackPrefix ? `${fallbackPrefix} ${raw}` : raw);
 }
 
 export interface FormatMenuOptions {

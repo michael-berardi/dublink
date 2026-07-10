@@ -550,5 +550,9 @@ export async function serveImage(
   }
   // Uploads are immutable once written; cache aggressively at the edge.
   headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  // Product images are public and may be rendered on customer-owned domains.
+  // Anonymous CORS lets the TV renderer inspect loaded pixels without tainting
+  // its canvas while still forbidding credentialed cross-origin access.
+  headers.set('Access-Control-Allow-Origin', '*');
   return new Response(object.body, { headers });
 }

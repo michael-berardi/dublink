@@ -65,6 +65,49 @@ describe('Session Durable Object integrity', () => {
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ ok: false, error: 'Import failed' });
   });
+
+  it('preserves imported sale metadata as a visible promotion', async () => {
+    const session = new SessionDurableObject(fakeSessionState(), {} as Env);
+    const imported = await session.fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({
+        categories: [{
+          id: 'flower',
+          name: 'Flower',
+          order: 0,
+          products: [{
+            id: 'sale-product',
+            name: 'Sale Product',
+            price: 28,
+            originalPrice: 35,
+            special: true,
+            specialLabel: 'Sale',
+            inStock: true,
+          }],
+        }],
+      }),
+    }));
+    expect(imported.status).toBe(200);
+
+    const config = await session.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    const payload: unknown = await config.json();
+    expect(payload).toMatchObject({
+      config: {
+        categories: [{
+          products: [{
+            id: 'sale-product',
+            price: 28,
+            originalPrice: 35,
+            isPromo: true,
+            specialLabel: 'Sale',
+          }],
+        }],
+      },
+    });
+  });
 });
 
 describe('session ownership isolation', () => {

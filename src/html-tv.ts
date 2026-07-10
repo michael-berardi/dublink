@@ -1,4 +1,5 @@
 import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
+import { allocateCategoriesForDisplay } from './multi-display';
 
 export type TvPageInitialConfig = {
   template?: string;
@@ -10,6 +11,38 @@ const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest',
 
 function isTvTemplate(value: unknown): value is (typeof TV_TEMPLATES)[number] {
   return typeof value === 'string' && (TV_TEMPLATES as readonly string[]).includes(value);
+}
+
+export function normalizeTvUploadImageUrl(value: unknown, pageOrigin: string): string {
+  if (!value || typeof value !== 'string') return '';
+  const url = value.trim();
+  if (/^data:image\//.test(url)) return url;
+  try {
+    const parsed = new URL(url, pageOrigin);
+    if (!parsed.pathname.startsWith('/api/uploads/')) return '';
+    const isRelativeUpload = /^\/api\/uploads\//.test(url);
+    const approvedHost = parsed.protocol === 'https:' &&
+      (parsed.hostname === 'dubmenu.com' || parsed.hostname === 'www.dubmenu.com');
+    if (!isRelativeUpload && parsed.origin !== pageOrigin && !approvedHost) return '';
+    parsed.searchParams.set('dubmenu-cors', '1');
+    return isRelativeUpload ? `${parsed.pathname}${parsed.search}` : parsed.toString();
+  } catch {
+    return '';
+  }
+}
+
+export function isVisuallyBlankImageSample(pixels: ArrayLike<number>): boolean {
+  let opaque = 0;
+  let bright = 0;
+  let dark = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] < 16) continue;
+    const luminance = 0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2];
+    opaque++;
+    if (luminance > 235) bright++;
+    if (luminance < 190) dark++;
+  }
+  return opaque === 0 || (bright / opaque > 0.94 && dark / opaque < 0.035);
 }
 
 
@@ -231,7 +264,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .dispensary-name{font-size:clamp(2rem,3vw,3rem);font-weight:950;letter-spacing:-0.035em;line-height:1.05;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 32px var(--accent-glow);}
   .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem 2rem 1rem;width:100%;}
   .menu-content.content-refresh{animation:content-refresh 420ms ease-out;}
-  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.55rem 2rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.38),rgba(0,0,0,0.16)),var(--bg);font-size:0.8rem;font-weight:800;color:var(--text-muted);gap:1rem;text-transform:uppercase;letter-spacing:0.055em;}
+  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.72rem 2rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:0.92rem;font-weight:800;color:var(--text);opacity:0.8;gap:1rem;text-transform:uppercase;letter-spacing:0.05em;}
   .footer-right{text-align:center;max-width:90%;}
 
   .age-gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:500;gap:1.5rem;padding:2rem;text-align:center;}
@@ -266,17 +299,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall .category-block{border-radius:1rem;padding:0.9rem;background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(0,0,0,0.2)),var(--bg-card);}
   .layout-pricewall .category-title{font-size:clamp(1.32rem,1.7vw,1.95rem);letter-spacing:0.015em;text-transform:uppercase;}
   .layout-pricewall .grid-products{gap:0.46rem;}
-  .layout-pricewall .product-card{min-height:5.1rem;padding:0.56rem 0.72rem 0.56rem 0;gap:0.68rem;border-radius:0.62rem;box-shadow:0 10px 24px rgba(0,0,0,0.18);}
-  .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 3.45rem minmax(0,1fr) auto;}
+  .layout-pricewall .product-card{min-height:5.35rem;padding:0.58rem 0.76rem 0.58rem 0;gap:0.72rem;border-radius:0.62rem;box-shadow:0 10px 24px rgba(0,0,0,0.18);}
+  .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 3.9rem minmax(0,1fr) auto;}
   .layout-pricewall .strain-bar{width:0.34rem;}
-  .layout-pricewall .card-image{width:3.45rem;height:3.45rem;border-radius:0.42rem;}
-  .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;gap:0.2rem;}
-  .layout-pricewall .card-name{font-size:clamp(1.06rem,1.18vw,1.38rem);line-height:1.05;-webkit-line-clamp:1;text-transform:none;}
-  .layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:clamp(0.66rem,0.75vw,0.86rem);line-height:1.1;gap:0.18rem 0.44rem;}
+  .layout-pricewall .card-image{width:3.9rem;height:3.9rem;border-radius:0.48rem;}
+  .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;gap:0.24rem;}
+  .layout-pricewall .card-name{font-size:clamp(1.04rem,1.13vw,1.34rem);line-height:1.08;-webkit-line-clamp:2;text-transform:none;}
+  .layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:clamp(0.76rem,0.82vw,0.94rem);line-height:1.14;gap:0.2rem 0.46rem;color:var(--text-muted);}
   .layout-pricewall .card-meta span{white-space:nowrap;}
   .layout-pricewall .card-desc{display:none;}
-  .layout-pricewall .card-price{font-size:clamp(1.32rem,1.6vw,1.92rem);min-width:4rem;text-align:right;}
-  .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.18rem auto;padding:0.12rem 0.36rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:clamp(0.54rem,0.58vw,0.7rem);line-height:1;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;}
+  .layout-pricewall .card-price{font-size:clamp(1.38rem,1.65vw,1.98rem);min-width:5rem;text-align:right;font-variant-numeric:tabular-nums;}
+  .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.2rem auto;padding:0.14rem 0.4rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:clamp(0.58rem,0.62vw,0.74rem);line-height:1;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;}
   .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
   body.has-promo-banner .menu-content{padding-top:0.95rem;padding-bottom:0.7rem;}
@@ -296,8 +329,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .pricewall-specials{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:0.6rem;}
   .pricewall-special-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0.75rem;align-items:center;border-top:1px solid var(--border);padding-top:0.58rem;}
   .pricewall-special-row:first-child{border-top:0;padding-top:0;}
-  .pricewall-special-name{font-weight:900;font-size:clamp(0.98rem,1.08vw,1.2rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:clamp(1.16rem,1.3vw,1.46rem);white-space:nowrap;}
+  .pricewall-special-name{font-weight:900;font-size:clamp(0.98rem,1.08vw,1.2rem);line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:clamp(1.16rem,1.3vw,1.46rem);white-space:nowrap;font-variant-numeric:tabular-nums;}
   .layout-list .product-row{display:flex;align-items:baseline;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
   .layout-list .row-name{font-size:1.6rem;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
   .layout-list .row-meta{font-size:1.1rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
@@ -326,16 +359,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-poster .product-row.no-image .card-image{display:none;}
 
   .layout-cinematic .cinematic-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:0.78rem;flex:1 1 auto;min-height:0;}
+  .layout-cinematic .cinematic-products.count-1 .product-card,.layout-cinematic .cinematic-products.count-3 .product-card:first-child{grid-column:1 / -1;}
   .layout-cinematic .product-card{position:relative;border-radius:0.8rem;overflow:hidden;height:100%;min-height:0;background:var(--bg-card);border:1px solid var(--border);box-shadow:var(--card-shadow);}
   .layout-cinematic .card-image{width:100%;height:100%;object-fit:cover;border:0;}
-  .layout-cinematic .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.9rem 1rem;background:linear-gradient(to top,rgba(0,0,0,0.94) 0%,rgba(0,0,0,0.62) 70%,transparent 100%);display:flex;flex-direction:column;gap:0.2rem;}
-  .layout-cinematic .card-name{font-size:clamp(1.25rem,1.6vw,1.8rem);font-weight:900;line-height:1.04;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-  .layout-cinematic .card-meta{font-size:clamp(0.82rem,0.95vw,1.08rem);line-height:1.16;color:rgba(255,255,255,0.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-cinematic .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.9rem 1rem;background:linear-gradient(to top,rgba(0,0,0,0.98) 0%,rgba(0,0,0,0.9) 70%,rgba(0,0,0,0.68) 100%);display:flex;flex-direction:column;gap:0.2rem;}
+  .layout-cinematic .card-name{font-size:clamp(1rem,1.15vw,1.25rem);font-weight:900;line-height:1.04;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.9);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-cinematic .card-meta{font-size:clamp(0.82rem,0.95vw,1.08rem);line-height:1.16;color:rgba(255,255,255,0.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-cinematic .card-price{font-size:clamp(1.45rem,1.9vw,2.15rem);line-height:1;font-weight:900;color:var(--accent);}
-  .layout-cinematic .product-card.no-image{height:100%;min-height:7.2rem;}
-  .layout-cinematic .product-card.no-image .card-body{position:static;min-height:7.2rem;padding:1rem 1.15rem;background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price";align-items:center;column-gap:1rem;row-gap:0.25rem;}
-  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:clamp(1.35rem,1.8vw,2.05rem);line-height:1.08;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-cinematic .product-card.no-image .card-meta{grid-area:meta;font-size:clamp(0.9rem,1.05vw,1.2rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-cinematic .product-card.no-image{height:100%;min-height:7.2rem;border-color:var(--border-hover);background:radial-gradient(circle at 84% 16%,var(--accent-dim),transparent 42%),linear-gradient(145deg,rgba(255,255,255,0.075),rgba(255,255,255,0.018)),var(--bg-card);}
+  .layout-cinematic .product-card.no-image .card-body{position:static;height:100%;min-height:7.2rem;padding:1rem 1.15rem;background:transparent;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.4rem;box-shadow:inset 0.38rem 0 var(--accent);}
+  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:clamp(1.12rem,1.38vw,1.55rem);line-height:1.08;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-cinematic .product-card.no-image .card-meta{grid-area:meta;font-size:clamp(0.9rem,1.05vw,1.2rem);white-space:normal;overflow:visible;}
   .layout-cinematic .product-card.no-image .card-price{grid-area:price;font-size:clamp(1.9rem,2.45vw,3rem);line-height:1;text-align:right;}
 
   .layout-showcase .showcase-products{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;}
@@ -360,7 +394,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .out-of-stock{opacity:0.5;}
   .out-of-stock .card-image{filter:grayscale(0.6);}
-  .sale-text{color:#ef4444;font-weight:800;}
+  .card-price-orig{color:var(--text-muted);font-size:0.72em;font-weight:750;text-decoration:line-through;text-decoration-thickness:0.1em;}
+  .sale-text{color:var(--accent);font-weight:950;white-space:nowrap;}
   .oos-text{color:var(--text-faint);font-style:italic;}
 
   @keyframes content-refresh{0%{opacity:0.55;transform:translateY(6px);}100%{opacity:1;transform:translateY(0);}}
@@ -393,6 +428,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-grid .price-tiers .tier{min-width:3.25rem;padding:0.22rem 0.38rem;border-radius:0.38rem;}
   .layout-grid .price-tiers .tier-label{font-size:0.62rem;}
   .layout-grid .price-tiers .tier-price{font-size:1.05rem;}
+  .layout-pricewall .price-tiers{display:grid;grid-template-columns:repeat(2,minmax(4.1rem,1fr));gap:0.34rem;min-width:9rem;}
+  .layout-pricewall .price-tiers .tier{min-width:0;align-items:flex-end;padding:0.26rem 0.4rem;}
+  .layout-pricewall .price-tiers .tier-label{font-size:0.68rem;}
+  .layout-pricewall .price-tiers .tier-price{font-size:1.08rem;font-variant-numeric:tabular-nums;}
   .layout-list .price-tiers{margin-top:0;gap:0.35rem;}
   .layout-list .price-tiers .tier{padding:0;background:transparent;border:0;min-width:auto;flex-direction:row;align-items:baseline;gap:0.25rem;}
   .layout-list .price-tiers .tier-price{font-size:1rem;}
@@ -601,6 +640,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 (function(){
   var WS_URL = location.origin.replace(/^http/, 'ws') + '/ws/${safeSessionId}?role=tv';
   var DEMO_MODE = ${options?.demo ? 'true' : 'false'};
+  var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
   var DISPLAY_NUM = parseInt(new URLSearchParams(location.search).get('display') || '1');
   var DISPLAY_TOTAL = parseInt(new URLSearchParams(location.search).get('displays') || '1');
 
@@ -664,16 +704,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }
     return '';
   }
+  var normalizeTvUploadImageUrl = ${normalizeTvUploadImageUrl.toString()};
+  var isVisuallyBlankImageSample = ${isVisuallyBlankImageSample.toString()};
   function safeImgUrl(url){
-    if(!url || typeof url !== 'string') return '';
-    var u = url.trim();
-    if(/^\\/api\\/uploads\\//.test(u) || /^data:image\\//.test(u)) return u;
-    try {
-      var parsed = new URL(u, location.origin);
-      var host = parsed.hostname;
-      if(parsed.protocol === 'https:' && parsed.pathname.indexOf('/api/uploads/') === 0 && (host === location.hostname || host === 'dubmenu.com' || host === 'www.dubmenu.com')) return parsed.toString();
-    } catch(e) {}
-    return '';
+    return normalizeTvUploadImageUrl(url, location.origin);
   }
   function safeCssValue(v){
     if(!v || typeof v !== 'string') return '';
@@ -716,7 +750,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(!safeUrl || (config && config.showImages === false)){
       return '';
     }
-    return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" onload="this.classList.remove(\\'card-image-loading\\');this.classList.add(\\'card-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
+    return '<img class="card-image card-image-loading" src="' + escapeHtml(safeUrl) + '" alt="' + alt + '" crossorigin="anonymous"' + (lazy ? ' loading="lazy"' : '') + ' decoding="async" onload="window.dubmenuImgLoaded(this)" onerror="window.dubmenuImgFallback(this)">';
   }
 
   window.dubmenuImgFallback = function(img){
@@ -726,6 +760,27 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(img.parentNode) img.parentNode.removeChild(img);
   };
 
+  window.dubmenuImgLoaded = function(img){
+    if(!img) return;
+    img.classList.remove('card-image-loading');
+    img.classList.add('card-image-loaded');
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = 24;
+      canvas.height = 24;
+      var context = canvas.getContext('2d');
+      if(!context) return;
+      context.drawImage(img,0,0,canvas.width,canvas.height);
+      var pixels = context.getImageData(0,0,canvas.width,canvas.height).data;
+      if(isVisuallyBlankImageSample(pixels)){
+        window.dubmenuImgFallback(img);
+      }
+    } catch(e) {
+      return;
+    }
+  };
+
+  var allocateCategoriesForDisplay = ${allocateCategoriesForDisplay.toString()};
   ${GET_CATEGORY_TYPE_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
@@ -741,9 +796,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   //   1. ?layout= URL override (validated) — used for monitor-level layout choices
   //   2. Explicit config.layout override from the remote controls
   //   3. Legacy config.layoutMode mapping (auto/columns/grid -> grid; pricelist/compact -> list)
-  //   4. For 1-of-4+ multi-display setups, prefer sparse hero-fill layout
-  //   5. Dense imported menus default to the pricewall shell that competitors use
-  //      for real TV menu boards: category price tables plus a promo/status rail.
+  //   4. Multi-display setups use image-led layouts when photos are available,
+  //      and dense text layouts when they are not.
+  //   5. Dense single-screen imports use the pricewall category tables.
   //   6. 'grid' fallback. Color templates never choose layouts.
   function getActiveLayout(cfg){
     if(URL_LAYOUT) return URL_LAYOUT;
@@ -757,7 +812,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       if(mode === 'grid' || mode === 'columns') return 'grid';
       if(mode === 'pricelist' || mode === 'compact') return 'list';
     }
-    if(DISPLAY_TOTAL >= 4) return 'sparse';
+    if(DISPLAY_TOTAL >= 4) return hasDisplayImages(cfg) ? 'cinematic' : 'list';
+    if(DISPLAY_TOTAL === 3) return hasDisplayImages(cfg) ? 'poster' : 'pricewall';
+    if(DISPLAY_TOTAL === 2) return hasDisplayImages(cfg) ? 'editorial' : 'pricewall';
     if(getTotalProductCount(cfg) >= 36) return 'pricewall';
     return 'grid';
   }
@@ -765,6 +822,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return ((cfg && cfg.categories) || []).reduce(function(total, cat){
       return total + ((cat && cat.products) ? cat.products.length : 0);
     }, 0);
+  }
+  function hasDisplayImages(cfg){
+    if(!cfg || cfg.showImages === false) return false;
+    return ((cfg && cfg.categories) || []).some(function(cat){
+      return cat && (cat.products || []).some(function(product){ return product && product.image; });
+    });
   }
   // Resolve the active template (theme) for THIS TV:
   //   1. ?theme= URL override (validated)
@@ -816,18 +879,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   function getCategoriesForDisplay(allCats){
-    var cats=(allCats||[]).filter(function(c){return c&&c.products&&c.products.length>0;});
-    if(DISPLAY_TOTAL>1 && cats.length>0 && cats.length<DISPLAY_TOTAL){
-      return [cats[(Math.max(1,DISPLAY_NUM)-1)%cats.length]];
-    }
-    if(DISPLAY_TOTAL>1){
-      var basePerTv=Math.floor(cats.length/DISPLAY_TOTAL);
-      var extra=cats.length%DISPLAY_TOTAL;
-      var count=basePerTv+(DISPLAY_NUM<=extra?1:0);
-      var start=(DISPLAY_NUM-1)*basePerTv+Math.min(DISPLAY_NUM-1,extra);
-      cats=cats.slice(start,start+count);
-    }
-    return cats;
+    return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL);
   }
 
   function manualSpecialsCategory(cfg){
@@ -993,16 +1045,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
     var displayCats = cats;
-    var pricewallRailCats = cats;
-    if(layout === 'pricewall' && cats.length > 1){
-      var promoProducts = getPricewallPromoProducts(cats);
-      var shouldUsePromoRail = !!getActiveBanner() || promoProducts.length >= 3;
-      if(shouldUsePromoRail){
+    var pricewallRailCats = [];
+    if(layout === 'pricewall'){
+      var explicitSpecialCats = cats.filter(isSpecialCategory);
+      if(explicitSpecialCats.length){
         displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);});
-        if(!displayCats.length) displayCats = cats;
-      } else if(promoProducts.length){
-        displayCats = mergeSparsePricewallSpecials(cats, promoProducts);
-        pricewallRailCats = [];
+        pricewallRailCats = explicitSpecialCats;
+        if(!displayCats.length){
+          displayCats = explicitSpecialCats;
+          pricewallRailCats = [];
+        }
       }
     }
     if(!displayCats.length){renderEmptyMenu(layout);return;}
@@ -1143,6 +1195,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return parts.join(' \u00B7 ');
   }
 
+  function formatPriceValue(value){
+    var numeric = typeof value === 'number' ? value : Number(value);
+    if(value !== '' && value !== null && value !== undefined && isFinite(numeric)){
+      return numeric.toFixed(2).replace(/\\.00$/, '');
+    }
+    return escapeHtml(value);
+  }
+
   function makePrice(p){
     if(!p) return '';
     var promo = '';
@@ -1165,10 +1225,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var hasPrice = typeof p.price === 'number' || (typeof p.price === 'string' && p.price.trim());
     var orig = p.priceOriginal || p.originalPrice;
     if(orig && hasPrice && orig !== p.price){
-      return promo + '<span class="card-price-orig">$' + escapeHtml(orig) + '</span> <span class="sale-text">$' + escapeHtml(p.price) + '</span>';
+      return promo + '<span class="card-price-orig">$' + formatPriceValue(orig) + '</span> <span class="sale-text">Now $' + formatPriceValue(p.price) + '</span>';
     }
     if(!hasPrice) return promo.trim();
-    return promo + '$' + (typeof p.price === 'number' ? p.price.toFixed(2).replace(/\\.00$/, '') : escapeHtml(p.price));
+    return promo + '$' + formatPriceValue(p.price);
   }
 
   function makeDesc(p){
@@ -1230,44 +1290,19 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return promoProducts;
   }
 
-  function mergeSparsePricewallSpecials(cats, promoProducts){
-    var promos = promoProducts.slice(0, 2).map(function(p){
-      return Object.assign({}, p, { isPromo: true, specialLabel: p.specialLabel || 'Special' });
-    });
-    var inserted = false;
-    var merged = [];
-    cats.forEach(function(cat){
-      if(isSpecialCategory(cat)) return;
-      var copy = Object.assign({}, cat);
-      var products = (cat.products || []).slice();
-      if(!inserted && products.length){
-        copy.products = promos.concat(products);
-        inserted = true;
-      } else {
-        copy.products = products;
-      }
-      merged.push(copy);
-    });
-    return inserted ? merged : cats;
-  }
 
 
 
 
   function renderPricewallShell(cats, container){
-    var promoProducts = getPricewallPromoProducts(cats);
-    var banner = getActiveBanner();
-    promoProducts = promoProducts.slice(0, 3);
-    var shell = document.createElement('aside');
-    shell.className = 'pricewall-shell';
-    var headline = banner ? banner.text : 'Specials';
+    var promoProducts = getPricewallPromoProducts(cats).slice(0, 3);
     var specials = promoProducts.map(function(p){
       return '<div class="pricewall-special-row"><div class="pricewall-special-name">' + escapeHtml(p.name) + '</div><div class="pricewall-special-price">' + makePrice(p) + '</div></div>';
     }).join('');
-    var promoPanel = banner ? '' : (specials ? '<div class="pricewall-panel pricewall-promo"><div class="pricewall-promo-main">' + escapeHtml(headline).slice(0, 42) + '</div></div>' : '');
-    var specialPanel = specials ? '<div class="pricewall-panel pricewall-specials"><div class="pricewall-panel-title">Featured deals</div>' + specials + '</div>' : '';
-    if(!promoPanel && !specialPanel) return false;
-    shell.innerHTML = promoPanel + specialPanel;
+    if(!specials) return false;
+    var shell = document.createElement('aside');
+    shell.className = 'pricewall-shell';
+    shell.innerHTML = '<div class="pricewall-panel pricewall-specials"><div class="pricewall-panel-title">Featured deals</div>' + specials + '</div>';
     container.appendChild(shell);
     return true;
   }
@@ -1321,7 +1356,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       catEl.className = 'category-block';
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
-      grid.className = 'cinematic-products';
+      grid.className = 'cinematic-products count-' + Math.min(4, cat.products.length);
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
@@ -1508,12 +1543,26 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   var fsDone=false;
+  var fsPending=false;
   function tryFullscreen(){
-    if(fsDone)return;
-    fsDone=true;
+    if(EMBED_MODE||fsDone||fsPending)return;
     var el=document.documentElement;
-    if(el.requestFullscreen)el.requestFullscreen().catch(function(){});
-    else if(el.webkitRequestFullscreen)el.webkitRequestFullscreen();
+    try {
+      if(el.requestFullscreen){
+        fsPending=true;
+        el.requestFullscreen().then(function(){
+          fsDone=true;
+          fsPending=false;
+        },function(){
+          fsPending=false;
+        });
+      } else if(el.webkitRequestFullscreen){
+        el.webkitRequestFullscreen();
+        fsDone=true;
+      }
+    } catch(e) {
+      fsPending=false;
+    }
   }
 
   function verifyAge(){

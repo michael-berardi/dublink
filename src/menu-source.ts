@@ -1,5 +1,5 @@
 import { importDutchieMenu } from './dutchie-api';
-import { importDutchiePublicMenu } from './dutchie-public-api';
+import { importDutchiePublicMenu, type DutchiePublicBrandStyle } from './dutchie-public-api';
 import { scrapeDutchie, type ScrapedCategory, type ScrapedProduct } from './dutchie-scraper';
 
 export type SourceType =
@@ -22,6 +22,7 @@ export interface MenuImportResult {
   productCount: number;
   dispensaryName: string;
   logo?: string;
+  brandStyle?: DutchiePublicBrandStyle;
   source: string;
   apiUsed?: boolean;
   demo?: boolean;
@@ -703,6 +704,7 @@ async function importDutchieFromSlug(
         productCount: publicResult.productCount,
         dispensaryName: publicResult.dispensaryName,
         logo: publicResult.logo,
+        brandStyle: publicResult.brandStyle,
         source: sourceLabel,
         apiUsed: false,
         warnings: [],
@@ -745,6 +747,7 @@ async function importDutchieFromSlug(
         productCount: publicResult.productCount,
         dispensaryName: publicResult.dispensaryName,
         logo: publicResult.logo,
+        brandStyle: publicResult.brandStyle,
         source: sourceLabel,
         apiUsed: false,
         warnings: errors.length ? [`Dutchie API unavailable; used public GraphQL fallback (${errors.join('; ')}).`] : [],

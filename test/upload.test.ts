@@ -204,6 +204,17 @@ describe('GET /api/uploads (list route)', () => {
   });
 });
 
+describe('GET /api/uploads/[key]', () => {
+  it('serves public product images with anonymous cross-origin access', async () => {
+    const { cookie } = await signupCookie();
+    const uploaded = await uploadOne(cookie, 'tv-photo.png');
+    const res = await SELF.fetch(`${BASE}/api/uploads/${uploaded.key}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('access-control-allow-origin')).toBe('*');
+  });
+});
+
 describe('DELETE /api/uploads/[filename]', () => {
   it('returns 401 when unauthenticated', async () => {
     const res = await SELF.fetch(`${BASE}/api/uploads/whatever.png`, { method: 'DELETE' });

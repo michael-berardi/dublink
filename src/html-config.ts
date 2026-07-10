@@ -207,9 +207,10 @@ export function configPage(sessionId: string, origin: string): string {
     ----------------------------------------------------------------- */
     @media(min-width:1100px){
       body{max-width:none;margin:0;height:100vh;overflow:hidden;}
-      .config-column{flex:1;min-width:0;max-width:680px;height:100vh;overflow-y:auto;padding:1rem;}
+      .desktop-layout{display:flex;width:100%;height:100vh;min-width:0;}
+      .config-column{flex:0 1 680px;width:min(680px,50vw);min-width:0;height:100vh;overflow-y:auto;padding:1rem;}
       .remote-heading{margin-bottom:1.25rem;}
-      #simulatorPanel{flex:0 0 420px;display:flex;flex-direction:column;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
+      #simulatorPanel{flex:1 1 420px;min-width:0;display:flex;flex-direction:column;height:100vh;background:#000;border-left:1px solid var(--border);padding:1rem;}
       .sim-header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.75rem;flex-shrink:0;}
       .sim-header h2{font-size:1.25rem;font-weight:700;}
       .sim-controls{display:flex;align-items:flex-end;gap:0.75rem;margin-bottom:0.75rem;flex-shrink:0;flex-wrap:wrap;}
@@ -2016,7 +2017,7 @@ function renderSimulatorPreview(){
 }
 
 function renderSinglePreview(preview){
-  preview.innerHTML='<div class="sim-frame-wrapper" id="simWrapper"><iframe id="simFrame" class="sim-frame" title="TV preview display '+simState.selectedDisplay+'" allowfullscreen></iframe></div>';
+  preview.innerHTML='<div class="sim-frame-wrapper" id="simWrapper"><iframe id="simFrame" class="sim-frame" title="TV preview display '+simState.selectedDisplay+'"></iframe></div>';
   updateSimFrame('simFrame',simState.selectedDisplay);
 }
 
@@ -2026,7 +2027,7 @@ function renderCompactPreview(preview){
   else gridClass+=' sim-grid-4';
   var html='<div class="'+gridClass+'">';
   for(var i=1;i<=simState.displayCount;i++){
-    html+='<div class="sim-grid-cell"><div class="sim-frame-wrapper" id="simWrapper-'+i+'"><iframe id="simFrame-'+i+'" class="sim-frame" title="TV preview display '+i+'" allowfullscreen></iframe></div></div>';
+    html+='<div class="sim-grid-cell"><div class="sim-frame-wrapper" id="simWrapper-'+i+'"><iframe id="simFrame-'+i+'" class="sim-frame" title="TV preview display '+i+'"></iframe></div></div>';
   }
   html+='</div>';
   preview.innerHTML=html;
@@ -2160,7 +2161,7 @@ function renderMobilePreview(){
   if(!modal||!modal.classList.contains('open'))return;
   var container=document.getElementById('mobilePreviewModalFrame');
   if(!container)return;
-  container.innerHTML='<iframe id="mobilePreviewFrame" title="TV preview" allowfullscreen></iframe>';
+  container.innerHTML='<iframe id="mobilePreviewFrame" title="TV preview"></iframe>';
   var frame=document.getElementById('mobilePreviewFrame');
   if(!frame)return;
   var url='/tv/'+SESSION_ID+'?embed=1&display=1&displays=1';

@@ -159,6 +159,15 @@ describe('resolveMenuSource', () => {
     );
   }
 
+  function publicProductsResponse(category = 'Flower', name = 'Blue Dream 3.5g') {
+    return graphqlResponse({
+      filteredProducts: {
+        products: [{ id: 'p1', name, brand: 'High Garden', category, recPrices: [35], Options: ['3.5g'] }],
+        queryInfo: { totalCount: 1, totalPages: 1 },
+      },
+    });
+  }
+
   it('imports a Dutchie slug via API when key is present', async () => {
     let calls = 0;
     globalThis.fetch = vi.fn(() => {
@@ -227,27 +236,10 @@ describe('resolveMenuSource', () => {
       if (calls === 1) {
         return Promise.resolve(new Response(html, { status: 200, headers: { 'Content-Type': 'text/html' } }));
       }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            data: {
-              filteredDispensaries: [
-                {
-                  id: 'd-1',
-                  name: 'Green Leaf',
-                  menuSections: [
-                    {
-                      category: 'Flower',
-                      products: [{ id: 'p1', name: 'Blue Dream', category: 'Flower', recPrices: [35] }],
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      );
+      if (calls === 2) {
+        return graphqlResponse({ filteredDispensaries: [{ id: 'd-1', name: 'Green Leaf' }] });
+      }
+      return publicProductsResponse('Flower', 'Blue Dream');
     }) as unknown as typeof fetch;
 
     const result = await resolveMenuSource('https://greenleaf.com/menu', { DUTCHIE_API_KEY: 'test-key' });
@@ -279,27 +271,11 @@ describe('resolveMenuSource', () => {
           )
         );
       }
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            data: {
-              filteredDispensaries: [
-                {
-                  id: 'd-1',
-                  name: 'Green Leaf',
-                  menuSections: [
-                    {
-                      category: 'Flower',
-                      products: [{ id: 'p1', name: 'Blue Dream', category: 'Flower', recPrices: [35] }],
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      );
+      const operationName = JSON.parse(String(init?.body)).operationName;
+      if (operationName === 'ConsumerDispensaries') {
+        return graphqlResponse({ filteredDispensaries: [{ id: 'd-1', name: 'Green Leaf' }] });
+      }
+      return publicProductsResponse('Flower', 'Blue Dream');
     });
     globalThis.fetch = mockFetch;
 
@@ -541,77 +517,43 @@ describe('resolveMenuSource', () => {
     expect(result.categories[0].products[0].brand).toBe('High Garden');
   });
 
-  it('uses Dutchie menu section products without making a second large-menu product request', async () => {
-    const mockFetch = vi.fn(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            data: {
-              filteredDispensaries: [
-                {
-                  id: 'd-1',
-                  name: 'Green Leaf',
-                  logoImage: 'https://img.com/logo.png',
-                  menuSections: [
-                    {
-                      category: 'Tinctures',
-                      products: [
-                        { id: 'p1', name: 'CBD Drops 30ml', brand: 'Care Co', category: 'Tinctures', recPrices: [38], Options: ['30ml'] },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
-    ) as unknown as typeof fetch;
+  it('imports Dutchie menu products from the dedicated product endpoint', async () => {
+    let calls = 0;
+    const mockFetch = vi.fn(() => {
+      calls++;
+      if (calls === 1) {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'd-1', name: 'Green Leaf', logoImage: 'https://img.com/logo.png' }],
+        });
+      }
+      return publicProductsResponse('Tinctures', 'CBD Drops 30ml');
+    }) as unknown as typeof fetch;
     globalThis.fetch = mockFetch;
 
     const result = await resolveMenuSource('green-leaf', {});
     expect(result.dispensaryName).toBe('Green Leaf');
     expect(result.productCount).toBe(1);
     expect(result.categories[0].name).toBe('Tinctures');
-    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('tries public Dutchie import before private API for store URLs from QR setup', async () => {
-    let requestedUrl = '';
-    const mockFetch = vi.fn((input: Parameters<typeof fetch>[0]) => {
-      requestedUrl = String(input);
-      return Promise.resolve(
-        new Response(
-          JSON.stringify({
-            data: {
-              filteredDispensaries: [
-                {
-                  id: 'd-1',
-                  name: 'Green Leaf',
-                  menuSections: [
-                    {
-                      category: 'Flower',
-                      products: [
-                        { id: 'p1', name: 'Blue Dream 3.5g', brand: 'High Garden', category: 'Flower', recPrices: [35], Options: ['3.5g'] },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      );
+    const requestedOperations: string[] = [];
+    const mockFetch = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const operationName = JSON.parse(String(init?.body)).operationName;
+      requestedOperations.push(operationName);
+      if (operationName === 'ConsumerDispensaries') {
+        return graphqlResponse({ filteredDispensaries: [{ id: 'd-1', name: 'Green Leaf' }] });
+      }
+      return publicProductsResponse();
     });
     globalThis.fetch = mockFetch as unknown as typeof fetch;
 
     const result = await resolveMenuSource('https://dutchie.com/stores/green-leaf', { DUTCHIE_API_KEY: 'private-key' });
     expect(result.apiUsed).toBe(false);
     expect(result.productCount).toBe(1);
-    expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(requestedUrl).toContain('operationName=ConsumerDispensaries');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(requestedOperations).toEqual(['ConsumerDispensaries', 'FilteredProducts']);
   });
 });
 

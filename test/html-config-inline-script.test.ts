@@ -87,6 +87,13 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('Open / Add');
   });
 
+  it('keeps the wide-screen controls and TV simulator side by side', () => {
+    expect(html).toContain('.desktop-layout{display:flex;width:100%;height:100vh;min-width:0;}');
+    expect(html).toContain('#simulatorPanel{flex:1 1 420px;min-width:0;');
+    expect(html).toContain('.sim-frame{position:absolute;');
+    expect(html).not.toContain('allowfullscreen');
+  });
+
   it('places JSON backup actions in the TV preview options area, not the import card', () => {
     const importSection = between(html, '<section class="control-section" id="section-import"', '</section>');
     const simulatorPanel = between(html, '<aside id="simulatorPanel"', '</aside>');

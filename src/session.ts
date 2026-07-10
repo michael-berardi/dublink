@@ -1,7 +1,7 @@
 import { MenuConfig, DEFAULT_CONFIG, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
 import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
 
-export interface Env extends AuthEnv {}
+export type Env = AuthEnv;
 
 interface WSConnection {
   socket: WebSocket;
@@ -970,23 +970,38 @@ export class SessionDurableObject implements DurableObject {
         id: typeof cat.id === 'string' ? this.sanitizeString(cat.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80) : `cat-${index}`,
         name: typeof cat.name === 'string' ? this.sanitizeString(cat.name) : `Category ${index + 1}`,
         order: typeof cat.order === 'number' ? Math.max(0, Math.floor(cat.order)) : index,
-        products: rawProducts.slice(0, 500).filter(isRecord).map((p, pIndex): Product => ({
-          id: typeof p.id === 'string' ? this.sanitizeString(p.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120) : `prod-${index}-${pIndex}`,
-          name: typeof p.name === 'string' ? this.sanitizeString(p.name) : `Product ${pIndex + 1}`,
-          price: typeof p.price === 'number' ? this.sanitizePrice(p.price) : 0,
-          originalPrice: typeof p.originalPrice === 'number' ? this.sanitizePrice(p.originalPrice) : undefined,
-          thc: typeof p.thc === 'string' ? this.sanitizeString(p.thc) : undefined,
-          cbd: typeof p.cbd === 'string' ? this.sanitizeString(p.cbd) : undefined,
-          description: typeof p.description === 'string' ? this.sanitizeString(p.description) : undefined,
-          image: typeof p.image === 'string' ? this.sanitizeString(p.image) : undefined,
-          weight: typeof p.weight === 'string' ? this.sanitizeString(p.weight) : undefined,
-          brand: typeof p.brand === 'string' ? this.sanitizeString(p.brand) : undefined,
-          sku: typeof p.sku === 'string' ? this.sanitizeString(p.sku) : undefined,
-          inStock: p.inStock !== false,
-          strain: this.sanitizeStrain(p.strain),
-          isPromo: Boolean(p.isPromo),
-          priceTiers: this.sanitizePriceTiers(p.priceTiers),
-        })),
+        products: rawProducts.slice(0, 500).filter(isRecord).map((p, pIndex): Product => {
+          const price = typeof p.price === 'number' ? this.sanitizePrice(p.price) : 0;
+          const originalPrice = typeof p.originalPrice === 'number'
+            ? this.sanitizePrice(p.originalPrice)
+            : undefined;
+          const specialLabel = typeof p.specialLabel === 'string'
+            ? this.sanitizeString(p.specialLabel)
+            : undefined;
+          return {
+            id: typeof p.id === 'string' ? this.sanitizeString(p.id).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120) : `prod-${index}-${pIndex}`,
+            name: typeof p.name === 'string' ? this.sanitizeString(p.name) : `Product ${pIndex + 1}`,
+            price,
+            originalPrice,
+            thc: typeof p.thc === 'string' ? this.sanitizeString(p.thc) : undefined,
+            cbd: typeof p.cbd === 'string' ? this.sanitizeString(p.cbd) : undefined,
+            description: typeof p.description === 'string' ? this.sanitizeString(p.description) : undefined,
+            image: typeof p.image === 'string' ? this.sanitizeString(p.image) : undefined,
+            weight: typeof p.weight === 'string' ? this.sanitizeString(p.weight) : undefined,
+            brand: typeof p.brand === 'string' ? this.sanitizeString(p.brand) : undefined,
+            sku: typeof p.sku === 'string' ? this.sanitizeString(p.sku) : undefined,
+            inStock: p.inStock !== false,
+            strain: this.sanitizeStrain(p.strain),
+            isPromo: Boolean(
+              p.isPromo ||
+              p.special ||
+              specialLabel ||
+              (originalPrice !== undefined && originalPrice > price)
+            ),
+            specialLabel,
+            priceTiers: this.sanitizePriceTiers(p.priceTiers),
+          };
+        }),
       };
     }).sort((a, b) => a.order - b.order);
   }

@@ -115,3 +115,22 @@ export function analyzeReferenceStyle(input: ReferenceStyleInput): ReferenceStyl
     },
   };
 }
+
+export function resolveImportedPresentation(
+  style: Pick<ReferenceStyleResult, 'layout' | 'template'>,
+  notes: string,
+  hasImportedBrandStyle: boolean,
+  inferredBrandTemplate: MenuConfig['template'],
+): Pick<MenuConfig, 'layout' | 'template'> {
+  const hasExplicitLayoutNotes = /\b(price\s*wall|pricewall|poster|cinematic|showcase|editorial|sparse|single[- ]hero|grid|columns?|list|compact)\b/i.test(notes);
+  const hasExplicitTemplateNotes = /\b(green|forest|emerald|gold|golden|lux|luxury|premium|elite|crown|blue|ocean|aqua|red|ruby|crimson|rose|scarlet|white|bone|ivory|neon|cyber|sunset|orange|ember|purple|vapor|pink|cosmic|royal|heritage)\b/i.test(notes);
+  const layout: MenuConfig['layout'] = hasExplicitLayoutNotes ? style.layout : 'auto';
+  const template: MenuConfig['template'] = hasExplicitTemplateNotes
+    ? style.template
+    : hasImportedBrandStyle
+      ? 'default'
+      : style.template === 'default'
+        ? inferredBrandTemplate
+        : style.template;
+  return { layout, template };
+}

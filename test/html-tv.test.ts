@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tvPage } from '../src/html-tv';
+import { isVisuallyBlankImageSample, normalizeTvUploadImageUrl, tvPage } from '../src/html-tv';
 
 describe('tvPage', () => {
   const sampleConfig = {
@@ -16,6 +16,40 @@ describe('tvPage', () => {
     ],
     template: 'default',
   };
+
+  it('accepts only app-owned uploads, preserves their origin, and versions CORS responses', () => {
+    expect(normalizeTvUploadImageUrl('/api/uploads/acct/photo.jpg', 'https://store.example')).toBe('/api/uploads/acct/photo.jpg?dubmenu-cors=1');
+    expect(normalizeTvUploadImageUrl(
+      'https://dubmenu.com/api/uploads/acct/photo.jpg?version=1',
+      'https://store.example'
+    )).toBe('https://dubmenu.com/api/uploads/acct/photo.jpg?version=1&dubmenu-cors=1');
+    expect(normalizeTvUploadImageUrl(
+      'https://store.example/api/uploads/acct/photo.jpg',
+      'https://store.example'
+    )).toBe('https://store.example/api/uploads/acct/photo.jpg?dubmenu-cors=1');
+    expect(normalizeTvUploadImageUrl(
+      'https://images.dutchie.com/api/uploads/acct/photo.jpg',
+      'https://store.example'
+    )).toBe('');
+  });
+
+  it('classifies washed-out samples while retaining photos with visible subject detail', () => {
+    const sample = (darkPixels: number) => {
+      const pixels = new Uint8ClampedArray(24 * 24 * 4);
+      for (let pixel = 0; pixel < 24 * 24; pixel++) {
+        const value = pixel < darkPixels ? 40 : 255;
+        const offset = pixel * 4;
+        pixels[offset] = value;
+        pixels[offset + 1] = value;
+        pixels[offset + 2] = value;
+        pixels[offset + 3] = 255;
+      }
+      return pixels;
+    };
+    expect(isVisuallyBlankImageSample(sample(0))).toBe(true);
+    expect(isVisuallyBlankImageSample(sample(10))).toBe(true);
+    expect(isVisuallyBlankImageSample(sample(24))).toBe(false);
+  });
 
   it('renders product images when showImages is true', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: true } });
@@ -70,8 +104,14 @@ describe('tvPage', () => {
         ],
       },
     });
-    expect(page).toContain("parsed.pathname.indexOf('/api/uploads/') === 0");
-    expect(page).not.toContain("if(/^\\\\/api\\\\/uploads\\\\//.test(u) || /^https:");
+    expect(page).toContain('normalizeTvUploadImageUrl(url, location.origin)');
+  });
+
+  it('prevents embedded config previews from taking over fullscreen', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
+    expect(page).toContain("var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1'");
+    expect(page).toContain('if(EMBED_MODE||fsDone||fsPending)return');
+    expect(page).toContain('fsPending=false');
   });
 
   it('uses production origin for the QR code on non-local hosts', () => {
@@ -171,6 +211,7 @@ describe('tvPage', () => {
     expect(page).toContain('.layout-poster .poster-products.no-images');
     expect(page).toContain("' no-images'");
     expect(page).toContain('.layout-cinematic .product-card.no-image');
+    expect(page).toContain("if(DISPLAY_TOTAL >= 4) return hasDisplayImages(cfg) ? 'cinematic' : 'list'");
     expect(page).toContain('.layout-editorial .product-card.no-image');
   });
 
@@ -302,10 +343,10 @@ describe('tvPage', () => {
     expect(page).not.toContain('card-image-placeholder');
   });
 
-  it('wraps sparse multi-screen allocation when there are fewer categories than displays', () => {
+  it('injects the tested multi-display allocator into the TV runtime', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: true } });
-    expect(page).toContain('cats.length>0 && cats.length<DISPLAY_TOTAL');
-    expect(page).toContain('return [cats[(Math.max(1,DISPLAY_NUM)-1)%cats.length]]');
+    expect(page).toContain('var allocateCategoriesForDisplay = function allocateCategoriesForDisplay');
+    expect(page).toContain('return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL)');
   });
 
   it('clamps stale cycle page state before rendering a smaller display slice', () => {
@@ -327,6 +368,14 @@ describe('tvPage', () => {
     expect(page).toContain("img.closest && img.closest('.has-image')");
     expect(page).toContain("card.classList.remove('has-image')");
     expect(page).toContain("card.classList.add('no-image')");
+  });
+
+  it('runs loaded product photos through the CORS-safe blank-image handler', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig } });
+    expect(page).toContain('crossorigin="anonymous"');
+    expect(page).toContain('window.dubmenuImgLoaded(this)');
+    expect(page).toContain('isVisuallyBlankImageSample(pixels)');
+    expect(page).toContain('window.dubmenuImgFallback(img)');
   });
 
   it('does not assign has-image or render an image placeholder for grid products without an image', () => {
@@ -391,14 +440,21 @@ describe('tvPage', () => {
     expect(page).toContain('flex:0 0 auto;');
   });
 
-  it('merges sparse specials into populated price-wall categories instead of rendering empty rails', () => {
+  it('reserves the price-wall rail for explicit specials instead of duplicating sale products', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
     expect(page).toContain('function getPricewallPromoProducts(cats)');
-    expect(page).toContain('function mergeSparsePricewallSpecials(cats, promoProducts)');
-    expect(page).toContain('var shouldUsePromoRail = !!getActiveBanner() || promoProducts.length >= 3');
-    expect(page).toContain('displayCats = mergeSparsePricewallSpecials(cats, promoProducts)');
-    expect(page).toContain('pricewallRailCats = []');
+    expect(page).toContain('var explicitSpecialCats = cats.filter(isSpecialCategory)');
+    expect(page).toContain('pricewallRailCats = explicitSpecialCats');
+    expect(page).toContain('if(!specials) return false');
+    expect(page).not.toContain('mergeSparsePricewallSpecials');
     expect(page).toContain('.layout-pricewall .card-price .promo-price');
+  });
+
+  it('makes markdown pricing explicit and formats fractional currency to cents', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
+    expect(page).toContain('<span class="sale-text">Now $');
+    expect(page).toContain("numeric.toFixed(2).replace(/\\.00$/, '')");
+    expect(page).toContain('.card-price-orig{color:var(--text-muted)');
   });
 
   it('does not render manual specials without prices as zero-dollar products', () => {

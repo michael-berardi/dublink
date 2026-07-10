@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeReferenceStyle } from '../src/reference-style';
+import { analyzeReferenceStyle, resolveImportedPresentation } from '../src/reference-style';
 
 describe('analyzeReferenceStyle', () => {
   it('turns dense no-photo multi-display cues into a price wall preset', () => {
@@ -136,5 +136,57 @@ describe('analyzeReferenceStyle smart-import payload contract', () => {
 
     expect(result.styleProfile.sourceUrl).toHaveLength(300);
     expect(result.styleProfile.notes).toHaveLength(500);
+  });
+});
+
+describe('resolveImportedPresentation', () => {
+  it('keeps automatic layout selection and applies imported brand colors neutrally', () => {
+    const style = analyzeReferenceStyle({
+      sourceUrl: 'https://dutchie.com/dispensary/vibe-by-california-ukiah',
+      productCount: 56,
+      currentShowImages: true,
+    });
+
+    expect(resolveImportedPresentation(style, '', true, 'vapor')).toEqual({
+      layout: 'auto',
+      template: 'default',
+    });
+  });
+
+  it('uses the inferred identity when no imported brand style exists', () => {
+    const style = analyzeReferenceStyle({
+      sourceUrl: 'https://dutchie.com/dispensary/simply-green',
+      productCount: 65,
+      currentShowImages: true,
+    });
+
+    expect(resolveImportedPresentation(style, '', false, 'forest')).toEqual({
+      layout: 'auto',
+      template: 'forest',
+    });
+  });
+
+  it('honors explicit layout and color direction from operator notes', () => {
+    const style = analyzeReferenceStyle({
+      notes: 'four-display green price wall, no photos',
+      productCount: 60,
+    });
+
+    expect(resolveImportedPresentation(style, 'four-display green price wall, no photos', true, 'vapor')).toEqual({
+      layout: 'pricewall',
+      template: 'forest',
+    });
+  });
+
+  it('keeps layout automatic when notes specify only a theme', () => {
+    const style = analyzeReferenceStyle({
+      notes: 'warm orange visual direction',
+      productCount: 60,
+    });
+
+    expect(resolveImportedPresentation(style, 'warm orange visual direction', true, 'vapor')).toEqual({
+      layout: 'auto',
+      template: 'sunset',
+    });
   });
 });

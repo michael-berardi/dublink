@@ -23,10 +23,18 @@ describe('importDutchiePublicMenu', () => {
     );
   }
 
+  function requestOperation(init?: RequestInit): string | undefined {
+    if (typeof init?.body !== 'string') return undefined;
+    const parsed: unknown = JSON.parse(init.body);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || !('operationName' in parsed)) {
+      return undefined;
+    }
+    return typeof parsed.operationName === 'string' ? parsed.operationName : undefined;
+  }
+
   it('imports products, categories, name, logo, and cleaned image URLs from the public GraphQL API', async () => {
-    globalThis.fetch = vi.fn(async (input: string | Request) => {
-      const url = typeof input === 'string' ? input : input.url;
-      if (url.includes('/graphql') && url.includes('ConsumerDispensaries')) {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
         return graphqlResponse({
           filteredDispensaries: [
             {
@@ -75,12 +83,88 @@ describe('importDutchiePublicMenu', () => {
     ]);
   });
 
-  it('uses the SHA-256 hash of the query in the persisted-query extension', async () => {
-    const captured: string[] = [];
-    globalThis.fetch = vi.fn(async (input: string | Request) => {
+  it('uses the current Dutchie schema, paginates every product page, and maps live field names', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = vi.fn(async (input: string | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.url;
-      captured.push(url);
-      if (url.includes('ConsumerDispensaries')) {
+      calls.push({ url, init });
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body.operationName === 'ConsumerDispensaries') {
+        expect(body.query).toContain('$dispensaryFilter: dispensariesFilterInput!');
+        expect(body.query).toContain('filteredDispensaries(filter: $dispensaryFilter)');
+        return graphqlResponse({
+          filteredDispensaries: [{
+            id: 'disp-123',
+            name: 'Simply Green',
+            logoImage: 'https://images.dutchie.com/logo.png',
+            webCustomizationSettingsV2: {
+              colors: { buttonsLinks: '#5f8f41', navBar: '#172219' },
+              fonts: { body: 'Montserrat', heading: 'Montserrat' },
+            },
+          }],
+        });
+      }
+
+      expect(url).toBe('https://dutchie.com/api-4/graphql');
+      expect(body.query).toContain('$productsFilter: productsFilterInput!');
+      expect(body.query).toMatch(/filteredProducts\(\s*filter:\s*\$productsFilter/);
+      const page = body.variables.page as number;
+      return graphqlResponse({
+        filteredProducts: {
+          products: [{
+            id: `product-${page}`,
+            Name: page === 0 ? 'Blue Dream 3.5g' : `Product ${page}`,
+            brandName: 'High Garden',
+            type: page === 2 ? 'Edible' : 'Flower',
+            strainType: 'Hybrid',
+            THCContent: { unit: 'PERCENTAGE', range: [22.4] },
+            CBDContent: { unit: 'PERCENTAGE', range: [0.1] },
+            description: '<p>Bright &amp; citrus flower</p>',
+            Image: `https://images.dutchie.com/product-${page}.jpg`,
+            Options: [page === 0 ? '1g' : '3.5g'],
+            recPrices: [35],
+            recSpecialPrices: page === 1 ? [28] : [],
+            special: page === 1 ? 'Weekly special' : null,
+            Status: 'Active',
+          }],
+          queryInfo: { totalCount: 3, totalPages: 3 },
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await importDutchiePublicMenu('simply-green');
+    const products = result.categories.flatMap((category) => category.products);
+    expect(result.productCount).toBe(3);
+    expect(products).toHaveLength(3);
+    expect(products[0]).toMatchObject({
+      name: 'Blue Dream 3.5g',
+      brand: 'High Garden',
+      category: 'Flower',
+      strain: 'hybrid',
+      thc: '22.4%',
+      cbd: '0.1%',
+      description: 'Bright & citrus flower',
+      image: 'https://images.dutchie.com/product-0.jpg?h=400&w=400',
+      weight: '3.5g',
+    });
+    expect(products.find((product) => product.id === 'product-1')).toMatchObject({
+      price: 28,
+      originalPrice: 35,
+      special: true,
+    });
+    expect(result.brandStyle).toEqual({
+      primaryColor: '#5f8f41',
+      secondaryColor: '#172219',
+    });
+    expect(calls.filter((call) => call.url === 'https://dutchie.com/api-4/graphql')).toHaveLength(3);
+  });
+
+  it('posts full query documents directly without an unregistered persisted-query round trip', async () => {
+    const captured: Array<{ url: string; init?: RequestInit }> = [];
+    globalThis.fetch = vi.fn(async (input: string | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.url;
+      captured.push({ url, init });
+      if (requestOperation(init) === 'ConsumerDispensaries') {
         return graphqlResponse({
           filteredDispensaries: [{ id: 'disp-123', name: 'Test', menuSections: [] }],
         });
@@ -94,52 +178,19 @@ describe('importDutchiePublicMenu', () => {
 
     await importDutchiePublicMenu('simply-green');
 
-    const consumerUrl = captured.find((u) => u.includes('ConsumerDispensaries'));
-    expect(consumerUrl).toBeDefined();
-    const params = new URLSearchParams(new URL(consumerUrl!).search);
-    const extensions = JSON.parse(params.get('extensions') || '{}');
-    expect(extensions.persistedQuery.version).toBe(1);
-    expect(extensions.persistedQuery.sha256Hash).toMatch(/^[a-f0-9]{64}$/);
-    expect(extensions.persistedQuery.sha256Hash).not.toContain(' ');
-    expect(extensions.persistedQuery.sha256Hash).not.toBe('adhoc');
-  });
-
-  it('falls back to POST with the full query when the persisted query is not recognized', async () => {
-    const captured: Array<{ url: string; init?: RequestInit }> = [];
-    globalThis.fetch = vi.fn(async (input: string | Request, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.url;
-      captured.push({ url, init });
-      const method = init?.method || 'GET';
-      if (method === 'GET' && url.includes('ConsumerDispensaries')) {
-        // First GET fails with PersistedQueryNotFound.
-        return new Response(
-          JSON.stringify({ errors: [{ message: 'PersistedQueryNotFound' }] }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      if (method === 'POST' && url.includes('/graphql')) {
-        return graphqlResponse({
-          filteredDispensaries: [{ id: 'disp-123', name: 'Fallback', menuSections: [] }],
-        });
-      }
-      return graphqlResponse({ filteredProducts: { products: [] } });
-    }) as unknown as typeof fetch;
-
-    await expect(importDutchiePublicMenu('simply-green')).rejects.toThrow('Dutchie public API returned no products');
-
-    const postCalls = captured.filter((c) => c.init?.method === 'POST' && c.url.includes('/graphql'));
-    expect(postCalls.length).toBe(1);
-    const body = JSON.parse(postCalls[0].init!.body as string);
-    expect(body.operationName).toBe('ConsumerDispensaries');
-    expect(body.query).toContain('ConsumerDispensaries');
-    expect(body.query).toContain('filteredDispensaries');
-    expect(body.extensions.persistedQuery.sha256Hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(captured).toHaveLength(2);
+    expect(captured.every((call) => call.init?.method === 'POST')).toBe(true);
+    for (const call of captured) {
+      const parsed: unknown = JSON.parse(String(call.init?.body));
+      expect(parsed).toBeTypeOf('object');
+      expect(parsed).not.toBeNull();
+      expect(parsed).not.toHaveProperty('extensions');
+    }
   });
 
   it('extracts images from the images array and POSMetaData fallback', async () => {
-    globalThis.fetch = vi.fn(async (input: string | Request) => {
-      const url = typeof input === 'string' ? input : input.url;
-      if (url.includes('ConsumerDispensaries')) {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
         return graphqlResponse({
           filteredDispensaries: [{ id: 'disp-123', name: 'Image Test', menuSections: [] }],
         });
@@ -174,31 +225,11 @@ describe('importDutchiePublicMenu', () => {
     ]);
   });
 
-  it('falls back to menu section products when the FilteredProducts query errors', async () => {
-    globalThis.fetch = vi.fn(async (input: string | Request) => {
-      const url = typeof input === 'string' ? input : input.url;
-      if (url.includes('ConsumerDispensaries')) {
+  it('surfaces the failing Dutchie operation when product retrieval is rejected', async () => {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
         return graphqlResponse({
-          filteredDispensaries: [
-            {
-              id: 'disp-123',
-              name: 'Section Fallback',
-              menuSections: [
-                {
-                  category: 'Flower',
-                  products: [
-                    {
-                      id: 'p1',
-                      name: 'Blue Dream 3.5g',
-                      description: 'Section-provided flower',
-                      recPrices: [35],
-                      image: 'https://images.dutchie.com/blue.jpg',
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+          filteredDispensaries: [{ id: 'disp-123', name: 'Rejected Products', menuSections: [] }],
         });
       }
       return new Response(
@@ -207,18 +238,77 @@ describe('importDutchiePublicMenu', () => {
       );
     }) as unknown as typeof fetch;
 
-    const result = await importDutchiePublicMenu('section-fallback');
-    expect(result.dispensaryName).toBe('Section Fallback');
-    expect(result.productCount).toBe(1);
-    expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/blue.jpg?h=400&w=400');
-    expect(result.categories[0].name).toBe('Flower');
-    expect(result.categories[0].products[0].description).toBe('Section-provided flower');
+    await expect(importDutchiePublicMenu('rejected-products')).rejects.toThrow(
+      'Dutchie FilteredProducts returned 403: Forbidden'
+    );
+  });
+
+  it('collapses duplicate sale/base variants instead of rendering repeated price chips', async () => {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'disp-123', name: 'Tier Test', menuSections: [] }],
+        });
+      }
+      return graphqlResponse({
+        filteredProducts: {
+          products: [{
+            id: 'sale-flower',
+            Name: 'Sale Flower',
+            type: 'Flower',
+            Options: ['1/8oz', '1/8oz'],
+            recPrices: [36, 36],
+            recSpecialPrices: [21.6, 21.6],
+            POSMetaData: {
+              children: [
+                { option: '1/8oz', recPrice: 36 },
+                { option: '1/8oz', recPrice: 36 },
+              ],
+            },
+          }],
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await importDutchiePublicMenu('tier-test');
+    const product = result.categories[0].products[0];
+    expect(product.price).toBe(21.6);
+    expect(product.originalPrice).toBe(36);
+    expect(product.priceTiers).toBeUndefined();
+  });
+
+  it('normalizes the broader Dutchie product taxonomy without name guessing', async () => {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'disp-123', name: 'Taxonomy Test', menuSections: [] }],
+        });
+      }
+      return graphqlResponse({
+        filteredProducts: {
+          products: [
+            { id: 'beverage', Name: 'Sparkling Water', type: 'Beverage', recPrices: [8] },
+            { id: 'clone', Name: 'Starter Plant', type: 'Clones', recPrices: [25] },
+            { id: 'apparel', Name: 'Logo Hoodie', type: 'Apparel', recPrices: [40] },
+          ],
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await importDutchiePublicMenu('taxonomy-test');
+    const categoryByProduct = Object.fromEntries(
+      result.categories.flatMap((category) => category.products.map((product) => [product.id, category.name]))
+    );
+    expect(categoryByProduct).toEqual({
+      beverage: 'Edibles',
+      clone: 'Flower',
+      apparel: 'Accessories',
+    });
   });
 
   it('keeps all products for the formatter to rank and cap', async () => {
-    globalThis.fetch = vi.fn(async (input: string | Request) => {
-      const url = typeof input === 'string' ? input : input.url;
-      if (url.includes('ConsumerDispensaries')) {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      if (requestOperation(init) === 'ConsumerDispensaries') {
         return graphqlResponse({ filteredDispensaries: [{ id: 'disp-123', name: 'Large Menu', menuSections: [] }] });
       }
       return graphqlResponse({

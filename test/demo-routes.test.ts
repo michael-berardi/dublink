@@ -69,7 +69,7 @@ describe('demo route fallback', () => {
     const res = await SELF.fetch('https://dubmenu.com/digital-menu-board-for-cannabis-dispensary');
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toMatch(/href="http:\/\/127\.0\.0\.1:\d+\/signup">Start Your Free Trial<\/a>/);
+    expect(html).toContain('href="https://dubmenu.com/signup">Start Your Free Trial</a>');
     expect(html).not.toContain('href="https://tv.dubmenu.com/tv/demo" target="_blank">Start Your Free Trial</a>');
   });
 });
