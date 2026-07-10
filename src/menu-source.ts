@@ -74,6 +74,9 @@ const DUTCHIE_STORE_RE = /dutchie\.com\/stores\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_DISPENSARY_RE = /dutchie\.com\/dispensary\/([a-zA-Z0-9_-]+)/i;
 const DUTCHIE_ROOT_SLUG_RE = /https?:\/\/(?:www\.)?dutchie\.com\/([a-zA-Z0-9_-]+)(?:\/[a-zA-Z0-9_-]+)?/i;
 const DUTCHIE_RESERVED_PATHS = new Set(['api', 'api-2', 'assets', 'business', 'cdn', 'help', 'hc', 'images', 'stores', 'store', 'dispensaries', 'us', 'embedded-menu', 'www']);
+const KNOWN_DUTCHIE_WEBSITE_SLUGS: Record<string, string> = {
+  'simplygreenny.com': 'simply-green',
+};
 
 
 function looksLikeUrl(value: string): boolean {
@@ -146,6 +149,10 @@ export function detectMenuSource(input: string): MenuSource {
   }
 
   const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+  const knownDutchieSlug = KNOWN_DUTCHIE_WEBSITE_SLUGS[hostname];
+  if (knownDutchieSlug) {
+    return { type: 'website-dutchie', slug: knownDutchieSlug, url: urlStr };
+  }
 
 
   if (hostname === 'dutchie.com' || hostname.endsWith('.dutchie.com')) {

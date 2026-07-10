@@ -26,14 +26,20 @@ describe('detectMenuSource', () => {
     expect(s.slug).toBe('simply-green');
   });
 
-  it('treats Simply Green website URLs as generic websites', () => {
+  it('routes Simply Green production URLs through its live Dutchie store', () => {
     const s = detectMenuSource('https://simplygreenny.com/shop');
-    expect(s.type).toBe('website-generic');
-    expect(s.url).toBe('https://simplygreenny.com/shop');
+    expect(s).toMatchObject({
+      type: 'website-dutchie',
+      slug: 'simply-green',
+      url: 'https://simplygreenny.com/shop',
+    });
 
     const www = detectMenuSource('https://www.simplygreenny.com/');
-    expect(www.type).toBe('website-generic');
-    expect(www.url).toBe('https://www.simplygreenny.com/');
+    expect(www).toMatchObject({
+      type: 'website-dutchie',
+      slug: 'simply-green',
+      url: 'https://www.simplygreenny.com/',
+    });
 
     const staging = detectMenuSource('https://dc88ae0b.simply-green-ny.pages.dev/shop');
     expect(staging.type).toBe('website-generic');
@@ -429,19 +435,15 @@ describe('resolveMenuSource', () => {
     await expect(resolveMenuSource('https://empty-menu.com', {})).rejects.toThrow('No live menu products found');
   });
 
-  it('imports Simply Green website through Browserless when its HTML embeds a Dutchie iframe and GraphQL is blocked', async () => {
+  it('imports Simply Green through Browserless when public GraphQL is blocked', async () => {
     const structuredUrls: string[] = [];
     let privateCalls = 0;
-    const websiteHtml = '<html><body><iframe src="https://dutchie.com/embedded-menu/simply-green/"></iframe></body></html>';
     globalThis.fetch = vi.fn<typeof fetch>((input, init) => {
       if (new Headers(init?.headers).has('x-api-key')) {
         privateCalls++;
         return Promise.resolve(new Response('Private API should not be called', { status: 500 }));
       }
       const requestedUrl = String(input);
-      if (requestedUrl === 'https://simplygreenny.com/shop') {
-        return Promise.resolve(new Response(websiteHtml, { status: 200, headers: { 'Content-Type': 'text/html' } }));
-      }
       if (requestedUrl.startsWith('https://dutchie.com/graphql')) {
         return Promise.resolve(
           new Response(JSON.stringify({ errors: [{ message: 'Forbidden' }] }), {
@@ -481,7 +483,7 @@ describe('resolveMenuSource', () => {
       DUTCHIE_API_KEY: 'private-key',
     });
     expect(result.demo).toBeFalsy();
-    expect(result.source).toBe('website-dutchie:https://simplygreenny.com/shop');
+    expect(result.source).toBe('website-dutchie');
     expect(result.productCount).toBe(1);
     expect(result.categories[0].name).toBe('Flower');
     expect(structuredUrls[0]).toContain(encodeURIComponent('https://dutchie.com/stores/simply-green'));
