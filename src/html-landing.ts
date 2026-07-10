@@ -36,18 +36,21 @@ export function landingPage(origin: string): string {
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "DubMenu",
-    "url": "${safeOrigin}/",
-    "logo": "${safeOrigin}/og-image.png",
-    "sameAs": [
-      "https://dubhaven.com"
-    ],
-    "mainEntityOfPage": {
-      "@type": "WebSite",
-      "name": "DubMenu",
-      "url": "${safeOrigin}/"
-    }
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "DubMenu",
+        "url": "${safeOrigin}/",
+        "sameAs": [
+          "https://dubhaven.com"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "name": "DubMenu",
+        "url": "${safeOrigin}/"
+      }
+    ]
   }
   </script>
   <style>
