@@ -1,10 +1,38 @@
-import { setCookie, signToken, upsertDubHavenAccount, Account } from './auth';
+import { clearCookie, constantTimeEqual, getCookieValue, setCookie, signToken, upsertDubHavenAccount, Account } from './auth';
 import type { Env as BaseEnv } from './auth';
 
 export const DUBHAVEN_AUTH_URL_DEFAULT = 'https://dubhaven.com/api/auth/google';
 const DUBHAVEN_AUDIENCE = 'dubmenu';
 const _DUBHAVEN_ISSUER_DEFAULT = 'https://dubhaven.com';
 const DUBHAVEN_HANDOFF_TTL_SECONDS = 60; // 1 minute, matches DubHaven provider
+export const DUBHAVEN_STATE_COOKIE = 'dubmenu_dubhaven_state';
+
+function hasUnsafeRedirectChars(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (value[index] === '\\' || code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
+function safePostLoginRedirect(value: string | null | undefined, origin: string): string | null {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || hasUnsafeRedirectChars(value)) return null;
+  try {
+    const target = new URL(value, origin);
+    if (target.origin !== new URL(origin).origin) return null;
+    return `${target.pathname}${target.search}${target.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function callbackFailure(message: string, status: number): { response: Response; account: null; isNew: false } {
+  return {
+    response: new Response(message, { status, headers: { 'Set-Cookie': clearCookie(DUBHAVEN_STATE_COOKIE), 'Cache-Control': 'no-store' } }),
+    account: null,
+    isNew: false,
+  };
+}
 
 export interface DubHavenEnv extends BaseEnv {
   DUBHAVEN_AUTH_URL?: string;
@@ -34,9 +62,13 @@ interface DubHavenClaims extends DubHavenIdentity {
   exp: number;
 }
 
-function base64UrlEncode(buffer: ArrayBuffer): string {
-  const str = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-  return str.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+function base64UrlEncode(input: ArrayBufferLike | ArrayBufferView<ArrayBufferLike>): string {
+  const bytes = ArrayBuffer.isView(input)
+    ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+    : new Uint8Array(input);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 function base64UrlDecode(str: string): ArrayBuffer {
@@ -76,17 +108,18 @@ export function isDubHavenCallbackConfigured(env: DubHavenEnv): boolean {
   return Boolean(env.DUBHAVEN_ACCOUNT_SECRET && env.AUTH_SECRET);
 }
 
-export function buildDubHavenAuthUrl(env: DubHavenEnv, origin: string, redirectAfter?: string): string {
+export function buildDubHavenAuthUrl(env: DubHavenEnv, origin: string, redirectAfter?: string, nonce = crypto.randomUUID()): string {
   if (!isDubHavenStartConfigured(env, origin)) {
     throw new Error('DubHaven auth is not configured');
   }
+  const next = safePostLoginRedirect(redirectAfter, origin) || '/account';
   const callbackUrl = new URL('/auth/dubhaven/callback', origin);
-  if (redirectAfter) {
-    callbackUrl.searchParams.set('next', redirectAfter);
-  }
+  callbackUrl.searchParams.set('next', next);
   const authUrl = new URL(getDubHavenAuthUrl(env));
   authUrl.searchParams.set('product', 'dubmenu');
   authUrl.searchParams.set('redirect', callbackUrl.toString());
+  authUrl.searchParams.set('nonce', nonce);
+  authUrl.searchParams.set('returnTo', next);
   return authUrl.toString();
 }
 
@@ -175,24 +208,24 @@ export async function handleDubHavenCallback(
   secure: boolean
 ): Promise<{ response: Response; account: Account; isNew: boolean } | { response: Response; account: null; isNew: false }> {
   if (!isDubHavenCallbackConfigured(env)) {
-    return { response: new Response('DubHaven auth is not configured', { status: 503 }), account: null, isNew: false };
+    return callbackFailure('DubHaven auth is not configured', 503);
   }
   const url = new URL(request.url);
   const token = url.searchParams.get('token') || url.searchParams.get('id_token') || url.searchParams.get('identity');
   const error = url.searchParams.get('error');
-  const next = url.searchParams.get('next') || `${origin}/account`;
-  if (error) {
-    return { response: new Response(`DubHaven SSO error: ${error}`, { status: 400 }), account: null, isNew: false };
-  }
-  if (!token) {
-    return { response: new Response('Missing DubHaven identity token', { status: 400 }), account: null, isNew: false };
-  }
+  if (error) return callbackFailure(`DubHaven SSO error: ${error}`, 400);
+  if (!token) return callbackFailure('Missing DubHaven identity token', 400);
   const identity = await verifyDubHavenToken(token, env.DUBHAVEN_ACCOUNT_SECRET as string, {
     issuer: env.DUBHAVEN_ISSUER,
   });
-  if (!identity) {
-    return { response: new Response('Invalid or expired DubHaven identity token', { status: 400 }), account: null, isNew: false };
+  if (!identity) return callbackFailure('Invalid or expired DubHaven identity token', 400);
+  const browserState = getCookieValue(request, DUBHAVEN_STATE_COOKIE);
+  if (!browserState || !identity.nonce || !constantTimeEqual(browserState, identity.nonce)) {
+    return callbackFailure('DubHaven sign-in state did not match this browser', 400);
   }
+  const next = safePostLoginRedirect(url.searchParams.get('next'), origin)
+    || safePostLoginRedirect(identity.returnTo, origin)
+    || `${origin}/account`;
   try {
     const localAccountId = dubmenuAccountId(identity.accountId);
     const { account, isNew } = await upsertDubHavenAccount(env, {
@@ -205,15 +238,16 @@ export async function handleDubHavenCallback(
       picture: identity.picture ?? undefined,
     });
     const authToken = await signToken({ accountId: account.id, email: account.email }, env.AUTH_SECRET as string);
-    const headers: Record<string, string> = {
+    const headers = new Headers({
       Location: next,
-      'Set-Cookie': setCookie('dubmenu_auth', authToken, 60 * 60 * 24 * 7, secure),
       'Cache-Control': 'no-store',
-    };
+    });
+    headers.append('Set-Cookie', setCookie('dubmenu_auth', authToken, 60 * 60 * 24 * 7, secure));
+    headers.append('Set-Cookie', clearCookie(DUBHAVEN_STATE_COOKIE));
     return { response: new Response(null, { status: 302, headers }), account, isNew };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'DubHaven sign-in failed';
-    return { response: new Response(message, { status: 500 }), account: null, isNew: false };
+    return callbackFailure(message, 500);
   }
 }
 

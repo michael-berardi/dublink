@@ -40,12 +40,12 @@ function parseStrain(text: string): 'indica' | 'sativa' | 'hybrid' | undefined {
 }
 
 function parseTHC(text: string): string | undefined {
-  const m = text.match(/THC:\s*([\d.]+\s*(?:%|mg))/i);
+  const m = text.match(/THC\s*:?\s*([\d.]+\s*(?:%|mg))/i);
   return m ? m[1].replace(/\s+/g, '') : undefined;
 }
 
 function parseCBD(text: string): string | undefined {
-  const m = text.match(/CBD:\s*([\d.]+\s*(?:%|mg))/i);
+  const m = text.match(/CBD\s*:?\s*([\d.]+\s*(?:%|mg))/i);
   return m ? m[1].replace(/\s+/g, '') : undefined;
 }
 
@@ -364,12 +364,12 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
   for (const p of data.products) {
     const slug = productSlugFromHref(p.href);
     if (!slug || seen.has(slug)) continue;
-    seen.add(slug);
+
 
     const text = p.text || '';
     const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
     const firstLine = lines[0] || '';
-    const pollutedLine = !firstLine || /^(indica|sativa|hybrid)$/i.test(firstLine) || /THC:|CBD:|\$|Add to cart/i.test(firstLine) || firstLine.length > 110;
+    const pollutedLine = !firstLine || /^(indica|sativa|hybrid)$/i.test(firstLine) || /THC\s*:?\s*\d|CBD\s*:?\s*\d|\$|Add to cart/i.test(firstLine) || firstLine.length > 110;
     const rawName = pollutedLine ? titleFromSlug(slug) : firstLine;
     const { name, brand, category: parsedCategory } = parseName(rawName);
     const cleanName = cleanScrapedDisplayName(name);
@@ -377,6 +377,8 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     const thc = parseTHC(text);
     const cbd = parseCBD(text);
     const { price, originalPrice } = parsePrices(text);
+    if (!price) continue;
+    seen.add(slug);
     const weight = cleanWeight(parseWeight(`${rawName} ${text}`));
     const category = guessCategory(p.href || '', text || rawName, parsedCategory);
     const specialLabel = saleLabel(text, originalPrice);
@@ -392,7 +394,7 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
       cbd,
       image: cleanImageUrl(p.img),
       weight,
-      brand: brand || lines.find(l => l && l !== name && l !== cleanName && l !== strain && !l.includes('THC') && !l.includes('CBD') && !l.includes('$') && !l.match(/^\d/)),
+      brand: brand || lines.find((line) => line && line !== name && line !== cleanName && !/^(indica|sativa|hybrid)$/i.test(line) && !/THC|CBD|\$|Add to cart|In stock|Out of stock/i.test(line) && !/^\d/.test(line)),
       inStock: true,
       strain,
       special: !!specialLabel,
@@ -451,21 +453,22 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
     for (const p of products) {
       const id = String(p.id || p._id || p.Name || crypto.randomUUID());
       if (seen.has(id)) continue;
-      seen.add(id);
+
 
       const rawName = String(p.Name || p.name || 'Product');
       const parts = rawName.split('|').map((part) => part.trim()).filter(Boolean);
-      const category = normalizeCategory(p.type) || normalizeCategory(p.POSMetaData?.canonicalCategory) || normalizeCategory(parts[1]) || 'Other';
-      const brand = p.brandName || p.brand?.name || p.POSMetaData?.canonicalBrandName || parts[0];
+      const category = normalizeCategory(p.type) || normalizeCategory(p.POSMetaData?.canonicalCategory) || normalizeCategory(p.posMetadata?.canonicalCategory) || normalizeCategory(parts[1]) || 'Other';
+      const brand = p.brandName || p.brand?.name || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName || parts[0];
       const name = parts.length >= 4 ? parts.slice(3).join(' | ') : rawName;
-      const price = firstNumber(p.recPrices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price);
+      const price = firstNumber(p.recPrices) || firstNumber(p.prices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price) || firstNumber(p.posMetadata?.children?.[0]?.recPrice) || firstNumber(p.posMetadata?.children?.[0]?.price);
       if (!price) continue;
+      seen.add(id);
 
       const image = cleanImageUrl(firstImageUrl(p.Image, p.image, p.images, p.POSMetaData?.canonicalImgUrl, p.posMetadata?.canonicalImgUrl, p.thumbnail, p.productImage));
       const strain = parseStrain(String(p.strainType || parts[2] || rawName));
       const thc = potencyValue(p.THCContent) || parseTHC(rawName);
       const cbd = potencyValue(p.CBDContent);
-      const rawWeight = Array.isArray(p.Options) ? p.Options[0] : p.POSMetaData?.children?.[0]?.option;
+      const rawWeight = Array.isArray(p.options) ? p.options[0] : Array.isArray(p.Options) ? p.Options[0] : p.POSMetaData?.children?.[0]?.option || p.posMetadata?.children?.[0]?.option;
       const weight = cleanWeight(rawWeight);
 
       const product: ScrapedProduct = {
@@ -501,7 +504,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products: products.slice(0, 40),
+      products,
     }));
 
   const path = new URL(dutchieUrl).pathname;

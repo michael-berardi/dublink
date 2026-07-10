@@ -119,14 +119,10 @@ export class SessionDurableObject implements DurableObject {
   }
 
   private async persistConfig(): Promise<void> {
-    try {
-      this.config = { ...this.config, updatedAt: new Date().toISOString() };
-      const stored: StoredSession = { config: this.config };
-      if (this.ownerAccountId) stored.ownerAccountId = this.ownerAccountId;
-      await this.state.storage.put('session', stored);
-    } catch (err) {
-      console.error('Failed to persist config:', err);
-    }
+    this.config = { ...this.config, updatedAt: new Date().toISOString() };
+    const stored: StoredSession = { config: this.config };
+    if (this.ownerAccountId) stored.ownerAccountId = this.ownerAccountId;
+    await this.state.storage.put('session', stored);
   }
 
   private isValidConfig(config: unknown): config is MenuConfig {
@@ -403,13 +399,17 @@ export class SessionDurableObject implements DurableObject {
     // Worker router, which has already verified the requesting account owns
     // this session before invoking.
     if (url.pathname === '/' && request.method === 'DELETE') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      if (!accountId || !this.ownerAccountId || accountId !== this.ownerAccountId) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
       try {
         this.broadcast({ type: 'session_deleted' });
-      } catch (_err) {
+      } catch {
         // ignore broadcast failures during teardown
       }
       for (const [, conn] of this.connections) {
-        try { conn.socket.close(1001, 'Session deleted'); } catch (_err) { /* ignore */ }
+        try { conn.socket.close(1001, 'Session deleted'); } catch { /* ignore teardown failures */ }
       }
       this.connections.clear();
       this.messageCounts.clear();
@@ -450,23 +450,8 @@ export class SessionDurableObject implements DurableObject {
 
     this.startHeartbeat();
 
-    server.addEventListener('message', async (event) => {
-      try {
-        const data = event.data as string;
-        if (data.length > MAX_MESSAGE_SIZE) {
-          server.close(1009, 'Message too large');
-          return;
-        }
-        if (!this.checkRateLimit(connId)) {
-          server.close(1008, 'Rate limit exceeded');
-          return;
-        }
-        const msg = JSON.parse(data) as unknown;
-        if (!isRecord(msg) || typeof msg.type !== 'string') return;
-        await this.handleMessage(msg as WSMessage, connId, server);
-      } catch (err) {
-        console.error('WS message error:', err);
-      }
+    server.addEventListener('message', (event) => {
+      void this.handleWebSocketEvent(event, connId, server);
     });
 
     server.addEventListener('close', () => this.cleanupConnection(connId));
@@ -478,6 +463,34 @@ export class SessionDurableObject implements DurableObject {
     }
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private async handleWebSocketEvent(event: MessageEvent, connId: string, server: WebSocket): Promise<void> {
+    try {
+      if (typeof event.data !== 'string') {
+        server.close(1003, 'Text messages only');
+        return;
+      }
+      if (event.data.length > MAX_MESSAGE_SIZE) {
+        server.close(1009, 'Message too large');
+        return;
+      }
+      if (!this.checkRateLimit(connId)) {
+        server.close(1008, 'Rate limit exceeded');
+        return;
+      }
+      const parsed: unknown = JSON.parse(event.data);
+      if (!isRecord(parsed) || typeof parsed.type !== 'string') return;
+      const message: WSMessage = { type: parsed.type, payload: parsed.payload };
+      await this.handleMessage(message, connId, server);
+    } catch (err) {
+      console.error('WS message error:', err);
+      try {
+        server.send(JSON.stringify({ type: 'error', payload: 'Update failed; your change was not saved.' }));
+      } catch {
+        // The socket may already be closed; the persistence failure remains logged above.
+      }
+    }
   }
 
   private checkRateLimit(connId: string): boolean {
@@ -503,6 +516,9 @@ export class SessionDurableObject implements DurableObject {
         type: 'peer_disconnected',
         payload: { role: conn.role }
       }, connId);
+      if (conn.role === 'phone' && !Array.from(this.connections.values()).some((peer) => peer.role === 'phone')) {
+        this.broadcast({ type: 'unpaired' }, connId);
+      }
     }
     
     // Stop heartbeat if no connections
@@ -600,8 +616,8 @@ export class SessionDurableObject implements DurableObject {
       case 'config_replace': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
-        if (!payload || typeof payload !== 'object' || !this.isValidImportedCategories(payload.categories)) return;
-        this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories), styleProfile: this.sanitizeStyleProfile(isRecord(payload) ? payload.styleProfile : undefined) };
+        if (!isRecord(payload) || !this.isValidImportedCategories(payload.categories)) return;
+        this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories), styleProfile: this.sanitizeStyleProfile(payload.styleProfile) };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;

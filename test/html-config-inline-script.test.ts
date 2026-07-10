@@ -192,4 +192,17 @@ describe('configPage setup wizard', () => {
     expect(script).toContain("wizard.classList.toggle('active',need)");
     expect(script).toContain("document.body.classList.toggle('wizard-body-lock',need)");
   });
+
+  it('derives completed import counts from preloaded category summaries', () => {
+    expect(script).toContain('function importProductCount(data)');
+    expect(script).toContain('function importCategoryCount(data)');
+    expect(script).toContain('var count=importProductCount(finalJob)');
+    expect(script).toContain('var categoryCount=importCategoryCount(finalJob)');
+    expect(script).not.toContain("(finalJob.productCount||0)+' products across '+(finalJob.categoryCount||0)");
+  });
+
+  it('resets starter products without replacing configured business branding', () => {
+    expect(script).toContain("send('config_replace',{categories:STARTER_CONFIG.categories})");
+    expect(script).not.toContain("send('config_replace',STARTER_CONFIG)");
+  });
 });

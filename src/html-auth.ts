@@ -1,4 +1,6 @@
-export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: any, error?: string, dubHavenEnabled: boolean = false, next?: string): string {
+import type { Account } from './auth';
+
+export function authPage(origin: string, mode: 'login' | 'signup' | 'account', account?: Account, error?: string, dubHavenEnabled: boolean = false, next?: string): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -17,7 +19,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
     const active = status === 'active' || (status === 'trialing' && account.trialEndsAt && account.trialEndsAt > Date.now());
     accountHtml = `
       <div class="card">
-        <div class="card-title">Account</div>
+        <h1 class="card-title">Account</h1>
         <p style="color:var(--muted);margin-bottom:1rem;">Email: ${escapeHtml(account.email)}</p>
         <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
           <span class="status-badge ${active ? 'active' : 'inactive'}">${active ? 'Active' : 'Inactive'}</span>
@@ -27,7 +29,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
         <form method="POST" action="${safeOrigin}/api/logout"><button type="submit" class="btn btn-danger" style="width:100%;">Log Out</button></form>
       </div>
       <div class="card">
-        <div class="card-title">Your Menu Displays</div>
+        <h2 class="card-title">Your Menu Displays</h2>
         <div id="sessions" style="color:var(--muted);">Loading...</div>
         ${active
           ? `<a href="${safeOrigin}/tv/new" class="btn btn-primary" style="width:100%;margin-top:1rem;">+ Create New Display</a>`
@@ -38,7 +40,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
 
   const formHtml = isAccount ? '' : `
     <div class="card">
-      <div class="card-title">${isLogin ? 'Log In' : 'Create Account'}</div>
+      <h1 class="card-title">${isLogin ? 'Log In' : 'Create Account'}</h1>
       ${error ? `<div class="error">${escapeHtml(error)}</div>` : ''}
       ${dubHavenEnabled ? `
       <a href="${safeOrigin}/auth/dubhaven${next ? '?next=' + encodeURIComponent(next) : ''}" class="btn btn-google" style="width:100%;margin-bottom:1rem;">
@@ -75,6 +77,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
     .nav a{color:var(--muted);font-size:0.875rem;}
     .card{width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;margin-bottom:1rem;}
     .card-title{font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1.25rem;}
+    h1.card-title{font-size:1.375rem;text-transform:none;letter-spacing:-0.01em;color:var(--text);}
     .field{margin-bottom:1rem;}
     .field label{display:block;font-size:0.75rem;font-weight:600;color:var(--muted);margin-bottom:0.375rem;text-transform:uppercase;letter-spacing:0.04em;}
     .field input{width:100%;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;}

@@ -961,11 +961,19 @@ function imageCountFromImport(data){
     return total + ((cat.products||[]).filter(function(p){return !!(p&&p.image);}).length);
   },0);
 }
+function importProductCount(data){
+  if(data&&typeof data.productCount==='number')return data.productCount;
+  return (data&&data.categories||[]).reduce(function(total,cat){return total+(Array.isArray(cat.products)?cat.products.length:(typeof cat.count==='number'?cat.count:0));},0);
+}
+function importCategoryCount(data){
+  if(data&&typeof data.categoryCount==='number')return data.categoryCount;
+  return (data&&Array.isArray(data.categories))?data.categories.length:0;
+}
 function renderDutchieImportResults(data){
   var results=document.getElementById('dutchieResults');
   if(!results)return;
-  var count=data.productCount||((data.categories||[]).reduce(function(n,c){return n+(c.products?c.products.length:(c.count||0));},0));
-  var categoryCount=data.categoryCount||((data.categories||[]).length);
+  var count=importProductCount(data);
+  var categoryCount=importCategoryCount(data);
   var imageCount=data.photoCount||imageCountFromImport(data);
   var warnings=(data.warnings||[]).filter(Boolean);
   var sourceLabel=data.source?String(data.source).replace(/-/g,' '):'menu source';
@@ -1040,8 +1048,10 @@ async function runDirectMenuImport(payload,onUpdate){
 }
 
 function finishMenuImport(finalJob,status){
+  var count=importProductCount(finalJob);
+  var categoryCount=importCategoryCount(finalJob);
   setDutchieImportStage(5,100);
-  setImportStatus(status,'Imported '+(finalJob.productCount||0)+' products across '+(finalJob.categoryCount||0)+' categories. Open the TV preview to verify the synced board.','ok',false);
+  setImportStatus(status,'Imported '+count+' products across '+categoryCount+' categories. Open the TV preview to verify the synced board.','ok',false);
   renderDutchieImportResults(finalJob);
   showToast('Menu imported');
   renderSetupWizardQuality(finalJob);
@@ -1686,7 +1696,7 @@ function applyReorderProducts(catId,ids){
 function exportData(){if(!config)return;var blob=new Blob([JSON.stringify(config,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='dubmenu-config.json';a.click();showToast('Exported');}
 function importData(ev){var f=ev.target.files[0];if(!f)return;var r=new FileReader();r.onload=function(e){try{var d=JSON.parse(e.target.result);if(!d.dispensaryName||!d.categories){showToast('Invalid file');return;}send('config_replace',d);showToast('Imported');}catch(err){showToast('Parse error');}};r.readAsText(f);ev.target.value='';}
 function clearMenu(){if(!config)return;if(!confirm('Clear your entire menu? This removes all categories and products and cannot be undone.'))return;send('config_replace',{categories:[]});showToast('Menu cleared');}
-function resetToStarter(){if(!config)return;if(!confirm('Reset your menu to the starter template? This replaces all categories and products with the demo menu.'))return;send('config_replace',STARTER_CONFIG);showToast('Starter template restored');}
+function resetToStarter(){if(!config)return;if(!confirm('Reset your menu to the starter template? This replaces all categories and products with starter examples while preserving your business settings.'))return;send('config_replace',{categories:STARTER_CONFIG.categories});showToast('Starter products restored');}
 
 
 // ---- Image Library ----

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, getProductVariant, GET_PRODUCT_VARIANT_JS, getPlaceholderIconSvg, GET_PLACEHOLDER_ICON_SVG_JS } from '../src/category-icons';
+import { getCategoryType, GET_CATEGORY_TYPE_JS, CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS } from '../src/category-icons';
 
 describe('getCategoryType', () => {
   it('classifies canonical category names and synonyms', () => {
@@ -26,6 +26,13 @@ describe('getCategoryType', () => {
     expect(getCategoryType('FLOWER')).toBe('flower');
     expect(getCategoryType('Pre-Roll Singles')).toBe('prerolls');
   });
+
+  it('matches category cues as words instead of unrelated fragments', () => {
+    expect(getCategoryType('Soil')).toBe('other');
+    expect(getCategoryType('Live Plants')).toBe('other');
+    expect(getCategoryType('Live Resin')).toBe('concentrates');
+    expect(getCategoryType('Vape Pens')).toBe('vapes');
+  });
 });
 
 describe('GET_CATEGORY_TYPE_JS', () => {
@@ -39,6 +46,8 @@ describe('GET_CATEGORY_TYPE_JS', () => {
     expect(fn('Live Resin')).toBe('concentrates');
     expect(fn('Soda')).toBe('beverages');
     expect(fn('Unknown')).toBe('other');
+    expect(fn('Soil')).toBe('other');
+    expect(fn('Live Plants')).toBe('other');
   });
 });
 
@@ -151,81 +160,5 @@ describe('icon SVGs', () => {
     const circleCount = (svg.match(/<circle/g) || []).length;
     // Smiley faces rely on paired eye circles; product-realistic edibles uses at most one highlight.
     expect(circleCount).toBeLessThanOrEqual(1);
-  });
-});
-
-describe('getProductVariant', () => {
-  it('returns a deterministic number between 0 and 3', () => {
-    expect(getProductVariant('p1', 'OG Kush')).toBeGreaterThanOrEqual(0);
-    expect(getProductVariant('p1', 'OG Kush')).toBeLessThan(4);
-  });
-
-  it('is stable for the same id and name', () => {
-    expect(getProductVariant('p1', 'OG Kush')).toBe(getProductVariant('p1', 'OG Kush'));
-  });
-
-  it('varies with different inputs', () => {
-    const variants = new Set<number>();
-    variants.add(getProductVariant('p1', 'OG Kush'));
-    variants.add(getProductVariant('p2', 'Blue Dream'));
-    variants.add(getProductVariant('p3', 'Gelato #33'));
-    variants.add(getProductVariant('p4', 'Runtz'));
-    // At least two distinct variants should appear across a small sample.
-    expect(variants.size).toBeGreaterThanOrEqual(2);
-  });
-
-  it('tolerates missing id or name', () => {
-    expect(getProductVariant('', 'Name')).toBeGreaterThanOrEqual(0);
-    expect(getProductVariant('', 'Name')).toBeLessThan(4);
-    expect(getProductVariant('id', '')).toBeGreaterThanOrEqual(0);
-    expect(getProductVariant('id', '')).toBeLessThan(4);
-  });
-});
-
-describe('GET_PRODUCT_VARIANT_JS', () => {
-  it('injects a runnable browser function that matches the server result', () => {
-    expect(GET_PRODUCT_VARIANT_JS).toContain('function getProductVariant');
-    const fn = new Function(GET_PRODUCT_VARIANT_JS + '; return getProductVariant;')();
-    expect(fn('p1', 'OG Kush')).toBe(getProductVariant('p1', 'OG Kush'));
-    expect(fn('', 'Name')).toBe(getProductVariant('', 'Name'));
-    expect(fn('p1', 'OG Kush')).toBeGreaterThanOrEqual(0);
-    expect(fn('p1', 'OG Kush')).toBeLessThan(4);
-  });
-});
-
-describe('getPlaceholderIconSvg', () => {
-  it('returns a clean currentColor placeholder SVG without inline color styles', () => {
-    const svg = getPlaceholderIconSvg('flower', 1);
-    expect(svg).toContain('class="placeholder-icon"');
-    expect(svg).not.toContain('style="color:');
-    expect(svg).not.toContain('linearGradient');
-    expect(svg).toContain('currentColor');
-  });
-
-  it('returns the bare category icon for variant 0', () => {
-    const svg = getPlaceholderIconSvg('edibles', 0);
-    expect(svg).toContain('class="placeholder-icon"');
-    expect(svg).not.toContain('style="color:');
-    expect(svg).not.toContain('variant-decor');
-  });
-
-  it('is deterministic for the same category and variant', () => {
-    expect(getPlaceholderIconSvg('concentrates', 2)).toBe(getPlaceholderIconSvg('concentrates', 2));
-  });
-
-  it('falls back to generic for unknown categories', () => {
-    const svg = getPlaceholderIconSvg('unknown', 3);
-    expect(svg).toContain('class="placeholder-icon"');
-    expect(svg).toContain('currentColor');
-  });
-});
-
-describe('GET_PLACEHOLDER_ICON_SVG_JS', () => {
-  it('injects a runnable browser function that matches the server result', () => {
-    expect(GET_PLACEHOLDER_ICON_SVG_JS).toContain('function getPlaceholderIconSvg');
-    const fn = new Function('PLACEHOLDER_ICON_SVGS', GET_PLACEHOLDER_ICON_SVG_JS + '; return getPlaceholderIconSvg;')(PLACEHOLDER_ICON_SVGS);
-    expect(fn('flower', 1)).toBe(getPlaceholderIconSvg('flower', 1));
-    expect(fn('flower', 0)).toBe(getPlaceholderIconSvg('flower', 0));
-    expect(fn('unknown', 3)).toBe(getPlaceholderIconSvg('unknown', 3));
   });
 });

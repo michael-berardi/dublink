@@ -1,9 +1,9 @@
 import { Env as SessionEnv, SessionDurableObject, SESSION_ID_REGEX } from './session';
-import { AccountDurableObject, createAccount, authenticate, signToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, addSessionToAccount, generateSessionId, constantTimeEqual, ensureDemoAccount } from './auth';
-import { StatsDurableObject } from './stats';
+import { AccountDurableObject, createAccount, authenticate, signToken, verifyToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, updateAccountStripe, addSessionToAccount, generateSessionId, constantTimeEqual, ensureDemoAccount, type DurableObjectBinding } from './auth';
+import { StatsDurableObject, claimStripeEvent, completeStripeEvent, releaseStripeEvent, type StatsEvent, type StatsSnapshot } from './stats';
 import { DomainDurableObject } from './domains';
-import { buildDubHavenAuthUrl, handleDubHavenCallback, isDubHavenStartConfigured } from './dubhaven-auth';
-import { tvPage } from './html-tv';
+import { buildDubHavenAuthUrl, DUBHAVEN_STATE_COOKIE, handleDubHavenCallback, isDubHavenStartConfigured } from './dubhaven-auth';
+import { tvPage, type TvPageInitialConfig } from './html-tv';
 import { menuPage } from './html-menu';
 import { configPage } from './html-config';
 import { landingPage } from './html-landing';
@@ -26,7 +26,8 @@ import { importMenuFromCSV } from './csv-import';
 import { analyzeReferenceStyle } from './reference-style';
 import { createStarterConfig, createDemoConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload, bundleImportedImages } from './upload';
-import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, isDuplicateEvent, recordEvent as recordStripeEvent, cancelSubscription } from './stripe';
+import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, cancelSubscription } from './stripe';
+import type { Category, MenuConfig } from './types';
 
 export { SessionDurableObject, AccountDurableObject, StatsDurableObject, DomainDurableObject };
 
@@ -40,8 +41,8 @@ export interface Env extends SessionEnv {
   ADMIN_EMAILS?: string;
   DEMO_LOGIN_PASSWORD?: string;
   DEMO_LOGIN_EMAIL?: string;
-  STATS?: DurableObjectNamespace;
-  DOMAINS?: DurableObjectNamespace;
+  STATS?: DurableObjectBinding;
+  DOMAINS?: DurableObjectBinding;
   UPLOADS?: R2Bucket;
   DUBHAVEN_AUTH_URL?: string;
   DUBHAVEN_ACCOUNT_SECRET?: string;
@@ -76,7 +77,7 @@ type ImportJobStatus = {
 type MenuImportPayload = {
   dispensaryName: string;
   logo?: string;
-  categories: Array<{ products?: Array<{ image?: unknown }>; [key: string]: unknown }>;
+  categories: MenuImportResult['categories'];
   productCount: number;
   displayCount: number;
   layout: string;
@@ -103,7 +104,37 @@ type MenuImportBuildResult = {
   warnings: string[];
 };
 
-async function recordEvent(env: Env, event: { type: string; accountId?: string; email?: string; payload?: any }): Promise<void> {
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStatsEvent(value: unknown): value is StatsEvent {
+  return isRecord(value) && typeof value.type === 'string' && typeof value.timestamp === 'number';
+}
+
+function isStatsSnapshot(value: unknown): value is StatsSnapshot {
+  return isRecord(value) &&
+    typeof value.accountCount === 'number' &&
+    typeof value.sessionCount === 'number' &&
+    Array.isArray(value.events) &&
+    value.events.every(isStatsEvent);
+}
+
+function isTvPageInitialConfig(value: unknown): value is TvPageInitialConfig {
+  if (!isRecord(value)) return false;
+  if (value.categories === undefined) return true;
+  return Array.isArray(value.categories) && value.categories.every((category) =>
+    isRecord(category) && Array.isArray(category.products)
+  );
+}
+
+function isAnalyticsEventType(value: unknown): value is `analytics.${string}` {
+  return typeof value === 'string' && value.startsWith('analytics.');
+}
+
+async function recordEvent(env: Env, event: Omit<StatsEvent, 'timestamp'>): Promise<void> {
   if (!env.STATS) return;
   try {
     const statsId = env.STATS.idFromName('global');
@@ -260,6 +291,7 @@ async function buildMenuImport(
     notes: styleNotes,
     productCount: formatted.productCount,
     currentDisplayCount: displayCount,
+    currentShowImages: formatted.layout.showImages,
   });
   const resolvedTemplate = style.template === 'default' ? formatted.brandStyle.template : style.template;
   const styleColors = getImportedTemplateStyle(resolvedTemplate);
@@ -302,7 +334,7 @@ async function buildMenuImport(
   });
 
   const bundled = await bundleImportedImages(importPayload, env, accountId);
-  const bundledPayload = bundled.config as MenuImportPayload;
+  const bundledPayload = bundled.config;
   const warnings = [...(raw.warnings || []), ...formatted.warnings, ...bundled.warnings];
 
   return {
@@ -415,10 +447,11 @@ async function runMenuImportJob(params: {
 async function requireAuth(request: Request, env: Env): Promise<{ accountId: string; email: string } | null> {
   const tokenStr = getCookieValue(request, 'dubmenu_auth');
   if (!tokenStr || !env.AUTH_SECRET) return null;
-  const { verifyToken } = await import('./auth');
   const token = await verifyToken(tokenStr, env.AUTH_SECRET);
   if (!token) return null;
-  return { accountId: token.accountId, email: token.email };
+  const account = await getAccount(env, token.accountId);
+  if (!account) return null;
+  return { accountId: account.id, email: account.email };
 }
 
 function appUrl(env: Env, request: Request): string {
@@ -492,10 +525,18 @@ function demoLoginEnabled(env: Env): boolean {
 // same origin. Relative paths are preferred; absolute URLs are allowed only when
 // they match the app's origin. This prevents open-redirect abuse via the
 // auth forms.
+function hasUnsafeRedirectChars(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (value[index] === '\\' || code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
+
 function safeRedirectUrl(env: Env, request: Request, next: string, fallback: string): string {
   if (!next) return fallback;
   const origin = appUrl(env, request);
-  if (next.startsWith('/')) {
+  if (/^\/(?!\/)/.test(next) && !hasUnsafeRedirectChars(next)) {
     return origin + next;
   }
   try {
@@ -516,11 +557,12 @@ async function createStarterDisplay(env: Env, accountId: string): Promise<string
   const starter = createStarterConfig();
   const id = env.SESSION.idFromName(sessionId);
   const session = env.SESSION.get(id);
-  await session.fetch(new Request('https://internal/import', {
+  const importRes = await session.fetch(new Request('https://internal/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Account-Id': accountId },
     body: JSON.stringify(starter),
   }));
+  if (!importRes.ok) throw new Error(`Starter session import failed (${importRes.status})`);
   await addSessionToAccount(env, accountId, sessionId);
   return sessionId;
 }
@@ -582,20 +624,20 @@ function escapeHtml(str: unknown): string {
 // `config` is the shape returned by the SessionDurableObject `/widget` endpoint
 // (dispensaryName + categories[] with products[]). Out-of-stock products are
 // omitted. All user-controlled strings are HTML-escaped.
-function printPage(sessionId: string, config: any, _origin: string): string {
+function printPage(sessionId: string, config: Partial<MenuConfig>, _origin: string): string {
   const dispensaryName = escapeHtml(config?.dispensaryName || 'Menu');
   const currency = config?.currency || '$';
-  const categories: any[] = Array.isArray(config?.categories) ? config.categories : [];
+  const categories: Category[] = Array.isArray(config.categories) ? config.categories : [];
 
   const today = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
 
   const sections = categories
-    .filter((cat) => cat && Array.isArray(cat.products) && cat.products.some((p: any) => p && p.inStock !== false))
+    .filter((cat) => Array.isArray(cat.products) && cat.products.some((product) => product.inStock !== false))
     .map((cat) => {
       const catName = escapeHtml(cat.name || 'Category');
       const items = cat.products
-        .filter((p: any) => p && p.inStock !== false)
-        .map((p: any) => {
+        .filter((product) => product.inStock !== false)
+        .map((p) => {
           const name = escapeHtml(p.name || '');
           // Strain type indicator after product name
           let strainHtml = '';
@@ -608,9 +650,9 @@ function printPage(sessionId: string, config: any, _origin: string): string {
           // Price tiers override flat price when available
           let priceHtml: string;
           if (p.priceTiers && Array.isArray(p.priceTiers) && p.priceTiers.length > 0) {
-            const tiers = p.priceTiers.map((t: any) => {
-              const tLabel = escapeHtml(t?.label || '');
-              const tPrice = escapeHtml(t?.price || '');
+            const tiers = p.priceTiers.map((tier) => {
+              const tLabel = escapeHtml(tier.label || '');
+              const tPrice = escapeHtml(tier.price || '');
               if (!tLabel || !tPrice) return '';
               return '<span style="display:inline-block;padding:0.05rem 0.35rem;border:0.5px solid #999;border-radius:0.2rem;margin-right:0.25rem;font-size:0.8rem;"><span style="font-size:0.7rem;color:#777;text-transform:uppercase;">' + tLabel + '</span> ' + tPrice + '</span>';
             }).join('');
@@ -736,18 +778,37 @@ export default {
       return new Response('CSRF check failed', { status: 403, headers: SECURITY_HEADERS });
     }
 
-    // Custom domain detection: if the host is not dubmenu.com or tv.dubmenu.com, check for a mapping
+    if (path === '/favicon.ico') {
+      return new Response('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0a0f0d"/><rect x="10" y="12" width="44" height="32" rx="5" fill="none" stroke="#10b981" stroke-width="5"/><path d="M22 53h20M32 44v9" fill="none" stroke="#10b981" stroke-width="5" stroke-linecap="round"/></svg>', {
+        headers: { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400', ...SECURITY_HEADERS },
+      });
+    }
+
+    // Custom domains only serve verified mappings. The well-known challenge
+    // remains available before activation so DNS ownership can be proven.
     const host = url.hostname;
     const isTvHost = host === 'tv.dubmenu.com';
-    const isDubMenuHost = host === 'dubmenu.com' || host === 'tv.dubmenu.com' || host.endsWith('.workers.dev') || host === 'localhost';
-    if (!isDubMenuHost && env.DOMAINS && path === '/') {
+    const isDubMenuHost = host === 'dubmenu.com' || host === 'tv.dubmenu.com' || host.endsWith('.workers.dev') || host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0';
+    if (!isDubMenuHost) {
+      if (!env.DOMAINS) return new Response('Custom domain not configured', { status: 404 });
       const domainId = env.DOMAINS.idFromName('global');
       const domainStub = env.DOMAINS.get(domainId);
       const lookupRes = await domainStub.fetch(new Request(`https://internal/lookup?domain=${encodeURIComponent(host)}`, { method: 'GET' }));
-      const lookup = (await lookupRes.json()) as { mapping: { sessionId: string; verified: boolean } | null };
-      if (lookup.mapping?.sessionId) {
-        return htmlResponse(tvPage(lookup.mapping.sessionId, url.origin, { noAgeGate: true }));
+      const lookup = (await lookupRes.json()) as { mapping: { sessionId: string; verified: boolean; verificationToken?: string } | null };
+      if (path === '/.well-known/dubmenu-verification' && lookup.mapping?.verificationToken) {
+        return new Response(lookup.mapping.verificationToken, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
       }
+      if (path !== '/' || !lookup.mapping?.sessionId || !lookup.mapping.verified) {
+        return new Response('Custom domain not verified', { status: 404 });
+      }
+      let initialConfig: ({ categories?: Array<{ products?: unknown[] }> } & Record<string, unknown>) | undefined;
+      if (env.SESSION) {
+        const sessionId = env.SESSION.idFromName(lookup.mapping.sessionId);
+        const session = env.SESSION.get(sessionId);
+        const configRes = await session.fetch(new Request('https://internal/tv-config'));
+        if (configRes.ok) initialConfig = await configRes.json() as typeof initialConfig;
+      }
+      return htmlResponse(tvPage(lookup.mapping.sessionId, url.origin, { noAgeGate: true, initialConfig }));
     }
 
     // TV subdomain (tv.dubmenu.com) is the universal entrypoint shown on a
@@ -782,37 +843,40 @@ export default {
         return htmlResponse(authPage(origin, 'account', undefined, 'Admin access required'), 403);
       }
       const status = await getStatus(env);
-      let stats: any = {};
+      let stats: StatsSnapshot = { events: [], accountCount: 0, sessionCount: 0 };
       if (env.STATS) {
         try {
           const statsId = env.STATS.idFromName('global');
           const stub = env.STATS.get(statsId);
           const res = await stub.fetch(new Request('https://internal/stats', { method: 'GET' }));
-          stats = await res.json();
+          const data: unknown = await res.json();
+          if (isStatsSnapshot(data)) stats = data;
         } catch (err) {
           console.error('Failed to load admin stats:', err);
         }
       }
-      const analyticsEvents = stats.events || [];
+      const analyticsEvents = stats.events;
       const analytics = {
         totalEvents: analyticsEvents.length,
-        tvLoads: analyticsEvents.filter((e: any) => e.type === 'analytics.tv.load').length,
-        widgetLoads: analyticsEvents.filter((e: any) => e.type === 'analytics.widget.load').length,
-        configSaves: analyticsEvents.filter((e: any) => e.type === 'analytics.config.save').length,
+        tvLoads: analyticsEvents.filter((event) => event.type === 'analytics.tv.load').length,
+        widgetLoads: analyticsEvents.filter((event) => event.type === 'analytics.widget.load').length,
+        configSaves: analyticsEvents.filter((event) => event.type === 'analytics.config.save').length,
         recentEvents: analyticsEvents.slice(0, 20),
       };
       return htmlResponse(adminPage(stats, analytics, status));
     }
 
-        if (path === '/api/analytics/track' && request.method === 'POST') {
+    if (path === '/api/analytics/track' && request.method === 'POST') {
       try {
-        const body = (await request.json()) as { type?: string; sessionId?: string; payload?: any };
-        if (!body.type || !body.type.startsWith('analytics.')) {
+        const body: unknown = await request.json();
+        if (!isRecord(body) || !isAnalyticsEventType(body.type)) {
           return jsonResponse({ error: 'Invalid analytics type' }, 400);
         }
-        await recordEvent(env, { type: body.type as any, payload: { sessionId: body.sessionId, ...(body.payload || {}) } });
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId : undefined;
+        const payload = isRecord(body.payload) ? body.payload : {};
+        await recordEvent(env, { type: body.type, payload: { ...payload, ...(sessionId ? { sessionId } : {}) } });
         return jsonResponse({ ok: true });
-      } catch (err) {
+      } catch {
         return jsonResponse({ error: 'Invalid request' }, 400);
       }
     }
@@ -821,7 +885,6 @@ export default {
     if (path === '/api/test/activate-trial' && request.method === 'POST' && env.APP_URL && (env.APP_URL.startsWith('http://localhost:') || env.APP_URL.startsWith('http://127.0.0.1:'))) {
       const auth = await requireAuth(request, env);
       if (!auth) return redirectResponse(`${origin}/login`);
-      const { updateAccountStripe } = await import('./auth');
       await updateAccountStripe(env, auth.accountId, { subscriptionStatus: 'trialing', trialEndsAt: Date.now() + 14 * 24 * 60 * 60 * 1000 });
       return redirectResponse(`${origin}/account`);
     }
@@ -847,6 +910,9 @@ export default {
       const body = (await request.json()) as { domain: string; sessionId: string };
       if (!body.domain || !body.sessionId) return jsonResponse({ error: 'Missing domain or sessionId' }, 400);
       if (!SESSION_ID_REGEX.test(body.sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
+      if (!account.sessions.includes(body.sessionId)) {
+        return jsonResponse({ error: 'Session must be owned by the authenticated account' }, 403);
+      }
       const id = env.DOMAINS.idFromName('global');
       const stub = env.DOMAINS.get(id);
       const res = await stub.fetch(new Request('https://internal/add', {
@@ -919,14 +985,12 @@ export default {
       const hostHeader = request.headers.get('host') || '';
       const actualHost = hostHeader.split(':')[0] || url.hostname;
       const isLocalHost = actualHost === 'localhost' || actualHost === '127.0.0.1' || actualHost === '0.0.0.0';
-      console.log({ DEBUG: '/auth/dubhaven', urlOrigin: url.origin, urlHostname: url.hostname, hostHeader, actualHost, isLocalHost, isConfigured: isDubHavenStartConfigured(env, url.origin) });
       if (isLocalHost || !isDubHavenStartConfigured(env, url.origin)) {
-        // On localhost/loopback the DubHaven provider rejects the callback; fall
-        // back to the local email/password login so visual QA can proceed.
         return redirectResponse(`${origin}/login?next=${encodeURIComponent(redirectAfter)}`);
       }
-      const authUrl = buildDubHavenAuthUrl(env, url.origin, redirectAfter);
-      return redirectResponse(authUrl);
+      const state = crypto.randomUUID();
+      const authUrl = buildDubHavenAuthUrl(env, url.origin, redirectAfter, state);
+      return redirectResponse(authUrl, [setCookie(DUBHAVEN_STATE_COOKIE, state, 5 * 60, secure)]);
     }
 
     if (path === '/auth/dubhaven/callback' && request.method === 'GET') {
@@ -1021,6 +1085,7 @@ export default {
       }
       const session = await createCheckoutSession(env, {
         customerEmail: account.email,
+        customerId: account.stripeCustomerId,
         successUrl: `${origin}/api/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${origin}/account`,
         clientReferenceId: account.id,
@@ -1051,34 +1116,59 @@ export default {
       }
       const payload = await request.text();
       const sig = request.headers.get('stripe-signature') || '';
+      let event;
       try {
-        const event = await verifyWebhookSignature(payload, sig, env.STRIPE_WEBHOOK_SECRET);
-        const eventId = event.id as string | undefined;
-        if (eventId && isDuplicateEvent(eventId)) {
+        event = await verifyWebhookSignature(payload, sig, env.STRIPE_WEBHOOK_SECRET);
+      } catch (err) {
+        console.error('Stripe signature error:', err);
+        return jsonResponse({ error: 'Invalid signature' }, 400);
+      }
+
+      const eventId = typeof event.id === 'string' ? event.id : '';
+      if (!eventId) return jsonResponse({ error: 'Invalid event' }, 400);
+      try {
+        if (!(await claimStripeEvent(env, eventId))) {
           return jsonResponse({ received: true, duplicate: true });
         }
-        if (eventId) recordStripeEvent(eventId);
+      } catch (err) {
+        console.error('Stripe event claim error:', err);
+        return jsonResponse({ error: 'Webhook processing unavailable' }, 503);
+      }
+
+      try {
         if (event.type === 'checkout.session.completed') {
           const session = event.data.object;
-          if (session.client_reference_id && session.customer && session.subscription) {
+          if (
+            typeof session.client_reference_id === 'string' &&
+            typeof session.customer === 'string' &&
+            typeof session.subscription === 'string'
+          ) {
             await updateAccountFromStripe(env, session.client_reference_id, session.customer, session.subscription);
             await recordEvent(env, { type: 'subscription.updated', accountId: session.client_reference_id, payload: { event: 'checkout.session.completed' } });
           }
         }
         if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
           const sub = event.data.object;
-          const customerId = sub.customer;
-          const account = await findAccountByCustomerId(env, customerId);
-          if (account) {
-            await updateAccountFromStripe(env, account.id, customerId, sub.id);
-            await recordEvent(env, { type: 'subscription.updated', accountId: account.id, payload: { event: event.type } });
+          if (typeof sub.customer === 'string' && typeof sub.id === 'string') {
+            const customerId = sub.customer;
+            const account = await findAccountByCustomerId(env, customerId);
+            if (account) {
+              await updateAccountFromStripe(env, account.id, customerId, sub.id);
+              await recordEvent(env, { type: 'subscription.updated', accountId: account.id, payload: { event: event.type } });
+            }
           }
         }
         await recordEvent(env, { type: 'webhook.received', payload: { event: event.type } });
+        await completeStripeEvent(env, eventId);
         return jsonResponse({ received: true });
       } catch (err) {
-        console.error('Webhook error:', err);
-        return jsonResponse({ error: 'Invalid signature' }, 400);
+        console.error('Stripe webhook processing error:', err);
+        try {
+          await releaseStripeEvent(env, eventId);
+        } catch (releaseErr) {
+          console.error('Stripe event release error:', releaseErr);
+        }
+        return jsonResponse({ error: 'Webhook processing failed' }, 500);
       }
     }
 
@@ -1102,7 +1192,8 @@ export default {
       }));
       if (res.status === 403) return jsonResponse({ error: 'Session owned by another account' }, 403);
       if (!res.ok) return jsonResponse({ error: 'Failed to export config' }, 500);
-      const data = await res.json() as { config: any };
+      const data: unknown = await res.json();
+      if (!isRecord(data) || !('config' in data)) return jsonResponse({ error: 'Invalid session export' }, 500);
       const filename = `dubmenu-${sessionId}.json`;
       return new Response(JSON.stringify(data.config, null, 2), {
         headers: {
@@ -1123,7 +1214,7 @@ export default {
 
       const { passwordHash: _ph, passwordSalt: _ps, ...safeAccount } = account;
 
-      const sessions: Record<string, any> = {};
+      const sessions: Record<string, unknown> = {};
       for (const sid of account.sessions) {
         if (!SESSION_ID_REGEX.test(sid)) continue;
         try {
@@ -1134,12 +1225,12 @@ export default {
             headers: { 'X-Account-Id': auth.accountId },
           }));
           if (res.ok) {
-            const data = (await res.json()) as { config: any };
-            sessions[sid] = data.config;
+            const data: unknown = await res.json();
+            sessions[sid] = isRecord(data) && 'config' in data ? data.config : { error: 'invalid response' };
           } else {
             sessions[sid] = { error: `status ${res.status}` };
           }
-        } catch (err) {
+        } catch {
           sessions[sid] = { error: 'fetch failed' };
         }
       }
@@ -1185,13 +1276,13 @@ export default {
       const account = await getAccount(env, auth.accountId);
       if (!account) return jsonResponse({ error: 'Account not found' }, 404);
 
-      let body: any;
+      let body: unknown;
       try {
         body = await request.json();
-      } catch (_err) {
+      } catch {
         return jsonResponse({ error: 'Invalid JSON body' }, 400);
       }
-      if (!body || body.confirm !== 'DELETE') {
+      if (!isRecord(body) || body.confirm !== 'DELETE') {
         return jsonResponse({ error: 'Confirmation required: send { "confirm": "DELETE" }' }, 400);
       }
 
@@ -1202,7 +1293,7 @@ export default {
         try {
           const id = env.SESSION.idFromName(sid);
           const session = env.SESSION.get(id);
-          await session.fetch(new Request('https://internal/', { method: 'DELETE' }));
+          await session.fetch(new Request('https://internal/', { method: 'DELETE', headers: { 'X-Account-Id': auth.accountId } }));
         } catch (err) {
           console.error(`Failed to wipe session ${sid} during account delete:`, err);
         }
@@ -1272,12 +1363,20 @@ export default {
     if (path.startsWith('/api/widget/') && request.method === 'GET') {
       const sessionId = path.split('/')[3];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
-      const id = env.SESSION.idFromName(sessionId);
-      const session = env.SESSION.get(id);
-      const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
-      if (!res.ok) return jsonResponse({ error: 'Failed to load widget' }, 500);
-      const data = await res.json();
-      return jsonResponse(data);
+      let data: unknown;
+      if (sessionId === 'demo') {
+        data = createDemoConfig();
+      } else {
+        const id = env.SESSION.idFromName(sessionId);
+        const session = env.SESSION.get(id);
+        const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
+        if (!res.ok) return jsonResponse({ error: 'Failed to load widget' }, 500);
+        data = await res.json();
+      }
+      if (!isRecord(data)) return jsonResponse({ error: 'Invalid widget response' }, 500);
+      return new Response(JSON.stringify(data), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*', ...SECURITY_HEADERS },
+      });
     }
 
     if (path === '/api/contact' && request.method === 'POST') {
@@ -1407,11 +1506,15 @@ export default {
         if (body.session && SESSION_ID_REGEX.test(body.session)) {
           const id = env.SESSION.idFromName(body.session);
           const session = env.SESSION.get(id);
-          await session.fetch(new Request('https://internal/import', {
+          const importRes = await session.fetch(new Request('https://internal/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
             body: JSON.stringify(built.bundledPayload),
           }));
+          if (!importRes.ok) {
+            const details = await importRes.text().catch(() => '');
+            throw new Error(`Session import failed (${importRes.status})${details ? `: ${details.slice(0, 200)}` : ''}`);
+          }
           await addSessionToAccount(env, auth.accountId, body.session);
         }
         return jsonResponse(built.responseBody);
@@ -1446,11 +1549,13 @@ export default {
         if (ownerRes.status === 403) {
           return jsonResponse({ error: 'Session owned by another account' }, 403);
         }
-        await session.fetch(new Request('https://internal/import', {
+        if (!ownerRes.ok) return jsonResponse({ error: 'Failed to verify session ownership' }, 500);
+        const importRes = await session.fetch(new Request('https://internal/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
           body: JSON.stringify({ categories, dispensaryName: account.email.split('@')[0] }),
         }));
+        if (!importRes.ok) return jsonResponse({ error: 'Failed to persist imported menu' }, 500);
         await addSessionToAccount(env, auth.accountId, sessionId);
         return jsonResponse({ ok: true, categoriesImported: categories.length, productsImported: categories.reduce((a, c) => a + c.products.length, 0), errors });
       } catch (err) {
@@ -1527,13 +1632,13 @@ export default {
         // can throw on malformed input — treat that as a bad request.
         try {
           filename = decodeURIComponent(filename);
-        } catch (_decodeErr) {
+        } catch {
           return jsonResponse({ error: 'Invalid filename' }, 400);
         }
         let deleted: boolean;
         try {
           deleted = await deleteUpload(env, auth.accountId, filename);
-        } catch (_err) {
+        } catch {
           // Path-traversal / invalid filename.
           return jsonResponse({ error: 'Invalid filename' }, 400);
         }
@@ -1573,7 +1678,7 @@ export default {
         const auth = await requireAuth(request, env);
         if (!auth) {
           const next = encodeURIComponent('/tv/new');
-        const signInUrl = isDubHavenStartConfigured(env, url.origin) ? `${url.origin}/auth/dubhaven?next=${next}` : `${url.origin}/login?next=${next}`;
+          const signInUrl = isDubHavenStartConfigured(env, url.origin) ? `${url.origin}/auth/dubhaven?next=${next}` : `${url.origin}/login?next=${next}`;
           return redirectResponse(signInUrl);
         }
         const newId = generateSessionId();
@@ -1584,17 +1689,17 @@ export default {
 
       // For an existing saved session, preload the persisted public config so the TV
       // can render products immediately instead of waiting for a phone to pair.
-      let initialConfig: any = undefined;
+      let initialConfig: TvPageInitialConfig | undefined;
       if (sessionId === 'demo') {
-        initialConfig = createDemoConfig();
+        initialConfig = { ...createDemoConfig() };
       } else {
         try {
           const id = env.SESSION.idFromName(sessionId);
           const session = env.SESSION.get(id);
           const cfgRes = await session.fetch(new Request('https://internal/tv-config', { method: 'GET' }));
           if (cfgRes.ok) {
-            const data = (await cfgRes.json()) as any;
-            if (data && Array.isArray(data.categories) && data.categories.some((c: any) => c && Array.isArray(c.products) && c.products.length > 0)) {
+            const data: unknown = await cfgRes.json();
+            if (isTvPageInitialConfig(data) && data.categories?.some((category) => (category.products?.length || 0) > 0)) {
               initialConfig = data;
             }
           }
@@ -1636,15 +1741,16 @@ export default {
       const session = env.SESSION.get(id);
       const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
       if (!res.ok) return errorResponse('Failed to load menu', 500);
-      const config = await res.json();
-      return htmlResponse(printPage(sessionId, config, origin));
+      const data: unknown = await res.json();
+      if (!isRecord(data)) return errorResponse('Invalid menu response', 500);
+      return htmlResponse(printPage(sessionId, data as Partial<MenuConfig>, origin));
     }
 
     // Customer-facing mobile/tablet menu (QR code landing). Public, read-only.
     if (path.startsWith('/menu/')) {
       const sessionId = path.slice('/menu/'.length).split('/')[0].split('?')[0];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
-      let config: any;
+      let config: Partial<MenuConfig>;
       if (sessionId === 'demo') {
         config = createDemoConfig();
       } else {
@@ -1652,7 +1758,9 @@ export default {
         const session = env.SESSION.get(id);
         const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
         if (!res.ok) return errorResponse('Failed to load menu', 500);
-        config = await res.json();
+        const data: unknown = await res.json();
+        if (!isRecord(data)) return errorResponse('Invalid menu response', 500);
+        config = data as Partial<MenuConfig>;
       }
       return htmlResponse(menuPage(sessionId, config, origin));
     }
@@ -1747,12 +1855,11 @@ ${pseoUrls}
 };
 
 async function updateAccountFromStripe(env: Env, accountId: string, customerId: string, subscriptionId: string) {
-  const { updateAccountStripe } = await import('./auth');
   const subscription = await getSubscription(env, subscriptionId);
   await updateAccountStripe(env, accountId, {
     stripeCustomerId: customerId,
     stripeSubscriptionId: subscriptionId,
-    subscriptionStatus: subscriptionStatusFromStripe(subscription.status),
+    subscriptionStatus: subscriptionStatusFromStripe(typeof subscription.status === 'string' ? subscription.status : ''),
     trialEndsAt: trialEndsAtFromStripe(subscription),
   });
 }
@@ -1761,7 +1868,7 @@ async function findAccountByCustomerId(env: Env, customerId: string): Promise<{ 
   try {
     const customer = await fetchStripe(`/customers/${customerId}`, env);
     if (customer.metadata?.accountId) return { id: customer.metadata.accountId };
-  } catch (_err) {
+  } catch {
     // ignore
   }
   return null;
@@ -1772,8 +1879,17 @@ async function fetchStripe(path: string, env: Env): Promise<any> {
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
     headers: { Authorization: 'Basic ' + btoa(`${env.STRIPE_API_KEY}:`) },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || res.statusText);
+  const data: unknown = await res.json();
+  if (!res.ok) {
+    let message = res.statusText;
+    if (typeof data === 'object' && data !== null && 'error' in data) {
+      const error = data.error;
+      if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+        message = error.message;
+      }
+    }
+    throw new Error(message);
+  }
   return data;
 }
 

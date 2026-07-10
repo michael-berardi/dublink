@@ -16,7 +16,7 @@ function structuredResponse(products: unknown[]) {
   );
 }
 
-function baseProduct(id: string, extra: Record<string, unknown>) {
+function baseProduct(id: string, extra: Record<string, unknown> = {}) {
   return {
     id,
     name: `${id} Product`,
@@ -240,6 +240,8 @@ describe('Dutchie scraper image extraction', () => {
     const products = result.categories.flatMap((c) => c.products);
     const product = products.find((p) => p.id === 'browserless-og-kush');
     expect(product?.image).toBe('https://images.dutchie.com/browserless-og.jpg?h=400&w=400');
+    expect(product?.thc).toBe('22%');
+    expect(product?.brand).toBeUndefined();
   });
 
   it('renders scraped product images as real <img> tags on the TV page when showImages is true', async () => {
@@ -316,6 +318,67 @@ describe('Dutchie scraper image extraction', () => {
     expect(product!.category).toBe('Pre-Rolls');
     expect(product!.special).toBe(true);
     expect(product!.specialLabel).toBe('Staff Pick');
+  });
+
+  it('drops individual unpriced fallback cards while retaining priced products', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) return new Response('Unavailable', { status: 500 });
+      if (url.startsWith(BROWSERLESS_URL)) {
+        return new Response(JSON.stringify({ products: [
+          { href: '/product/priced-flower', text: 'Priced Flower\n$25' },
+          { href: '/product/no-price-edible', text: 'No Price Edible' },
+        ] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('fallback-prices', 'test-token');
+    expect(result.productCount).toBe(1);
+    expect(result.categories.flatMap((category) => category.products).map((product) => product.id)).toEqual(['priced-flower']);
+  });
+
+  it('accepts a later priced duplicate and lowercase structured fields', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      return new Response(JSON.stringify({ responses: [
+        { json: { data: { filteredProducts: { products: [{ id: 'duplicate', name: 'Incomplete', recPrices: [] }] } } } },
+        { json: { data: { filteredProducts: { products: [{
+          id: 'duplicate',
+          name: 'Complete Product',
+          prices: [25],
+          posMetadata: {
+            canonicalCategory: 'Flower',
+            canonicalBrandName: 'Lowercase Brand',
+            children: [{ option: '1g' }],
+          },
+        }] } } } },
+      ] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('structured-lowercase', 'test-token');
+    const products = result.categories.flatMap((category) => category.products);
+    expect(result.productCount).toBe(1);
+    expect(products[0]).toMatchObject({
+      id: 'duplicate',
+      price: 25,
+      category: 'Flower',
+      brand: 'Lowercase Brand',
+      weight: '1g',
+    });
+  });
+
+  it('keeps all structured products for the formatter to rank and cap', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      return structuredResponse(Array.from({ length: 41 }, (_, index) => baseProduct(`product-${index}`)));
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('structured-large', 'test-token');
+    expect(result.productCount).toBe(41);
+    expect(result.categories[0].products).toHaveLength(41);
   });
 });
 
@@ -459,5 +522,45 @@ describe('Dutchie import image bundling', () => {
     expect(result.config.categories?.[0]?.products?.[0]?.image).toBeUndefined();
     expect(result.warnings).toHaveLength(1);
     expect(uploads.put).toHaveBeenCalledTimes(1);
+  });
+
+  it('versions immutable imported image URLs when source bytes change', async () => {
+    const storedKeys: string[] = [];
+    const uploads = { put: vi.fn(async (key: string) => { storedKeys.push(key); return null; }) } as unknown as R2Bucket;
+    const source = 'https://images.dutchie.com/versioned.png';
+    const config = () => ({ categories: [{ products: [{ name: 'Versioned', image: source }] }], showImages: true });
+    const secondPng = new Uint8Array(pngBytes);
+    secondPng[secondPng.length - 1] ^= 0x01;
+    let version = 0;
+    globalThis.fetch = vi.fn(async () => new Response(version++ === 0 ? pngBytes : secondPng, { status: 200 })) as unknown as typeof fetch;
+
+    await bundleImportedImages(config(), { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+    await bundleImportedImages(config(), { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+
+    expect(storedKeys).toHaveLength(2);
+    expect(storedKeys[0]).not.toBe(storedKeys[1]);
+  });
+
+  it('cancels an oversized streamed image before buffering the full response', async () => {
+    let cancelled = false;
+    const chunk = new Uint8Array(1024 * 1024);
+    chunk.set(pngBytes.subarray(0, Math.min(pngBytes.length, chunk.length)));
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(chunk);
+        controller.enqueue(chunk);
+        controller.enqueue(new Uint8Array(1));
+      },
+      cancel() { cancelled = true; },
+    });
+    const uploads = { put: vi.fn() } as unknown as R2Bucket;
+    globalThis.fetch = vi.fn(async () => new Response(stream, { status: 200 })) as unknown as typeof fetch;
+    const config = { categories: [{ products: [{ name: 'Too Large', image: 'https://images.dutchie.com/huge.png' }] }], showImages: true };
+
+    const result = await bundleImportedImages(config, { UPLOADS: uploads, APP_URL: 'https://dubmenu.com' }, 'acct_123');
+
+    expect(cancelled).toBe(true);
+    expect(uploads.put).not.toHaveBeenCalled();
+    expect(result.config.categories[0].products[0].image).toBeUndefined();
   });
 });

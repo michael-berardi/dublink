@@ -15,10 +15,8 @@ const AUTH_SECRET = 'b'.repeat(32);
 
 function makeEnv(overrides: Partial<DubHavenEnv> = {}): DubHavenEnv {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    SESSION: undefined as any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ACCOUNTS: undefined as any,
+    SESSION: makeAccountsMock() as unknown as DubHavenEnv['SESSION'],
+    ACCOUNTS: makeAccountsMock() as unknown as DubHavenEnv['ACCOUNTS'],
     AUTH_SECRET,
     DUBHAVEN_AUTH_URL: 'https://dubhaven.com/api/auth/google',
     DUBHAVEN_ACCOUNT_SECRET: TEST_SECRET,
@@ -120,6 +118,8 @@ describe('dubhaven auth url builder', () => {
     const redirect = new URL(parsed.searchParams.get('redirect') || '');
     expect(redirect.pathname).toBe('/auth/dubhaven/callback');
     expect(redirect.searchParams.get('next')).toBe('/config/abc');
+    expect(parsed.searchParams.get('nonce')).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(parsed.searchParams.get('returnTo')).toBe('/config/abc');
   });
 
   it('refuses to build a DubHaven SSO URL for localhost origins', () => {
@@ -156,13 +156,14 @@ describe('dubhaven auth url builder', () => {
 
 describe('dubhaven callback handler', () => {
   it('issues a local session and redirects on a valid token', async () => {
-    const env = makeEnv({ ACCOUNTS: makeAccountsMock() as unknown });
+    const env = makeEnv({ ACCOUNTS: makeAccountsMock() as unknown as DurableObjectNamespace });
     const token = await signDubHavenToken(
       makeIdentity({ email: 'Test@Example.com' }),
       TEST_SECRET
     );
     const req = new Request(
-      `https://dubmenu.com/auth/dubhaven/callback?token=${encodeURIComponent(token)}&next=%2Fconfig%2Fabc`
+      `https://dubmenu.com/auth/dubhaven/callback?token=${encodeURIComponent(token)}&next=%2Fconfig%2Fabc`,
+      { headers: { Cookie: 'dubmenu_dubhaven_state=nonce-1' } }
     );
     const result = await handleDubHavenCallback(req, env, 'https://dubmenu.com', true);
     expect(result.response.status).toBe(302);
@@ -175,6 +176,30 @@ describe('dubhaven callback handler', () => {
     expect(result.isNew).toBe(true);
   });
 
+
+  it('rejects a valid provider token outside the browser that initiated sign-in', async () => {
+    const env = makeEnv({ ACCOUNTS: makeAccountsMock() as unknown as DurableObjectNamespace });
+    const token = await signDubHavenToken(makeIdentity({ nonce: 'browser-bound' }), TEST_SECRET);
+    const req = new Request(`https://dubmenu.com/auth/dubhaven/callback?token=${encodeURIComponent(token)}`);
+    const result = await handleDubHavenCallback(req, env, 'https://dubmenu.com', true);
+    expect(result.response.status).toBe(400);
+    expect(result.account).toBeNull();
+    expect(result.response.headers.get('set-cookie')).toContain('dubmenu_dubhaven_state=');
+    expect(result.response.headers.get('set-cookie')).toContain('Max-Age=0');
+  });
+
+  it('falls back to the account page for external or protocol-relative post-login redirects', async () => {
+    const env = makeEnv({ ACCOUNTS: makeAccountsMock() as unknown as DurableObjectNamespace });
+    for (const redirect of ['https://evil.example/steal', '//evil.example/steal', '\\\\evil.example\\steal']) {
+      const token = await signDubHavenToken(makeIdentity({ nonce: 'safe-state', returnTo: redirect }), TEST_SECRET);
+      const req = new Request(
+        `https://dubmenu.com/auth/dubhaven/callback?token=${encodeURIComponent(token)}&next=${encodeURIComponent(redirect)}`,
+        { headers: { Cookie: 'dubmenu_dubhaven_state=safe-state' } }
+      );
+      const result = await handleDubHavenCallback(req, env, 'https://dubmenu.com', true);
+      expect(result.response.headers.get('location')).toBe('https://dubmenu.com/account');
+    }
+  });
   it('returns 400 when token is missing', async () => {
     const env = makeEnv();
     const req = new Request('https://dubmenu.com/auth/dubhaven/callback');

@@ -33,6 +33,7 @@ describe('demo-login route', () => {
     expect(html).toContain('/demo-login');
     expect(html).toContain('<input type="hidden" name="next" value="/config/ABC123">');
     expect(html).toContain('name="token"');
+    expect(html).toContain('<h1 class="card-title">Demo Login</h1>');
   });
 
   it('POST with wrong demo token fails and does not set a cookie', async () => {

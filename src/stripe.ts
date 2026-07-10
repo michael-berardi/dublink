@@ -1,6 +1,31 @@
-import { Env } from './auth';
+import type { Account, Env } from './auth';
 
 const STRIPE_API = 'https://api.stripe.com/v1';
+const pendingCheckoutSessions = new Map<string, Promise<{ url: string | null; id: string }>>();
+
+export interface StripeObject {
+  [key: string]: unknown;
+  id?: string;
+  url?: string | null;
+  status?: string;
+  trial_end?: number;
+  customer?: string;
+}
+
+export interface StripeWebhookEvent {
+  id: string;
+  type: string;
+  data: { object: StripeObject };
+}
+
+function isStripeObject(value: unknown): value is StripeObject {
+  return typeof value === 'object' && value !== null;
+}
+
+function isStripeWebhookEvent(value: unknown): value is StripeWebhookEvent {
+  if (!isStripeObject(value) || typeof value.id !== 'string' || typeof value.type !== 'string') return false;
+  return isStripeObject(value.data) && isStripeObject(value.data.object);
+}
 
 /**
  * Constant-time string comparison to avoid timing side-channels.
@@ -16,39 +41,12 @@ export function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/**
- * In-process Stripe event idempotency cache.
- *
- * LIMITATION: This is a module-level structure that resets on Worker
- * isolate restart. It catches Stripe's immediate/burst retries (the most
- * common duplicate-delivery scenario) but does NOT guarantee de-dup across
- * the full ~3-day Stripe retry window or across multiple isolates. A KV- or
- * Durable Object-backed store would be the durable upgrade (deferred to
- * avoid wrangler.toml binding conflicts during the multi-agent pass).
- */
-const MAX_EVENT_CACHE = 1000;
-const processedEventIds: Set<string> = new Set();
-const eventOrder: string[] = [];
-
-export function isDuplicateEvent(eventId: string): boolean {
-  return processedEventIds.has(eventId);
-}
-
-export function recordEvent(eventId: string): void {
-  if (processedEventIds.has(eventId)) return;
-  processedEventIds.add(eventId);
-  eventOrder.push(eventId);
-  while (eventOrder.length > MAX_EVENT_CACHE) {
-    const evicted = eventOrder.shift();
-    if (evicted !== undefined) processedEventIds.delete(evicted);
-  }
-}
 
 function authHeader(apiKey: string): string {
   return 'Basic ' + btoa(`${apiKey}:`);
 }
 
-async function stripeFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<any> {
+async function stripeFetch(path: string, apiKey: string, options: RequestInit = {}): Promise<StripeObject> {
   const url = `${STRIPE_API}${path}`;
   const res = await fetch(url, {
     ...options,
@@ -58,10 +56,15 @@ async function stripeFetch(path: string, apiKey: string, options: RequestInit = 
       ...options.headers,
     },
   });
-  const data = await res.json().catch(() => ({}));
+  const data: unknown = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(`Stripe error: ${data.error?.message || res.statusText}`);
+    let message = res.statusText;
+    if (isStripeObject(data) && isStripeObject(data.error) && typeof data.error.message === 'string') {
+      message = data.error.message;
+    }
+    throw new Error(`Stripe error: ${message}`);
   }
+  if (!isStripeObject(data)) throw new Error('Stripe returned an invalid response');
   return data;
 }
 
@@ -78,8 +81,10 @@ export async function createCustomer(env: Env, email: string, accountId: string)
   if (!env.STRIPE_API_KEY) throw new Error('Stripe not configured');
   const data = await stripeFetch('/customers', env.STRIPE_API_KEY, {
     method: 'POST',
+    headers: { 'Idempotency-Key': `dubmenu-customer-${accountId}` },
     body: encodeParams({ email, 'metadata[accountId]': accountId }),
   });
+  if (typeof data.id !== 'string') throw new Error('Stripe customer response missing ID');
   return { id: data.id };
 }
 
@@ -87,34 +92,49 @@ export async function createCheckoutSession(
   env: Env,
   options: {
     customerEmail?: string;
+    customerId?: string;
     successUrl: string;
     cancelUrl: string;
     clientReferenceId?: string;
   }
 ): Promise<{ url: string | null; id: string }> {
-  if (!env.STRIPE_API_KEY || !env.STRIPE_PRICE_ID) {
-    throw new Error('Stripe not configured');
-  }
+  if (!env.STRIPE_API_KEY || !env.STRIPE_PRICE_ID) throw new Error('Stripe not configured');
   if (!options.clientReferenceId) throw new Error('clientReferenceId required');
-  const customer = await createCustomer(env, options.customerEmail || '', options.clientReferenceId);
-  const params: Record<string, string | number | undefined> = {
-    'mode': 'subscription',
-    'payment_method_types[0]': 'card',
-    'line_items[0][price]': env.STRIPE_PRICE_ID,
-    'line_items[0][quantity]': '1',
-    'subscription_data[trial_period_days]': '14',
-    'customer': customer.id,
-    'success_url': options.successUrl,
-    'cancel_url': options.cancelUrl,
-    'allow_promotion_codes': 'true',
-    'billing_address_collection': 'auto',
-    'client_reference_id': options.clientReferenceId,
-  };
-  const data = await stripeFetch('/checkout/sessions', env.STRIPE_API_KEY, {
-    method: 'POST',
-    body: encodeParams(params),
-  });
-  return { url: data.url, id: data.id };
+  const accountId = options.clientReferenceId;
+  const inFlight = pendingCheckoutSessions.get(accountId);
+  if (inFlight) return inFlight;
+  const pending = (async () => {
+    const customerId = options.customerId || (await createCustomer(env, options.customerEmail || '', accountId)).id;
+    const params: Record<string, string | number | undefined> = {
+      mode: 'subscription',
+      'payment_method_types[0]': 'card',
+      'line_items[0][price]': env.STRIPE_PRICE_ID,
+      'line_items[0][quantity]': '1',
+      'subscription_data[trial_period_days]': '14',
+      customer: customerId,
+      success_url: options.successUrl,
+      cancel_url: options.cancelUrl,
+      allow_promotion_codes: 'true',
+      billing_address_collection: 'auto',
+      client_reference_id: accountId,
+    };
+    const windowId = Math.floor(Date.now() / (15 * 60 * 1000));
+    const data = await stripeFetch('/checkout/sessions', env.STRIPE_API_KEY as string, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': `dubmenu-checkout-${accountId}-${windowId}` },
+      body: encodeParams(params),
+    });
+    if (typeof data.id !== 'string' || (data.url !== null && typeof data.url !== 'string')) {
+      throw new Error('Stripe checkout response is invalid');
+    }
+    return { url: data.url ?? null, id: data.id };
+  })();
+  pendingCheckoutSessions.set(accountId, pending);
+  try {
+    return await pending;
+  } finally {
+    if (pendingCheckoutSessions.get(accountId) === pending) pendingCheckoutSessions.delete(accountId);
+  }
 }
 
 export async function createCustomerPortalSession(
@@ -127,20 +147,21 @@ export async function createCustomerPortalSession(
     method: 'POST',
     body: encodeParams({ customer: customerId, return_url: returnUrl }),
   });
-  return { url: data.url };
+  if (data.url !== null && typeof data.url !== 'string') throw new Error('Stripe portal response is invalid');
+  return { url: data.url ?? null };
 }
 
-export async function getCheckoutSession(env: Env, sessionId: string): Promise<any> {
+export async function getCheckoutSession(env: Env, sessionId: string): Promise<StripeObject> {
   if (!env.STRIPE_API_KEY) throw new Error('Stripe not configured');
   return stripeFetch(`/checkout/sessions/${sessionId}`, env.STRIPE_API_KEY);
 }
 
-export async function getSubscription(env: Env, subscriptionId: string): Promise<any> {
+export async function getSubscription(env: Env, subscriptionId: string): Promise<StripeObject> {
   if (!env.STRIPE_API_KEY) throw new Error('Stripe not configured');
   return stripeFetch(`/subscriptions/${subscriptionId}`, env.STRIPE_API_KEY);
 }
 
-export async function cancelSubscription(env: Env, subscriptionId: string): Promise<any> {
+export async function cancelSubscription(env: Env, subscriptionId: string): Promise<StripeObject> {
   if (!env.STRIPE_API_KEY) throw new Error('Stripe not configured');
   return stripeFetch(`/subscriptions/${subscriptionId}`, env.STRIPE_API_KEY, {
     method: 'POST',
@@ -148,7 +169,7 @@ export async function cancelSubscription(env: Env, subscriptionId: string): Prom
   });
 }
 
-export async function verifyWebhookSignature(payload: string, signature: string, secret: string): Promise<any> {
+export async function verifyWebhookSignature(payload: string, signature: string, secret: string): Promise<StripeWebhookEvent> {
   const parts = signature.split(',').reduce((acc, part) => {
     const [key, value] = part.split('=');
     if (key && value) acc[key] = value;
@@ -163,7 +184,8 @@ export async function verifyWebhookSignature(payload: string, signature: string,
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signedPayload));
   const expectedSig = arrayBufferToHex(sig);
   if (!safeEqual(v1, expectedSig)) throw new Error('Signature mismatch');
-  const event = JSON.parse(payload);
+  const event: unknown = JSON.parse(payload);
+  if (!isStripeWebhookEvent(event)) throw new Error('Invalid webhook event');
   const headerTimestamp = parseInt(timestamp, 10) * 1000;
   const now = Date.now();
   if (now - headerTimestamp > 5 * 60 * 1000) throw new Error('Webhook too old');
@@ -176,7 +198,7 @@ function arrayBufferToHex(buffer: ArrayBuffer): string {
     .join('');
 }
 
-export function subscriptionStatusFromStripe(status: string): any {
+export function subscriptionStatusFromStripe(status: string): Account['subscriptionStatus'] {
   switch (status) {
     case 'trialing': return 'trialing';
     case 'active': return 'active';
@@ -189,7 +211,6 @@ export function subscriptionStatusFromStripe(status: string): any {
   }
 }
 
-export function trialEndsAtFromStripe(subscription: any): number | undefined {
-  if (subscription.trial_end) return subscription.trial_end * 1000;
-  return undefined;
+export function trialEndsAtFromStripe(subscription: StripeObject): number | undefined {
+  return typeof subscription.trial_end === 'number' ? subscription.trial_end * 1000 : undefined;
 }

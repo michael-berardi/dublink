@@ -58,7 +58,7 @@ describe('GET /api/account/export', () => {
       uploads?: unknown[];
     };
     expect(body.exportedAt).toBeTruthy();
-    expect(body.account).toBeTruthy();
+    if (!body.account) throw new Error('Expected account export payload');
     expect(body.account.passwordHash).toBeUndefined();
     expect(body.account.passwordSalt).toBeUndefined();
     expect(body.account.email).toBeTruthy();
@@ -112,6 +112,8 @@ describe('POST /api/account/delete', () => {
     const setCookie = res.headers.get('set-cookie') || '';
     expect(setCookie).toMatch(/dubmenu_auth=;/);
     expect(setCookie).toMatch(/Max-Age=0/);
+    const replay = await authedFetch('/api/sessions', cookie);
+    expect(replay.status).toBe(401);
   });
 });
 

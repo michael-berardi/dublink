@@ -46,6 +46,13 @@ const MAGIC_SIGNATURES: readonly MagicSignature[] = [
 const MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB
 const IMPORT_IMAGE_FETCH_TIMEOUT_MS = 4500;
 const IMPORT_IMAGE_CONCURRENCY = 8;
+const IMAGE_CONTENT_TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
 
 
 // Restrictive CSP applied to every served image. `default-src 'none'` blocks
@@ -58,8 +65,9 @@ function generateKey(accountId: string, ext: string): string {
   return `${accountId}/${uuid}.${ext}`;
 }
 
-async function importKey(accountId: string, sourceUrl: string, ext: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sourceUrl));
+async function importKey(accountId: string, sourceUrl: string, contentDigest: string, ext: string): Promise<string> {
+  const material = `${sourceUrl}\u0000${contentDigest}`;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(material));
   const hex = [...new Uint8Array(digest)]
     .slice(0, 12)
     .map((b) => b.toString(16).padStart(2, '0'))
@@ -94,7 +102,7 @@ async function mapWithConcurrency<T>(
   await Promise.all(workers);
 }
 
-async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; detected: MagicSignature; size: number } | null> {
+async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; detected: MagicSignature; size: number; contentDigest: string } | null> {
   let url: URL;
   try {
     url = new URL(sourceUrl);
@@ -109,12 +117,38 @@ async function fetchImportedImage(sourceUrl: string): Promise<{ body: Blob; dete
       headers: { Accept: 'image/jpeg,image/png,image/webp,image/gif;q=0.9,*/*;q=0.1' },
       signal: controller.signal,
     });
-    if (!res.ok) return null;
-    const buffer = await res.arrayBuffer();
-    if (buffer.byteLength > MAX_IMAGE_SIZE) return null;
-    const detected = detectImage(new Uint8Array(buffer));
+    if (!res.ok || !res.body) return null;
+    const declaredLength = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_IMAGE_SIZE) {
+      await res.body.cancel();
+      return null;
+    }
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      size += value.byteLength;
+      if (size > MAX_IMAGE_SIZE) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const detected = detectImage(bytes);
     if (!detected) return null;
-    return { body: new Blob([buffer], { type: detected.contentType }), detected, size: buffer.byteLength };
+    const exactBuffer = bytes.buffer as ArrayBuffer;
+    const digest = await crypto.subtle.digest('SHA-256', exactBuffer);
+    const contentDigest = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+    return { body: new Blob([exactBuffer], { type: detected.contentType }), detected, size, contentDigest };
   } catch {
     return null;
   } finally {
@@ -136,7 +170,7 @@ async function ingestImportedImage(
       try {
         const image = await fetchImportedImage(sourceUrl);
         if (!image) return undefined;
-        const key = await importKey(accountId, sourceUrl, image.detected.ext);
+        const key = await importKey(accountId, sourceUrl, image.contentDigest, image.detected.ext);
         await env.UPLOADS!.put(key, image.body, {
           httpMetadata: { contentType: image.detected.contentType },
           customMetadata: {
@@ -184,17 +218,29 @@ function sanitizeFilename(name: string): string {
   return cleaned.length > 0 ? cleaned : 'image';
 }
 
-export async function bundleImportedImages(
-  config: {
-    logo?: unknown;
-    showImages?: unknown;
-    categories?: Array<{ products?: Array<{ image?: unknown }> }>;
-    specials?: Array<{ image?: unknown }>;
-    [key: string]: unknown;
-  },
+type UploadedFile = {
+  size: number;
+  name: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+};
+
+function isUploadedFile(value: unknown): value is UploadedFile {
+  return typeof value === 'object' && value !== null
+    && 'size' in value && typeof value.size === 'number'
+    && 'name' in value && typeof value.name === 'string'
+    && 'arrayBuffer' in value && typeof value.arrayBuffer === 'function';
+}
+
+export async function bundleImportedImages<T extends {
+  logo?: unknown;
+  showImages?: unknown;
+  categories?: Array<{ products?: Array<{ image?: unknown }> }>;
+  specials?: Array<{ image?: unknown }>;
+}>(
+  config: T,
   env: { UPLOADS?: R2Bucket; APP_URL?: string },
   accountId: string
-): Promise<{ config: typeof config; warnings: string[] }> {
+): Promise<{ config: T; warnings: string[] }> {
   const warnings: string[] = [];
   const cache = new Map<string, Promise<string | undefined>>();
   const rewrite = async (value: unknown, label: string): Promise<string | undefined> => {
@@ -254,7 +300,7 @@ export async function handleImageUpload(
 
   const form = await request.formData();
   const file = form.get('file');
-  if (!file || !(file instanceof File)) {
+  if (!isUploadedFile(file)) {
     return new Response(JSON.stringify({ error: 'Missing file' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
   }
   if (file.size > MAX_IMAGE_SIZE) {
@@ -309,10 +355,14 @@ export async function deleteAccountUploads(
   do {
     const listed = await env.UPLOADS.list({ prefix, cursor, limit: 1000 });
     const keys = listed.objects.map((o) => o.key);
-    if (keys.length > 0) {
-      await env.UPLOADS.delete(keys);
-      deleted += keys.length;
-    }
+    await mapWithConcurrency(keys, IMPORT_IMAGE_CONCURRENCY, async (key) => {
+      try {
+        await env.UPLOADS!.delete(key);
+        deleted++;
+      } catch {
+        // Account deletion is irreversible; continue removing every other object.
+      }
+    });
     cursor = listed.truncated ? listed.cursor : undefined;
   } while (cursor);
   return deleted;
@@ -348,8 +398,8 @@ export async function listAccountUploads(
   do {
     const listed = await env.UPLOADS.list({ prefix, cursor, limit: 1000 });
     for (const obj of listed.objects) {
-      const httpMeta = (obj as any).httpMetadata || {};
-      const customMeta = (obj as any).customMetadata || {};
+      const httpMeta = obj.httpMetadata || {};
+      const customMeta = obj.customMetadata || {};
       // Prefer metadata embedded in the list result. On real Cloudflare R2
       // both httpMetadata and customMetadata are populated; some local
       // emulators surface them empty, so fall back to a head() lookup when
@@ -363,18 +413,21 @@ export async function listAccountUploads(
         try {
           const head = await env.UPLOADS.head(obj.key);
           if (head) {
-            const headHttp = (head as any).httpMetadata || {};
-            const headCustom = (head as any).customMetadata || {};
+            const headHttp = head.httpMetadata || {};
+            const headCustom = head.customMetadata || {};
             contentType =
               headCustom.contentType ||
               headHttp.contentType ||
               'application/octet-stream';
             originalName = originalName || headCustom.originalName || undefined;
           }
-        } catch (_err) {
+        } catch {
           // best-effort enrichment; fall through with default below
         }
-        if (!contentType) contentType = 'application/octet-stream';
+        if (!contentType) {
+          const extension = obj.key.split('.').pop()?.toLowerCase() || '';
+          contentType = IMAGE_CONTENT_TYPES_BY_EXTENSION[extension] || 'application/octet-stream';
+        }
       }
       // R2 listed objects expose `size` and `uploaded` (a Date) natively.
       // customMetadata.size/uploaded are accepted as fallbacks for parity with

@@ -1,6 +1,6 @@
 import { SELF } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
-import { listAccountUploads, deleteUpload } from '../src/upload';
+import { describe, it, expect, vi } from 'vitest';
+import { deleteAccountUploads, listAccountUploads, deleteUpload } from '../src/upload';
 
 const BASE = 'https://dubmenu.com';
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -69,6 +69,42 @@ describe('listAccountUploads (unit)', () => {
     // verify shape through the HTTP route below, and here just confirm the
     // function is exported and callable. The route test covers the real shape.
     expect(uploaded.key).toMatch(/^[^/]+\/[^/]+\.png$/);
+  });
+
+  it('infers generated image types when R2 head metadata is unavailable', async () => {
+    const uploaded = new Date('2026-07-09T12:00:00Z');
+    const uploads = {
+      list: async () => ({
+        objects: [{ key: 'acct/import-0123456789abcdef.webp', size: 128, uploaded }],
+        truncated: false,
+      }),
+      head: async () => { throw new Error('HEAD unavailable'); },
+    } as unknown as R2Bucket;
+
+    const result = await listAccountUploads({ UPLOADS: uploads }, 'acct');
+
+    expect(result).toEqual([expect.objectContaining({
+      key: 'import-0123456789abcdef.webp',
+      contentType: 'image/webp',
+    })]);
+  });
+});
+
+describe('deleteAccountUploads', () => {
+  it('continues across objects and pages after an individual delete failure', async () => {
+    const list = vi.fn(async ({ cursor }: { cursor?: string }) => cursor
+      ? { objects: [{ key: 'acct/third.png' }], truncated: false }
+      : { objects: [{ key: 'acct/first.png' }, { key: 'acct/second.png' }], truncated: true, cursor: 'next' });
+    const remove = vi.fn(async (key: string | string[]) => {
+      if (key === 'acct/first.png') throw new Error('temporary R2 failure');
+    });
+    const uploads = { list, delete: remove } as unknown as R2Bucket;
+
+    await expect(deleteAccountUploads({ UPLOADS: uploads }, 'acct')).resolves.toBe(2);
+    expect(remove).toHaveBeenCalledWith('acct/first.png');
+    expect(remove).toHaveBeenCalledWith('acct/second.png');
+    expect(remove).toHaveBeenCalledWith('acct/third.png');
+    expect(list).toHaveBeenCalledTimes(2);
   });
 });
 

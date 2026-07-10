@@ -147,7 +147,7 @@ export function detectMenuSource(input: string): MenuSource {
   const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
 
 
-  if (hostname.endsWith('dutchie.com')) {
+  if (hostname === 'dutchie.com' || hostname.endsWith('.dutchie.com')) {
     const path = url.pathname.replace(/\/+$/, '');
 
     // Dutchie v2 embedded-menu script IDs are hex hashes, not cName slugs.
@@ -222,30 +222,47 @@ function titleCaseFromDomain(domain: string): string {
     .join(' ');
 }
 
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+};
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x[0-9a-f]+|#\d+|amp|quot|apos|lt|gt);/gi, (entity, code: string) => {
+    if (code[0] !== '#') return HTML_ENTITIES[code.toLowerCase()] || entity;
+    const numeric = code[1].toLowerCase() === 'x' ? Number.parseInt(code.slice(2), 16) : Number.parseInt(code.slice(1), 10);
+    return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : entity;
+  });
+}
+
+function resolveAssetUrl(value: string, pageUrl: string): string | undefined {
+  try {
+    return new URL(decodeHtmlEntities(value.trim()), pageUrl).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function extractStoreName(html: string, url: string): string {
   const ogSite = html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']+)["']/i)?.[1];
-  if (ogSite) return ogSite.trim();
+  if (ogSite) return decodeHtmlEntities(ogSite.trim());
   const ogTitle = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)?.[1];
-  if (ogTitle) return ogTitle.trim();
+  if (ogTitle) return decodeHtmlEntities(ogTitle.trim());
   const title = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1];
-  if (title) return title.trim();
+  if (title) return decodeHtmlEntities(title.trim());
   return titleCaseFromDomain(humanDomain(url));
 }
 
 function extractLogo(html: string, url: string): string | undefined {
   const ogImage = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
-  if (ogImage) return ogImage.trim();
+  if (ogImage) return resolveAssetUrl(ogImage, url);
   const twitterImage = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)?.[1];
-  if (twitterImage) return twitterImage.trim();
+  if (twitterImage) return resolveAssetUrl(twitterImage, url);
   const logo = html.match(/<img[^>]+(?:class=["'][^"']*logo[^"']*["']|alt=["'][^"']*logo[^"']*["'])[^>]+src=["']([^"']+)["']/i)?.[1];
-  if (logo) {
-    try {
-      return new URL(logo, url).toString();
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
+  return logo ? resolveAssetUrl(logo, url) : undefined;
 }
 
 function parsePrice(value: unknown): number {
@@ -290,9 +307,12 @@ function stringField(record: UnknownRecord, key: string): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function recordField(record: UnknownRecord, key: string): UnknownRecord | undefined {
-  const value = record[key];
-  return isRecord(value) ? value : undefined;
+
+function firstOffer(value: unknown): UnknownRecord | undefined {
+  if (isRecord(value)) return value;
+  if (!Array.isArray(value)) return undefined;
+  return value.find((offer) => isRecord(offer) && parsePrice(offer.price) > 0) as UnknownRecord | undefined
+    ?? value.find(isRecord);
 }
 
 function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct | null {
@@ -301,7 +321,7 @@ function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct
   const name = stringField(item, 'name') || stringField(item, 'title') || '';
   if (!name) return null;
 
-  const offers = recordField(item, 'offers');
+  const offers = firstOffer(item.offers);
   const price = parsePrice(offers?.price ?? item.price);
   if (!price && !offers) return null;
 
@@ -325,7 +345,7 @@ function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct
     : isRecord(brandValue)
       ? stringField(brandValue, 'name')
       : undefined;
-  const description = stringField(item, 'description') || stringField(item, 'rawText') || stringField(item, 'potency');
+  const description = (stringField(item, 'description') || stringField(item, 'rawText') || stringField(item, 'potency'))?.slice(0, 500);
   const combined = `${name} ${description || ''}`;
 
   // Extract weight from name or description (e.g., "3.5g", "100mg", "1/8 oz").
@@ -336,7 +356,8 @@ function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct
   const thcMatch = combined.match(/THC[\s:]*([\d.]+%|[\d.]+mg)/i);
   const cbdMatch = combined.match(/CBD[\s:]*([\d.]+%|[\d.]+mg)/i);
   const sourceId = stringField(item, 'sku') || stringField(item, 'slug') || stringField(item, '@id') || name;
-  const availability = offers?.availability;
+  const availability = offers?.availability ?? item.availability;
+  const availabilityToken = typeof availability === 'string' ? availability.split(/[\/#]/).pop()?.toLowerCase() : undefined;
 
   return {
     id: sourceId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 120),
@@ -349,7 +370,8 @@ function normalizeGenericProduct(item: unknown, baseUrl: string): ScrapedProduct
     image,
     weight,
     brand,
-    inStock: availability !== 'https://schema.org/OutOfStock' && availability !== 'OutOfStock',
+    description,
+    inStock: availabilityToken !== 'outofstock',
     strain: parseStrain(combined),
   };
 }
@@ -375,7 +397,7 @@ function overseerCrawlBaseUrl(env: MenuImportEnv): string | null {
 }
 
 function cleanOverseerDisplayName(product: OverseerProductCrawlProduct, category: string): string {
-  const raw = product.name.trim();
+  const raw = product.name?.trim() || '';
   if (!raw.includes('|')) return raw;
   const brand = (product.brand || '').toLowerCase();
   const categoryLower = category.toLowerCase();
@@ -491,7 +513,7 @@ async function fetchOverseerProductsCrawl(
     signal: AbortSignal.timeout(60000),
   });
   const body = await resp.json().catch(() => null) as OverseerProductCrawlResponse | { error?: string; message?: string } | null;
-  if (!resp.ok || !body || body.success === false) {
+  if (!resp.ok || !body || ('success' in body && body.success === false)) {
     const message = body && 'error' in body ? (body.error || body.message) : undefined;
     throw new Error(message || `Overseer Products Crawl returned ${resp.status}`);
   }
@@ -513,22 +535,24 @@ export async function scrapeGenericWebsite(url: string): Promise<MenuImportResul
     products.push(p);
   };
 
-  const ldMatches = html.matchAll(/<script type="application\/ld\+json">([^<]+)<\/script>/g);
+  const ldMatches = html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi);
   for (const match of ldMatches) {
+    if (!/\btype\s*=\s*["']application\/ld\+json["']/i.test(match[1])) continue;
     try {
-      const data: unknown = JSON.parse(match[1]);
-      const items = Array.isArray(data) ? data : [data];
-      for (const item of items) {
+      const data: unknown = JSON.parse(match[2]);
+      const pending: unknown[] = Array.isArray(data) ? [...data] : [data];
+      while (pending.length > 0) {
+        const item = pending.pop();
         if (!isRecord(item)) continue;
         if (item['@type'] === 'Product') addCandidate(item);
+        if (Array.isArray(item['@graph'])) pending.push(...item['@graph']);
         if (!Array.isArray(item.itemListElement)) continue;
-        for (const el of item.itemListElement) {
-          if (!isRecord(el) || !isRecord(el.item) || el.item['@type'] !== 'Product') continue;
-          addCandidate(el.item);
+        for (const element of item.itemListElement) {
+          pending.push(isRecord(element) && 'item' in element ? element.item : element);
         }
       }
     } catch {
-      // ignore malformed JSON-LD
+      // Ignore malformed JSON-LD blocks and continue scanning the page.
     }
   }
 
@@ -555,7 +579,7 @@ export async function scrapeGenericWebsite(url: string): Promise<MenuImportResul
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products: prods.slice(0, 40),
+      products: prods,
     }));
 
   return {
@@ -569,7 +593,7 @@ export async function scrapeGenericWebsite(url: string): Promise<MenuImportResul
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: string | number | NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error(message)), ms);
   });

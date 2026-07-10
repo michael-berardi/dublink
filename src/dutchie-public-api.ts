@@ -165,6 +165,11 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
+function cleanDescription(value: string | undefined): string | undefined {
+  const description = value?.replace(/\s+/g, ' ').trim().slice(0, 500);
+  return description || undefined;
+}
+
 type ImportedPriceTier = { label: string; price: string };
 
 function formatTierPrice(value: number): string {
@@ -296,6 +301,7 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     image,
     weight,
     brand,
+    description: cleanDescription(p.description),
     inStock: true,
     strain,
     special: Boolean(p.special || specialLabel || originalPrice),
@@ -322,7 +328,7 @@ function toCategories(products: ScrapedProduct[]): ScrapedCategory[] {
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products: products.slice(0, 40),
+      products,
     }));
 }
 
@@ -416,7 +422,11 @@ export async function importDutchiePublicMenu(slug: string): Promise<{ categorie
   // 2. Prefer products already returned with the dispensary menu sections. Large
   // Dutchie menus can time out if we immediately make a second all-products
   // GraphQL request after the store lookup.
-  let products: DutchiePublicProduct[] = dispensary.menuSections?.flatMap((s) => s.products || []) || [];
+  let products: DutchiePublicProduct[] = dispensary.menuSections?.flatMap((section) =>
+    (section.products || []).map((product) => product.category
+      ? product
+      : { ...product, category: section.category || section.label })
+  ) || [];
   if (!products.length) {
     const productsData = await fetchDutchiePublicGraphQL<{ filteredProducts: { products: DutchiePublicProduct[] } }>(
       DUTCHIE_API2_GRAPHQL_URL,

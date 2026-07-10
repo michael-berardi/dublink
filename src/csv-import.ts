@@ -1,5 +1,9 @@
+import type { Category, Product } from './types';
+
 const MAX_CSV_BYTES = 5 * 1024 * 1024;
 const MAX_CSV_ROWS = 5000;
+const MAX_CSV_CATEGORIES = 20;
+const MAX_CSV_PRODUCTS_PER_CATEGORY = 500;
 
 /**
  * RFC 4180 CSV parser (state machine). Handles quoted fields, escaped
@@ -91,7 +95,7 @@ export interface CsvImportResult {
   errors?: string[];
 }
 
-export function importMenuFromCSV(csvText: string): { categories: any[]; errors: string[] } {
+export function importMenuFromCSV(csvText: string): { categories: Category[]; errors: string[] } {
   const errors: string[] = [];
 
   if (csvText.length > MAX_CSV_BYTES) {
@@ -117,29 +121,31 @@ export function importMenuFromCSV(csvText: string): { categories: any[]; errors:
     return { categories: [], errors };
   }
 
-  const categoryMap = new Map<string, { id: string; name: string; order: number; products: any[] }>();
+  const categoryMap = new Map<string, Category>();
   let order = 0;
 
   rows.forEach((row, idx) => {
     const categoryName = row.category?.trim();
     const name = row.name?.trim();
-    const price = parseFloat(row.price);
-    if (!categoryName || !name || Number.isNaN(price)) {
+    const priceText = row.price?.trim() || '';
+    const price = priceText ? Number(priceText) : Number.NaN;
+    if (!categoryName || !name || !Number.isFinite(price) || price < 0 || price > 1_000_000) {
       errors.push(`Row ${idx + 2}: missing category, name, or valid price`);
       return;
     }
 
-    if (!categoryMap.has(categoryName)) {
-      categoryMap.set(categoryName, {
-        id: categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    const categoryId = categoryName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'other';
+    if (!categoryMap.has(categoryId)) {
+      categoryMap.set(categoryId, {
+        id: categoryId,
         name: categoryName,
         order: order++,
         products: [],
       });
     }
 
-    const cat = categoryMap.get(categoryName)!;
-    const product: any = {
+    const cat = categoryMap.get(categoryId)!;
+    const product: Product = {
       id: `${cat.id}-${cat.products.length + 1}`,
       name,
       price,
@@ -152,13 +158,21 @@ export function importMenuFromCSV(csvText: string): { categories: any[]; errors:
     if (row.brand) product.brand = row.brand;
     if (row.sku) product.sku = row.sku;
     if (row.strain) {
-      const s = row.strain.toLowerCase();
-      if (['indica', 'sativa', 'hybrid'].includes(s)) product.strain = s;
+      const strain = row.strain.toLowerCase();
+      if (strain === 'indica' || strain === 'sativa' || strain === 'hybrid') product.strain = strain;
     }
     if (row.description) product.description = row.description;
 
     cat.products.push(product);
   });
 
-  return { categories: Array.from(categoryMap.values()), errors };
+  const categories = Array.from(categoryMap.values());
+  if (categories.length > MAX_CSV_CATEGORIES) {
+    errors.push(`CSV exceeds maximum of ${MAX_CSV_CATEGORIES} categories`);
+  }
+  const oversizedCategory = categories.find((category) => category.products.length > MAX_CSV_PRODUCTS_PER_CATEGORY);
+  if (oversizedCategory) {
+    errors.push(`Category "${oversizedCategory.name}" exceeds maximum of ${MAX_CSV_PRODUCTS_PER_CATEGORY} products`);
+  }
+  return errors.some((error) => /exceeds maximum/.test(error)) ? { categories: [], errors } : { categories, errors };
 }

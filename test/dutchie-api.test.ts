@@ -82,6 +82,7 @@ describe('importDutchieMenu', () => {
               name: 'Blue Dream 3.5g',
               brand: 'High Garden',
               category: 'Flower',
+              description: 'Bright citrus flower',
               type: 'flower',
               strainType: 'Hybrid',
               thc: { value: 22, unit: 'PERCENT' },
@@ -107,6 +108,7 @@ describe('importDutchieMenu', () => {
     expect(result.categories[0].products[0].thc).toBe('22%');
     expect(result.categories[0].products[0].weight).toBe('1g');
     expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/prod1.jpg?h=400&w=400');
+    expect(result.categories[0].products[0].description).toBe('Bright citrus flower');
     expect(result.categories[0].products[0].priceTiers).toEqual([
       { label: '1g', price: '$12' },
       { label: '3.5g', price: '$35' },
@@ -230,5 +232,18 @@ describe('importDutchieMenu category handling', () => {
     const result = await importDutchieMenu('multi', 'test-key');
     const names = result.categories.map((c: ScrapedCategory) => c.name);
     expect(names).toEqual(['Flower', 'Pre-Rolls', 'Vapes', 'Edibles']);
+  });
+
+  it('keeps all products for the formatter to rank and cap', async () => {
+    mockFetchForProducts(Array.from({ length: 41 }, (_, index) => ({
+      id: `flower-${index}`,
+      name: `Flower ${index}`,
+      category: 'Flower',
+      recPrices: [30 + index],
+    })));
+
+    const result = await importDutchieMenu('multi', 'test-key');
+    expect(result.productCount).toBe(41);
+    expect(result.categories[0].products).toHaveLength(41);
   });
 });

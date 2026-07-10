@@ -1,6 +1,8 @@
+import type { DurableObjectBinding } from './auth';
+
 export interface StatusEnv {
-  SESSION: DurableObjectNamespace;
-  ACCOUNTS: DurableObjectNamespace;
+  SESSION: DurableObjectBinding;
+  ACCOUNTS: DurableObjectBinding;
   STRIPE_API_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
@@ -73,6 +75,6 @@ export async function getStatus(env: StatusEnv): Promise<StatusResult> {
     result.stripe.error = 'missing key';
   }
 
-  result.healthy = result.env.authSecret && result.env.stripeKey && result.durableObjects.accounts && result.durableObjects.sessions && result.stripe.ok;
+  result.healthy = result.env.authSecret && result.env.stripeKey && result.env.stripePriceId && result.env.webhookSecret && result.durableObjects.accounts && result.durableObjects.sessions && result.stripe.ok;
   return result;
 }

@@ -79,13 +79,6 @@ describe('menuPage', () => {
     expect(page).toMatch(/\.sticky-top\{[^}]*width:100%;max-width:100vw/);
   });
 
-  it('emits deterministic product-level placeholder variant classes', () => {
-    const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');
-    expect(page).toContain('placeholder-v');
-    expect(page).toContain('data-variant=');
-    expect(page).toContain('getProductVariant');
-    expect(page).toContain('placeholder-icon');
-  });
 
   it('uses a responsive header name that can wrap on very narrow screens', () => {
     const page = menuPage('demo', createDemoConfig(), 'https://dubmenu.com');

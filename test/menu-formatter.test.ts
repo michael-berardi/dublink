@@ -59,6 +59,22 @@ describe('dedupeAndFormatCategories', () => {
     expect(result.categories.length).toBe(5);
     expect(result.warnings.length).toBe(1);
   });
+
+  it('keeps distinct products with non-ASCII identifiers', () => {
+    const categories: ScrapedCategory[] = [{
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: [
+        { id: '漢字一', name: 'First Product', price: 10, inStock: true },
+        { id: '漢字二', name: 'Second Product', price: 12, inStock: true },
+      ],
+    }];
+
+    const result = dedupeAndFormatCategories(categories);
+    expect(result.productCount).toBe(2);
+    expect(new Set(result.categories[0].products.map((product) => product.id)).size).toBe(2);
+  });
 });
 
 describe('smartLayout', () => {

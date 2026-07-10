@@ -1,5 +1,6 @@
 import { SELF } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import { SessionDurableObject } from '../src/session';
 
 const BASE = 'https://dubmenu.com';
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -29,6 +30,42 @@ function authedFetch(path: string, cookie: string, init: RequestInit = {}): Prom
     },
   });
 }
+
+function fakeSessionState(failPut = false): DurableObjectState {
+  const storage = {
+    get: vi.fn(async () => undefined),
+    put: vi.fn(async () => { if (failPut) throw new Error('storage unavailable'); }),
+    deleteAll: vi.fn(async () => undefined),
+  };
+  return {
+    storage,
+    blockConcurrencyWhile: async (callback: () => Promise<unknown>) => callback(),
+  } as unknown as DurableObjectState;
+}
+
+describe('Session Durable Object integrity', () => {
+  it('requires the owning account for destructive deletion', async () => {
+    const state = fakeSessionState();
+    const session = new SessionDurableObject(state, {} as Env);
+    const claim = await session.fetch(new Request('https://internal/owner', { method: 'POST', headers: { 'X-Account-Id': 'owner' } }));
+    expect(claim.status).toBe(200);
+
+    expect((await session.fetch(new Request('https://internal/', { method: 'DELETE' }))).status).toBe(403);
+    expect((await session.fetch(new Request('https://internal/', { method: 'DELETE', headers: { 'X-Account-Id': 'attacker' } }))).status).toBe(403);
+    expect((await session.fetch(new Request('https://internal/', { method: 'DELETE', headers: { 'X-Account-Id': 'owner' } }))).status).toBe(200);
+  });
+
+  it('returns an import failure instead of broadcasting success when persistence fails', async () => {
+    const session = new SessionDurableObject(fakeSessionState(true), {} as Env);
+    const res = await session.fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({ categories: [{ id: 'flower', name: 'Flower', order: 0, products: [{ id: 'p1', name: 'OG Kush', price: 20, inStock: true }] }] }),
+    }));
+    expect(res.status).toBe(500);
+    await expect(res.json()).resolves.toMatchObject({ ok: false, error: 'Import failed' });
+  });
+});
 
 describe('session ownership isolation', () => {
   it('rejects unauthenticated claim attempts', async () => {
@@ -116,30 +153,57 @@ describe('session ownership isolation', () => {
     const body = (await res.json()) as { error?: string };
     expect(body.error).toMatch(/import job/i);
   });
+
+  it('notifies TVs when the last authenticated phone disconnects', async () => {
+    const sessionId = `DISCONNECT-${unique()}`;
+    const cookie = await signupCookie();
+    expect((await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' })).status).toBe(200);
+    const tvRes = await SELF.fetch(`${BASE}/ws/${sessionId}?role=tv`, { headers: { Upgrade: 'websocket' } });
+    const phoneRes = await SELF.fetch(`${BASE}/ws/${sessionId}?role=phone`, { headers: { Upgrade: 'websocket', Cookie: `dubmenu_auth=${cookie}` } });
+    const tv = tvRes.webSocket;
+    const phone = phoneRes.webSocket;
+    if (!tv || !phone) throw new Error('Expected paired WebSockets');
+    tv.accept();
+    phone.accept();
+    const disconnected = new Promise<void>((resolve) => {
+      tv.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as { type?: string };
+        if (message.type === 'unpaired') resolve();
+      });
+    });
+    phone.close(1000, 'test disconnect');
+    await disconnected;
+    tv.close(1000, 'test complete');
+  });
+  it('rejects custom-domain mappings to sessions the account does not own', async () => {
+    const cookie = await signupCookie();
+    const res = await authedFetch('/api/domains', cookie, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain: `menu-${unique()}.customer.com`, sessionId: `UNOWNED-${unique()}` }),
+    });
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({ error: expect.stringMatching(/owned/i) });
+  });
+
 });
 
 describe('demo widget', () => {
-  it('does not expose a fake customer dispensary name', async () => {
+  it('returns the same populated Simply Green demo used by the public menu and TV board', async () => {
     const res = await SELF.fetch(`${BASE}/api/widget/demo`);
     expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
     const body = (await res.json()) as { dispensaryName?: string; categories?: unknown[] };
-    const name = body.dispensaryName || '';
-    expect(name === '' || name === 'DubMenu').toBe(true);
+    expect(body.dispensaryName).toBe('Simply Green');
     expect(Array.isArray(body.categories)).toBe(true);
-  });
-
-  it('returns empty categories for an unowned demo session', async () => {
-    const res = await SELF.fetch(`${BASE}/api/widget/demo`);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { dispensaryName?: string; categories?: unknown[] };
-    expect(body.dispensaryName).toBe('DubMenu');
-    expect(body.categories).toHaveLength(0);
+    expect(body.categories?.length).toBeGreaterThan(0);
   });
 
   it('returns empty categories for an unowned non-demo session', async () => {
     const sessionId = `UNOWNED-${unique()}`;
     const res = await SELF.fetch(`${BASE}/api/widget/${sessionId}`);
     expect(res.status).toBe(200);
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
     const body = (await res.json()) as { dispensaryName?: string; categories?: unknown[] };
     expect(body.dispensaryName).toBe('DubMenu');
     expect(body.categories).toHaveLength(0);

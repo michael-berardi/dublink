@@ -288,7 +288,8 @@ type DemoCategorySeed = {
   name: string;
   names: string[];
   weights: string[];
-  thc: string[];
+  thc: Array<string | undefined>;
+  cbd?: Array<string | undefined>;
   prices: number[];
   strains: Array<'indica' | 'sativa' | 'hybrid' | undefined>;
 };
@@ -314,7 +315,8 @@ const simplyGreenDemoSeeds: DemoCategorySeed[] = [
     name: 'Vapes',
     names: ['Blueberry Cart', 'Tangie Disposable', 'Live Resin Pod', 'CBD Cartridge', 'Pineapple Express', 'Nighttime Indica'],
     weights: ['1g', '0.5g', '1g', '1g', '1g', '0.5g'],
-    thc: ['82%', '78%', '85%', '0%', '80%', '75%'],
+    thc: ['82%', '78%', '85%', undefined, '80%', '75%'],
+    cbd: [undefined, undefined, undefined, '80%', undefined, undefined],
     prices: [45, 35, 55, 40, 48, 32],
     strains: ['hybrid', 'sativa', 'hybrid', undefined, 'sativa', 'indica'],
   },
@@ -338,7 +340,8 @@ const simplyGreenDemoSeeds: DemoCategorySeed[] = [
     name: 'Tinctures',
     names: ['THC Tincture', 'CBD Tincture', '1:1 Ratio', 'Sleep Formula', 'Daytime Drops', 'Relief Tincture'],
     weights: ['30ml', '30ml', '30ml', '30ml', '30ml', '30ml'],
-    thc: ['300mg', '0mg', '150mg', '100mg', '200mg', '250mg'],
+    thc: ['300mg', undefined, '150mg', '100mg', '200mg', '250mg'],
+    cbd: [undefined, '500mg', undefined, undefined, undefined, undefined],
     prices: [45, 40, 55, 50, 48, 52],
     strains: [undefined, undefined, undefined, 'indica', 'sativa', 'hybrid'],
   },
@@ -346,7 +349,8 @@ const simplyGreenDemoSeeds: DemoCategorySeed[] = [
     name: 'Topicals',
     names: ['CBD Balm', 'THC Lotion', 'Transdermal Patch', 'Relief Cream', 'Muscle Rub', 'Face Serum'],
     weights: ['2oz', '4oz', '1pk', '3oz', '2oz', '1oz'],
-    thc: ['200mg', '100mg', '50mg', '150mg', '250mg', '75mg'],
+    thc: [undefined, '100mg', '50mg', '150mg', '250mg', '75mg'],
+    cbd: ['200mg', undefined, undefined, undefined, undefined, undefined],
     prices: [35, 30, 12, 28, 32, 45],
     strains: [undefined, undefined, undefined, undefined, undefined, undefined],
   },
@@ -359,9 +363,12 @@ export function createSimplyGreenDemoCategories(): Category[] {
     order: categoryIndex,
     products: seed.names.map((name, productIndex) => ({
       id: `simply-green-${seed.name.toLowerCase()}-${productIndex + 1}`.replace(/[^a-z0-9_-]/g, '-'),
-      name: `${name} ${seed.weights[productIndex]}`,
+      name: name.toLowerCase().endsWith(` ${seed.weights[productIndex].toLowerCase()}`)
+        ? name.slice(0, -seed.weights[productIndex].length).trim()
+        : name,
       price: seed.prices[productIndex],
       thc: seed.thc[productIndex],
+      cbd: seed.cbd?.[productIndex],
       weight: seed.weights[productIndex],
       brand: 'Simply Green',
       image: simplyGreenDemoImage(categoryIndex, productIndex),

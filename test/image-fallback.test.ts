@@ -20,19 +20,15 @@ describe('product image fallback in rendered pages', () => {
     expect(html).not.toContain('linearGradient');
   });
 
-  it('menu page includes the image fallback handler and premium placeholders', async () => {
+  it('menu page converts broken remote product images to text-only cards', async () => {
     const sessionId = 'IMG-FALLBACK-MENU-' + Date.now().toString(36);
     const res = await SELF.fetch(`${BASE}/menu/${sessionId}`);
     expect(res.status).toBe(200);
     const html = await res.text();
     expect(html).toContain('dubmenuImgFallback');
     expect(html).toContain('onerror="window.dubmenuImgFallback(this)"');
-    expect(html).toContain('placeholder-icon');
-    expect(html).toContain('placeholder-v');
-    expect(html).toContain('data-variant=');
-    // Clean placeholders: no decorative overlays or gradient/glow artifacts.
-    expect(html).not.toContain('placeholder-variant-overlay');
-    expect(html).not.toContain('variant-overlay-shape');
-    expect(html).not.toContain('linearGradient');
+    expect(html).toContain("card.classList.add('no-image')");
+    expect(html).toContain('removeChild(wrap)');
+    expect(html).not.toContain("replaceChild(wrap, img)");
   });
 });

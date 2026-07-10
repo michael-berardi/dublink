@@ -531,8 +531,6 @@ export function landingPage(origin: string): string {
       .comparison-table td { padding: 1rem; font-size: 0.875rem; }
       .hero { padding: 7rem 1.5rem 4rem; }
       .steps, .features, .comparison, .cta-section { padding: 4rem 1.5rem; }
-    }
-    @media (max-width: 640px) {
       .nav-toggle { display: block; }
       .nav-links {
         display: none;
@@ -550,10 +548,20 @@ export function landingPage(origin: string): string {
       .nav-links.open { display: flex; }
       .nav-links a { color: var(--text); }
       .nav-inner { padding: 1rem; }
+    }
+    @media (max-width: 640px) {
       .features-grid { grid-template-columns: 1fr; }
       .footer-inner { grid-template-columns: 1fr; gap: 2rem; }
       .comparison-table th,
       .comparison-table td { padding: 0.875rem 1rem; }
+      .comparison { padding-left: 0.75rem; padding-right: 0.75rem; }
+      .comparison-table { table-layout: fixed; }
+      .comparison-table th,
+      .comparison-table td { padding: 0.75rem 0.3rem; font-size: 0.6875rem; line-height: 1.25; overflow-wrap: anywhere; }
+      .comparison-table th:first-child,
+      .comparison-table td:first-child { width: 40%; }
+      .comparison-table th:not(:first-child),
+      .comparison-table td:not(:first-child) { width: 20%; text-align: center; }
       .mock-tv-qr { width: 60px; height: 60px; }
       .mock-tv-qr svg { width: 44px; height: 44px; }
     }
@@ -827,6 +835,8 @@ export function landingPage(origin: string): string {
         <a href="${safeOrigin}/about">About</a>
         <a href="${safeOrigin}/faq">FAQ</a>
         <a href="${safeOrigin}/contact">Contact</a>
+        <a href="${safeOrigin}/privacy">Privacy</a>
+        <a href="${safeOrigin}/terms">Terms</a>
       </div>
       <div class="footer-col">
         <h4>Resources</h4>

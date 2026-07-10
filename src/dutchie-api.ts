@@ -173,6 +173,11 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
+function cleanDescription(value: string | undefined): string | undefined {
+  const description = value?.replace(/\s+/g, ' ').trim().slice(0, 500);
+  return description || undefined;
+}
+
 type ImportedPriceTier = { label: string; price: string };
 
 function formatTierPrice(value: number): string {
@@ -338,6 +343,7 @@ function toProduct(p: DutchieApiProduct): ScrapedProduct | null {
     image,
     weight,
     brand,
+    description: cleanDescription(p.description),
     inStock: true,
     strain,
     special: Boolean(p.special || specialLabel || originalPrice),
@@ -365,7 +371,7 @@ function toCategories(products: ScrapedProduct[]): ScrapedCategory[] {
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products: products.slice(0, 40),
+      products,
     }));
 }
 

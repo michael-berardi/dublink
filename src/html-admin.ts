@@ -1,4 +1,20 @@
-export function adminPage(stats: any, analytics: any, status: any): string {
+import type { StatsEvent, StatsSnapshot } from './stats';
+import type { StatusResult } from './status';
+
+export interface AdminAnalytics {
+  totalEvents: number;
+  tvLoads: number;
+  widgetLoads: number;
+  configSaves: number;
+  recentEvents: StatsEvent[];
+}
+
+function eventSessionId(event: StatsEvent): string | undefined {
+  if (typeof event.payload !== 'object' || event.payload === null || !('sessionId' in event.payload)) return undefined;
+  return typeof event.payload.sessionId === 'string' ? event.payload.sessionId : undefined;
+}
+
+export function adminPage(stats: StatsSnapshot, analytics: AdminAnalytics, status: StatusResult): string {
   const escapeHtml = (str: string) => str
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -8,14 +24,17 @@ export function adminPage(stats: any, analytics: any, status: any): string {
 
   const formatTime = (ts: number) => new Date(ts).toLocaleString();
 
-  const events = (analytics?.recentEvents || []).map((e: any) => `
+  const events = analytics.recentEvents.map((event) => {
+    const sessionId = eventSessionId(event);
+    return `
     <tr>
-      <td>${escapeHtml(e.type)}</td>
-      <td>${e.payload?.sessionId ? escapeHtml(e.payload.sessionId) : '-'}</td>
-      <td>${e.accountId ? escapeHtml(e.accountId) : '-'}</td>
-      <td>${formatTime(e.timestamp)}</td>
+      <td>${escapeHtml(event.type)}</td>
+      <td>${sessionId ? escapeHtml(sessionId) : '-'}</td>
+      <td>${event.accountId ? escapeHtml(event.accountId) : '-'}</td>
+      <td>${formatTime(event.timestamp)}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 
   const statusRows = Object.entries(status || {}).map(([key, value]) => {
     const display = typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value);

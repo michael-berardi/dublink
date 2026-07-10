@@ -86,19 +86,24 @@ const CATEGORY_NEEDLES: { type: string; needles: string[] }[] = [
   { type: 'flower', needles: ['flower', 'bud', 'strain', 'whole flower', 'ground flower', 'smalls', 'popcorn'] },
   { type: 'beverages', needles: ['beverage', 'drink', 'soda', 'seltzer', 'tonic', 'refreshment'] },
   { type: 'edibles', needles: ['edible', 'gummy', 'gummies', 'candy', 'chocolate', 'baked', 'munchie', 'chew', 'cookie', 'brownie', 'mint', 'snack'] },
-  { type: 'concentrates', needles: ['concentrate', 'extract', 'wax', 'shatter', 'resin', 'rosin', 'oil', 'dab', 'sauce', 'badder', 'crumble', 'live', 'diamond', 'distillate', 'kief', 'bubble hash'] },
+  { type: 'concentrates', needles: ['concentrate', 'extract', 'wax', 'shatter', 'resin', 'rosin', 'oil', 'dab', 'sauce', 'badder', 'crumble', 'diamond', 'distillate', 'kief', 'bubble hash'] },
   { type: 'prerolls', needles: ['pre-roll', 'preroll', 'pre roll', 'joint', 'cone', 'blunt'] },
   { type: 'vapes', needles: ['vape', 'vaporizer', 'cartridge', 'cart', 'disposable', 'aio', '510', 'pen'] },
   { type: 'topicals', needles: ['topical', 'cream', 'balm', 'lotion', 'salve', 'transdermal', 'patch'] },
   { type: 'tinctures', needles: ['tincture', 'sublingual', 'drop', 'spray', 'elixir'] },
-  { type: 'accessories', needles: ['accessor', 'battery', 'paper', 'grinder', 'pipe', 'bong', 'rig', 'tool', 'gear', 'lighter', 'apparel'] },
-  { type: 'seedling', needles: ['seed', 'clone', 'seedling', 'cutting', 'root', 'clone', 'plant start'] },
+  { type: 'accessories', needles: ['accessory', 'accessories', 'battery', 'paper', 'grinder', 'pipe', 'bong', 'rig', 'tool', 'gear', 'lighter', 'apparel'] },
+  { type: 'seedling', needles: ['seed', 'clone', 'seedling', 'cutting', 'rooted clone', 'plant start'] },
 ];
+
+function matchesCategoryNeedle(name: string, needle: string): boolean {
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${escaped}(?:s)?(?=$|[^a-z0-9])`, 'i').test(name);
+}
 
 export function getCategoryType(name: string): string {
   const n = (name || '').toLowerCase();
   for (const { type, needles } of CATEGORY_NEEDLES) {
-    if (needles.some((needle) => n.includes(needle))) return type;
+    if (needles.some((needle) => matchesCategoryNeedle(n, needle))) return type;
   }
   return 'other';
 }
@@ -106,47 +111,18 @@ export function getCategoryType(name: string): string {
 // Self-contained JavaScript source for the shared category detector so it can
 // be injected into the inline browser scripts of html-menu and html-tv without
 // duplicating the needle list or logic.
-export const GET_CATEGORY_TYPE_JS = `function getCategoryType(name){
+export const GET_CATEGORY_TYPE_JS = `function matchesCategoryNeedle(name,needle){
+  var escaped=needle.replace(/[.*+?^\${}()|[\\]\\\\]/g,'\\\\$&');
+  return new RegExp('(^|[^a-z0-9])'+escaped+'(?:s)?(?=$|[^a-z0-9])','i').test(name);
+}
+function getCategoryType(name){
   var n=(name||'').toLowerCase();
   var NEEDLES=${JSON.stringify(CATEGORY_NEEDLES)};
   for(var i=0;i<NEEDLES.length;i++){
     var needles=NEEDLES[i].needles;
     for(var j=0;j<needles.length;j++){
-      if(n.indexOf(needles[j])!==-1)return NEEDLES[i].type;
+      if(matchesCategoryNeedle(n,needles[j]))return NEEDLES[i].type;
     }
   }
   return 'other';
-}`;
-
-// Deterministic product-level visual variant for placeholder icons. Kept for
-// backward compatibility, but the new placeholders do not apply decorative
-// overlays; variants only affect subtle CSS transforms if the consumer chooses.
-export function getProductVariant(id: string, name: string): number {
-  const s = String(id || '') + ':' + String(name || '');
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h) % 4;
-}
-
-export const GET_PRODUCT_VARIANT_JS = `function getProductVariant(id,name){
-  var s=String(id||'')+':'+String(name||'');
-  var h=0;
-  for(var i=0;i<s.length;i++){
-    h=(h*31+s.charCodeAt(i))|0;
-  }
-  return Math.abs(h)%4;
-}`;
-
-// Returns the clean placeholder SVG for a product category. No inline colors,
-// gradients, or overlays; the SVG uses currentColor so the surrounding CSS
-// controls the icon color.
-export function getPlaceholderIconSvg(type: string, _variant: number): string {
-  return PLACEHOLDER_ICON_SVGS[type] || PLACEHOLDER_ICON_SVGS.generic;
-}
-
-export const GET_PLACEHOLDER_ICON_SVG_JS = `function getPlaceholderIconSvg(type,v){
-  var PLACEHOLDER_ICON_SVGS=${JSON.stringify(PLACEHOLDER_ICON_SVGS)};
-  return PLACEHOLDER_ICON_SVGS[type]||PLACEHOLDER_ICON_SVGS.generic;
 }`;

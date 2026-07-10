@@ -46,6 +46,7 @@ describe('importDutchiePublicMenu', () => {
               name: 'Blue Dream 3.5g',
               brand: 'High Garden',
               category: 'Flower',
+              description: 'Bright citrus flower',
               strainType: 'Hybrid',
               thc: { value: 22, unit: 'PERCENT' },
               cbd: { value: 0.1, unit: 'PERCENT' },
@@ -66,6 +67,7 @@ describe('importDutchiePublicMenu', () => {
     expect(result.categories[0].name).toBe('Flower');
     expect(result.categories[0].products[0].name).toBe('Blue Dream 3.5g');
     expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/prod1.jpg?h=400&w=400');
+    expect(result.categories[0].products[0].description).toBe('Bright citrus flower');
     expect(result.categories[0].products[0].priceTiers).toEqual([
       { label: '1g', price: '$12' },
       { label: '3.5g', price: '$35' },
@@ -188,7 +190,7 @@ describe('importDutchiePublicMenu', () => {
                     {
                       id: 'p1',
                       name: 'Blue Dream 3.5g',
-                      category: 'Flower',
+                      description: 'Section-provided flower',
                       recPrices: [35],
                       image: 'https://images.dutchie.com/blue.jpg',
                     },
@@ -209,5 +211,30 @@ describe('importDutchiePublicMenu', () => {
     expect(result.dispensaryName).toBe('Section Fallback');
     expect(result.productCount).toBe(1);
     expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/blue.jpg?h=400&w=400');
+    expect(result.categories[0].name).toBe('Flower');
+    expect(result.categories[0].products[0].description).toBe('Section-provided flower');
+  });
+
+  it('keeps all products for the formatter to rank and cap', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.includes('ConsumerDispensaries')) {
+        return graphqlResponse({ filteredDispensaries: [{ id: 'disp-123', name: 'Large Menu', menuSections: [] }] });
+      }
+      return graphqlResponse({
+        filteredProducts: {
+          products: Array.from({ length: 41 }, (_, index) => ({
+            id: `flower-${index}`,
+            name: `Flower ${index}`,
+            category: 'Flower',
+            recPrices: [30 + index],
+          })),
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await importDutchiePublicMenu('large-menu');
+    expect(result.productCount).toBe(41);
+    expect(result.categories[0].products).toHaveLength(41);
   });
 });

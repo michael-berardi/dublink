@@ -3,6 +3,7 @@ export interface CustomDomainMapping {
   sessionId: string;
   accountId: string;
   verified: boolean;
+  verificationToken?: string;
   createdAt: number;
 }
 
@@ -29,6 +30,13 @@ export interface Account {
   picture?: string;
 }
 
+export interface AccountStripeUpdate {
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  subscriptionStatus?: Account['subscriptionStatus'];
+  trialEndsAt?: number;
+}
+
 export interface AuthToken {
   accountId: string;
   email: string;
@@ -36,9 +44,14 @@ export interface AuthToken {
   exp: number;
 }
 
+export interface DurableObjectBinding {
+  idFromName(name: string): DurableObjectId;
+  get(id: DurableObjectId): { fetch(request: Request): Promise<Response> };
+}
+
 export interface Env {
-  SESSION: DurableObjectNamespace;
-  ACCOUNTS: DurableObjectNamespace;
+  SESSION: DurableObjectBinding;
+  ACCOUNTS: DurableObjectBinding;
   STRIPE_API_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_PRICE_ID?: string;
@@ -85,10 +98,13 @@ export async function verifyPassword(password: string, salt: string, hash: strin
   return result.hash === hash;
 }
 
-function arrayBufferToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function arrayBufferToHex(input: ArrayBufferLike | ArrayBufferView<ArrayBufferLike>): string {
+  const bytes = ArrayBuffer.isView(input)
+    ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+    : new Uint8Array(input);
+  let hex = '';
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+  return hex;
 }
 
 export async function signToken(payload: Omit<AuthToken, 'iat' | 'exp'>, secret: string): Promise<string> {
@@ -149,8 +165,16 @@ export function clearCookie(name: string): string {
   return `${name}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-export function accountIdFromEmail(email: string): string {
-  return email.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
+function legacyAccountIdFromEmail(email: string): string {
+  return normalizeEmail(email).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64);
+}
+
+export async function accountIdFromEmail(email: string): Promise<string> {
+  const normalized = normalizeEmail(email);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+  const suffix = Array.from(new Uint8Array(digest).slice(0, 12), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const prefix = normalized.replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32) || 'account';
+  return `${prefix}-${suffix}`;
 }
 
 export class AccountDurableObject implements DurableObject {
@@ -266,12 +290,7 @@ export class AccountDurableObject implements DurableObject {
     }
 
     if (url.pathname === '/stripe' && request.method === 'POST') {
-      const body = (await request.json()) as {
-        stripeCustomerId?: string;
-        stripeSubscriptionId?: string;
-        subscriptionStatus?: Account['subscriptionStatus'];
-        trialEndsAt?: number;
-      };
+      const body = (await request.json()) as AccountStripeUpdate;
       if (!this.account) return jsonResponse({ error: 'Account not found' }, 404);
       if (body.stripeCustomerId !== undefined) this.account.stripeCustomerId = body.stripeCustomerId;
       if (body.stripeSubscriptionId !== undefined) this.account.stripeSubscriptionId = body.stripeSubscriptionId;
@@ -333,7 +352,11 @@ export async function getAccount(env: Env, accountId: string): Promise<Account |
 }
 
 export async function createAccount(env: Env, email: string, password: string): Promise<{ account: Account } | { error: string; status: number }> {
-  const accountId = accountIdFromEmail(email);
+  const accountId = await accountIdFromEmail(email);
+  const legacyAccountId = legacyAccountIdFromEmail(email);
+  if (legacyAccountId !== accountId && await getAccount(env, legacyAccountId)) {
+    return { error: 'Account exists', status: 409 };
+  }
   const id = env.ACCOUNTS.idFromName(accountId);
   const stub = env.ACCOUNTS.get(id);
   const { hash, salt } = await hashPassword(password);
@@ -353,18 +376,24 @@ export async function createAccount(env: Env, email: string, password: string): 
 }
 
 export async function authenticate(env: Env, email: string, password: string): Promise<Account | null> {
-  const accountId = accountIdFromEmail(email);
-  const id = env.ACCOUNTS.idFromName(accountId);
-  const stub = env.ACCOUNTS.get(id);
-  const res = await stub.fetch(
-    new Request('https://internal/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    })
-  );
-  const data = (await res.json()) as { valid: boolean; account: Account | null };
-  return data.valid ? data.account : null;
+  const accountId = await accountIdFromEmail(email);
+  const accountIds = [accountId];
+  const legacyAccountId = legacyAccountIdFromEmail(email);
+  if (legacyAccountId !== accountId) accountIds.push(legacyAccountId);
+  for (const candidateId of accountIds) {
+    const id = env.ACCOUNTS.idFromName(candidateId);
+    const stub = env.ACCOUNTS.get(id);
+    const res = await stub.fetch(
+      new Request('https://internal/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      })
+    );
+    const data = (await res.json()) as { valid: boolean; account: Account | null };
+    if (data.valid) return data.account;
+  }
+  return null;
 }
 
 export async function upsertDubHavenAccount(
@@ -388,7 +417,7 @@ export async function upsertDubHavenAccount(
   return { account: data.account, isNew: data.isNew };
 }
 
-export async function updateAccountStripe(env: Env, accountId: string, updates: Parameters<AccountDurableObject['fetch']> extends never ? never : any): Promise<Account | null> {
+export async function updateAccountStripe(env: Env, accountId: string, updates: AccountStripeUpdate): Promise<Account | null> {
   const id = env.ACCOUNTS.idFromName(accountId);
   const stub = env.ACCOUNTS.get(id);
   const res = await stub.fetch(
@@ -442,8 +471,9 @@ export function constantTimeEqual(a: string, b: string): boolean {
 }
 
 export async function ensureDemoAccount(env: Env, email: string): Promise<Account> {
-  const accountId = accountIdFromEmail(email);
-  const existing = await getAccount(env, accountId);
+  const accountId = await accountIdFromEmail(email);
+  const legacyAccountId = legacyAccountIdFromEmail(email);
+  const existing = await getAccount(env, accountId) || (legacyAccountId !== accountId ? await getAccount(env, legacyAccountId) : null);
   const trialEndsAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
   if (existing) {
     await updateAccountStripe(env, existing.id, { subscriptionStatus: 'trialing', trialEndsAt });

@@ -45,6 +45,15 @@ describe('demo route fallback', () => {
     expect(config.categories.length).toBeGreaterThan(0);
     expect(config.categories.some((cat) => cat.products.length > 0)).toBe(true);
     expect(config.disclaimer).toContain('used with permission');
+    for (const category of config.categories) {
+      for (const product of category.products) {
+        expect(product.name.toLowerCase().endsWith(` ${product.weight?.toLowerCase()}`)).toBe(false);
+      }
+    }
+    const products = config.categories.flatMap((category) => category.products);
+    expect(products.find((product) => product.name === 'CBD Balm')).toMatchObject({ cbd: '200mg', thc: undefined });
+    expect(products.find((product) => product.name === 'CBD Cartridge')?.cbd).toBe('80%');
+    expect(products.find((product) => product.name === 'CBD Tincture')?.cbd).toBe('500mg');
   });
 
   it('/menu/:unowned still returns empty categories (no fake data leak)', async () => {

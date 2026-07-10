@@ -1,6 +1,7 @@
-import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS, GET_PRODUCT_VARIANT_JS } from './category-icons';
+import { CATEGORY_ICON_SVGS, PLACEHOLDER_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
+import type { Category, MenuConfig } from './types';
 
-export function menuPage(sessionId: string, config: any, _origin: string): string {
+export function menuPage(sessionId: string, config: Partial<MenuConfig>, _origin: string): string {
   const escapeHtml = (str: unknown) => String(str ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -12,7 +13,7 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   const currency = config?.currency || '$';
   const disclaimer = escapeHtml(config?.disclaimer || 'Must be 21+ with valid ID. Product availability and pricing are subject to change.');
   const logoUrl = config?.logo || '';
-  const categories: any[] = Array.isArray(config?.categories) ? config.categories : [];
+  const categories: Category[] = Array.isArray(config?.categories) ? config.categories : [];
 
   // Pre-compute categories that have at least one product
   const visibleCats = categories.filter((c) => c && Array.isArray(c.products) && c.products.length > 0);
@@ -24,7 +25,7 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     categories: visibleCats.map((cat) => ({
       id: cat.id || '',
       name: cat.name || 'Category',
-      products: (cat.products || []).map((p: any) => ({
+      products: (cat.products || []).map((p) => ({
         id: p.id || '',
         categoryId: cat.id || '',
         categoryName: cat.name || 'Category',
@@ -503,7 +504,6 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
     return parts.length ? '<div class="product-meta">'+parts.join(' \\u00B7 ')+'</div>' : '';
   }
   ${GET_CATEGORY_TYPE_JS}
-  ${GET_PRODUCT_VARIANT_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
   }
@@ -515,28 +515,26 @@ export function menuPage(sessionId: string, config: any, _origin: string): strin
   }
   function placeholderMarkup(p){
     var type = getCategoryType(p.categoryName || p.name || '');
-    var v = getProductVariant(p.id || '', p.name || '');
-    return '<div class="product-image-placeholder placeholder-' + type + ' placeholder-v' + v + '">' +
+    return '<div class="product-image-placeholder placeholder-' + type + '">' +
       '<div class="placeholder-art">' + basePlaceholderSvg(type) + '<div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>' +
       '</div>';
   }
   function imgMarkup(p){
     var safeUrl = safeImgUrl(p.image);
     var catType = getCategoryType(p.categoryName || p.name || '');
-    var v = getProductVariant(p.id || '', p.name || '');
     if(!safeUrl){
       return placeholderMarkup(p);
     }
-    return '<img class="product-image product-image-loading" src="'+escapeHtml(safeUrl)+'" alt="'+escapeHtml(p.name)+'" loading="lazy" decoding="async" data-cat="'+catType+'" data-variant="'+v+'" onload="this.classList.remove(\\'product-image-loading\\');this.classList.add(\\'product-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
+    return '<img class="product-image product-image-loading" src="'+escapeHtml(safeUrl)+'" alt="'+escapeHtml(p.name)+'" loading="lazy" decoding="async" data-cat="'+catType+'" onload="this.classList.remove(\\'product-image-loading\\');this.classList.add(\\'product-image-loaded\\');" onerror="window.dubmenuImgFallback(this)">';
   }
 
   window.dubmenuImgFallback = function(img){
-    var type = img.getAttribute('data-cat') || 'generic';
-    var v = img.getAttribute('data-variant') || '0';
-    var wrap = document.createElement('div');
-    wrap.className = 'product-image-placeholder placeholder-' + type + ' placeholder-v' + v;
-    wrap.innerHTML = '<div class="placeholder-art">' + basePlaceholderSvg(type) + '<div class="placeholder-label">' + (CATEGORY_LABELS[type] || CATEGORY_LABELS.generic) + '</div></div>';
-    if(img.parentNode) img.parentNode.replaceChild(wrap, img);
+    if(!img) return;
+    var wrap = img.closest && img.closest('.product-image-wrap');
+    var card = img.closest && img.closest('.product-card');
+    if(card) card.classList.add('no-image');
+    if(wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    else if(img.parentNode) img.parentNode.removeChild(img);
   };
 
   // ---- Filter ----

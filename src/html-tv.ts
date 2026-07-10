@@ -1,9 +1,9 @@
 import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
 
-type TvPageInitialConfig = {
+export type TvPageInitialConfig = {
   template?: string;
   fontSize?: 'small' | 'medium' | 'large';
-  categories?: Array<{ products?: unknown[] }>;
+  categories?: Array<{ id?: string; name?: string; order?: number; products?: unknown[] }>;
 } & Record<string, unknown>;
 
 const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;

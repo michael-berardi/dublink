@@ -102,6 +102,23 @@ describe('csv-import: edge cases', () => {
     expect(res.errors.length).toBeGreaterThan(0);
     expect(res.errors.some((e: string) => /missing category, name, or valid price/.test(e))).toBe(true);
   });
+
+  it('rejects partial, negative, infinite, and oversized prices', () => {
+    for (const price of ['12oops', '-5', 'Infinity', '1000001']) {
+      const res = importMenuFromCSV(`name,price,category\nBad Price,${price},Flower`);
+      expect(res.categories, price).toHaveLength(0);
+      expect(res.errors, price).not.toHaveLength(0);
+    }
+  });
+
+  it('merges category spellings that normalize to the same ID', () => {
+    const res = importMenuFromCSV('name,price,category\nA,10,Flower\nB,12,flower\nC,14,Pre Rolls\nD,16,Pre-Rolls');
+    expect(res.errors).toHaveLength(0);
+    expect(res.categories).toHaveLength(2);
+    expect(res.categories[0].products).toHaveLength(2);
+    expect(res.categories[1].products).toHaveLength(2);
+    expect(new Set(res.categories.map((category) => category.id)).size).toBe(2);
+  });
 });
 
 describe('csv-import: limits', () => {
@@ -124,6 +141,22 @@ describe('csv-import: limits', () => {
     const res = importMenuFromCSV(lines.join('\n'));
     expect(res.categories).toHaveLength(0);
     expect(res.errors.some((e: string) => /5000/i.test(e))).toBe(true);
+  });
+
+  it('rejects menus that exceed the session category limit', () => {
+    const rows = ['name,price,category'];
+    for (let index = 0; index < 21; index++) rows.push(`P${index},1,Category ${index}`);
+    const res = importMenuFromCSV(rows.join('\n'));
+    expect(res.categories).toHaveLength(0);
+    expect(res.errors.some((error) => /20 categories/i.test(error))).toBe(true);
+  });
+
+  it('rejects categories that exceed the session product limit', () => {
+    const rows = ['name,price,category'];
+    for (let index = 0; index < 501; index++) rows.push(`P${index},1,Flower`);
+    const res = importMenuFromCSV(rows.join('\n'));
+    expect(res.categories).toHaveLength(0);
+    expect(res.errors.some((error) => /500 products/i.test(error))).toBe(true);
   });
 });
 

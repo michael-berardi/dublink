@@ -54,6 +54,34 @@ describe('analyzeReferenceStyle', () => {
     expect(result.styleProfile.sourceUrl).toHaveLength(300);
     expect(result.styleProfile.notes).toHaveLength(500);
   });
+
+  it('preserves imported images when notes give no image direction', () => {
+    const result = analyzeReferenceStyle({
+      notes: 'quiet boutique selection',
+      productCount: 8,
+      currentShowImages: true,
+    });
+
+    expect(result.showImages).toBe(true);
+  });
+
+  it('does not enable layouts or promos from negated cues', () => {
+    const result = analyzeReferenceStyle({
+      notes: 'not a dense price list, no deals or promotions',
+      productCount: 8,
+    });
+
+    expect(result.layout).toBe('grid');
+    expect(result.showPromos).toBe(false);
+  });
+
+  it('honors an explicit one-display cue and uses small type for dense menus', () => {
+    const singleDisplay = analyzeReferenceStyle({ notes: 'one display', currentDisplayCount: 4, productCount: 8 });
+    const dense = analyzeReferenceStyle({ notes: 'dense price wall', productCount: 80 });
+
+    expect(singleDisplay.displayCount).toBe(1);
+    expect(dense.fontSize).toBe('small');
+  });
 });
 
 describe('analyzeReferenceStyle smart-import payload contract', () => {
@@ -83,6 +111,8 @@ describe('analyzeReferenceStyle smart-import payload contract', () => {
     });
 
     expect(result.displayCount).toBe(3);
+    expect(result.layout).toBe('showcase');
+    expect(result.showImages).toBe(true);
   });
 
   it('preserves the current display count when no cue is present', () => {

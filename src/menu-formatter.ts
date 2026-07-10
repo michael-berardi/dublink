@@ -89,8 +89,28 @@ export function canonicalCategoryName(name: string): string {
   return 'Other';
 }
 
+function stableIdSuffix(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index++) {
+    hash = Math.imul(hash ^ value.charCodeAt(index), 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function normalizeProductId(p: ScrapedProduct): string {
-  return (p.id || p.name).replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase().slice(0, 120);
+  const source = p.id || p.name;
+  const normalized = source.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase().slice(0, 120);
+  let hasNonAscii = false;
+  for (let index = 0; index < source.length; index++) {
+    if (source.charCodeAt(index) > 0x7f) {
+      hasNonAscii = true;
+      break;
+    }
+  }
+  if (!hasNonAscii) return normalized;
+  const base = normalized.replace(/-+/g, '-').replace(/^-|-$/g, '') || 'product';
+  const suffix = stableIdSuffix(source);
+  return `${base.slice(0, 119 - suffix.length)}-${suffix}`;
 }
 
 function normalizeProductName(name: string): string {

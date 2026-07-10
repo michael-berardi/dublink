@@ -58,6 +58,11 @@ describe('detectMenuSource', () => {
     expect(s.url).toBe('https://example-dispensary.com/menu');
   });
 
+  it('does not classify lookalike hostnames as Dutchie', () => {
+    const source = detectMenuSource('https://notdutchie.com/menu');
+    expect(source.type).toBe('website-generic');
+  });
+
   it('rejects invalid input', () => {
     const s = detectMenuSource('not a url or slug!!!');
     expect(s.type).toBe('invalid');
@@ -573,8 +578,10 @@ describe('resolveMenuSource', () => {
   });
 
   it('tries public Dutchie import before private API for store URLs from QR setup', async () => {
-    const mockFetch = vi.fn(() =>
-      Promise.resolve(
+    let requestedUrl = '';
+    const mockFetch = vi.fn((input: Parameters<typeof fetch>[0]) => {
+      requestedUrl = String(input);
+      return Promise.resolve(
         new Response(
           JSON.stringify({
             data: {
@@ -596,15 +603,15 @@ describe('resolveMenuSource', () => {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
-      )
-    ) as unknown as typeof fetch;
-    globalThis.fetch = mockFetch;
+      );
+    });
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
 
     const result = await resolveMenuSource('https://dutchie.com/stores/green-leaf', { DUTCHIE_API_KEY: 'private-key' });
     expect(result.apiUsed).toBe(false);
     expect(result.productCount).toBe(1);
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('operationName=ConsumerDispensaries');
+    expect(requestedUrl).toContain('operationName=ConsumerDispensaries');
   });
 });
 
@@ -651,6 +658,40 @@ describe('scrapeGenericWebsite', () => {
     expect(names).toContain('Edibles');
   });
 
+
+  it('handles attributed scripts, graphs, offer arrays, metadata, and stock identifiers', async () => {
+    const html = `<html><head><title>Green &amp; Leaf</title><meta property="og:image" content="/brand/logo.png"></head>
+    <body><script nonce="abc" id="catalog" type='application/ld+json'>
+      {"@graph":[{"@type":"Product","name":"Mango Gummies","description":"Bright mango flavor","offers":[{"price":"18.00","availability":"http://schema.org/OutOfStock"}]}]}
+    </script></body></html>`;
+    globalThis.fetch = vi.fn(() => Promise.resolve(new Response(html, { status: 200 }))) as unknown as typeof fetch;
+
+    const result = await scrapeGenericWebsite('https://green-leaf.example/menu');
+    expect(result.dispensaryName).toBe('Green & Leaf');
+    expect(result.logo).toBe('https://green-leaf.example/brand/logo.png');
+    expect(result.productCount).toBe(1);
+    expect(result.categories[0].products[0]).toMatchObject({
+      name: 'Mango Gummies',
+      price: 18,
+      description: 'Bright mango flavor',
+      inStock: false,
+    });
+  });
+
+  it('keeps all generic products for the formatter to rank and cap', async () => {
+    const products = Array.from({ length: 41 }, (_, index) => ({
+      '@type': 'Product',
+      name: `Flower ${index}`,
+      category: 'Flower',
+      offers: { price: String(index + 1) },
+    }));
+    const html = `<script type="application/ld+json">${JSON.stringify(products)}</script>`;
+    globalThis.fetch = vi.fn(() => Promise.resolve(new Response(html, { status: 200 }))) as unknown as typeof fetch;
+
+    const result = await scrapeGenericWebsite('https://large-menu.example');
+    expect(result.productCount).toBe(41);
+    expect(result.categories[0].products).toHaveLength(41);
+  });
 
   it('throws a clear error when no products are found', async () => {
     globalThis.fetch = vi.fn(() =>
