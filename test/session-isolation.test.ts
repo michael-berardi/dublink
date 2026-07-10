@@ -186,6 +186,65 @@ describe('session ownership isolation', () => {
     expect(body.error).toMatch(/invalid session/i);
   });
 
+  it('waits for live menu persistence before resolving an import job start', async () => {
+    const sessionId = `IMPORT-AWAIT-${unique()}`;
+    const cookie = await signupCookie();
+    expect((await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' })).status).toBe(200);
+
+    const originalFetch = globalThis.fetch;
+    let releaseProducts!: () => void;
+    let productRequestStarted = false;
+    const productsReady = new Promise<void>((resolve) => {
+      releaseProducts = resolve;
+    });
+
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const operationName = JSON.parse(String(init?.body)).operationName as string;
+      if (operationName === 'ConsumerDispensaries') {
+        return Response.json({
+          data: {
+            filteredDispensaries: [{ id: 'd-1', name: 'Simply Green' }],
+          },
+        });
+      }
+      productRequestStarted = true;
+      await productsReady;
+      return Response.json({
+        data: {
+          filteredProducts: {
+            products: [{ id: 'p1', Name: 'Blue Dream', type: 'Flower', recPrices: [35] }],
+            totalCount: 1,
+          },
+        },
+      });
+    }) as typeof fetch;
+
+    try {
+      let requestSettled = false;
+      const importRequest = authedFetch('/api/import/jobs', cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'simply-green', session: sessionId }),
+      }).then((response) => {
+        requestSettled = true;
+        return response;
+      });
+
+      await vi.waitFor(() => expect(productRequestStarted).toBe(true));
+      expect(requestSettled).toBe(false);
+
+      releaseProducts();
+      const response = await importRequest;
+      expect(response.status).toBe(202);
+      const started = (await response.json()) as { statusUrl: string };
+      const statusResponse = await authedFetch(started.statusUrl, cookie);
+      const status = (await statusResponse.json()) as { job?: { status?: string; productCount?: number } };
+      expect(status.job).toMatchObject({ status: 'success', productCount: 1 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('returns a clear 404 for missing import jobs owned by the requester', async () => {
     const sessionId = `IMPORT-MISSING-${unique()}`;
     const cookie = await signupCookie();

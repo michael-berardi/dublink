@@ -168,11 +168,19 @@ describe('resolveMenuSource', () => {
     });
   }
 
-  it('imports a Dutchie slug via API when key is present', async () => {
-    let calls = 0;
-    globalThis.fetch = vi.fn(() => {
-      calls++;
-      if (calls === 1) {
+  it('falls back to the private Dutchie API when the public API is unavailable', async () => {
+    globalThis.fetch = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      if (!headers.has('x-api-key')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ errors: [{ message: 'Public API unavailable' }] }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+      const query = JSON.parse(String(init?.body)).query as string;
+      if (query.includes('GetDispensary')) {
         return graphqlResponse({ dispensary: { id: 'd-1', name: 'Green Leaf', logo: 'https://img.com/logo.png' } });
       }
       return graphqlResponse({
@@ -206,7 +214,7 @@ describe('resolveMenuSource', () => {
 
     await expect(resolveMenuSource('green-leaf', { DUTCHIE_API_KEY: 'test-key' })).rejects.toThrow('Could not import live menu products');
     // API key is never printed; only the error message is surfaced.
-    expect(mockFetch.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-api-key': 'test-key' });
+    expect(mockFetch.mock.calls.some((call) => new Headers(call[1]?.headers).get('x-api-key') === 'test-key')).toBe(true);
   });
 
   it('does not fall back to direct fetch when no API key or Browserless token is configured', async () => {
@@ -423,9 +431,13 @@ describe('resolveMenuSource', () => {
 
   it('imports Simply Green website through Browserless when its HTML embeds a Dutchie iframe and GraphQL is blocked', async () => {
     const structuredUrls: string[] = [];
+    let privateCalls = 0;
     const websiteHtml = '<html><body><iframe src="https://dutchie.com/embedded-menu/simply-green/"></iframe></body></html>';
     globalThis.fetch = vi.fn<typeof fetch>((input, init) => {
-      void init;
+      if (new Headers(init?.headers).has('x-api-key')) {
+        privateCalls++;
+        return Promise.resolve(new Response('Private API should not be called', { status: 500 }));
+      }
       const requestedUrl = String(input);
       if (requestedUrl === 'https://simplygreenny.com/shop') {
         return Promise.resolve(new Response(websiteHtml, { status: 200, headers: { 'Content-Type': 'text/html' } }));
@@ -464,12 +476,16 @@ describe('resolveMenuSource', () => {
       return Promise.resolve(new Response('Not Found', { status: 404 }));
     });
 
-    const result = await resolveMenuSource('https://simplygreenny.com/shop', { BROWSERLESS_TOKEN: 'browser-token' });
+    const result = await resolveMenuSource('https://simplygreenny.com/shop', {
+      BROWSERLESS_TOKEN: 'browser-token',
+      DUTCHIE_API_KEY: 'private-key',
+    });
     expect(result.demo).toBeFalsy();
     expect(result.source).toBe('website-dutchie:https://simplygreenny.com/shop');
     expect(result.productCount).toBe(1);
     expect(result.categories[0].name).toBe('Flower');
     expect(structuredUrls[0]).toContain(encodeURIComponent('https://dutchie.com/stores/simply-green'));
+    expect(privateCalls).toBe(0);
   });
 
   it('imports a Dutchie slug via the public GraphQL API when no private API key is configured', async () => {
@@ -553,6 +569,36 @@ describe('resolveMenuSource', () => {
     expect(result.apiUsed).toBe(false);
     expect(result.productCount).toBe(1);
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(requestedOperations).toEqual(['ConsumerDispensaries', 'FilteredProducts']);
+  });
+
+  it('tries public Dutchie import before private API for bare store slugs', async () => {
+    let privateCalls = 0;
+    const requestedOperations: string[] = [];
+    const mockFetch = vi.fn((_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (new Headers(init?.headers).has('x-api-key')) {
+        privateCalls++;
+        return Promise.resolve(
+          new Response(JSON.stringify({ errors: [{ message: 'Legacy API unavailable' }] }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+      const operationName = JSON.parse(String(init?.body)).operationName as string;
+      requestedOperations.push(operationName);
+      if (operationName === 'ConsumerDispensaries') {
+        return graphqlResponse({ filteredDispensaries: [{ id: 'd-1', name: 'Simply Green' }] });
+      }
+      return publicProductsResponse();
+    });
+    globalThis.fetch = mockFetch as unknown as typeof fetch;
+
+    const result = await resolveMenuSource('simply-green', { DUTCHIE_API_KEY: 'private-key' });
+
+    expect(result.apiUsed).toBe(false);
+    expect(result.productCount).toBe(1);
+    expect(privateCalls).toBe(0);
     expect(requestedOperations).toEqual(['ConsumerDispensaries', 'FilteredProducts']);
   });
 });

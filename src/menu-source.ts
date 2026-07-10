@@ -484,7 +484,7 @@ function menuResultFromProductCrawl(data: OverseerProductCrawlResponse, sourceUr
   return {
     categories,
     productCount: products.length,
-    dispensaryName: titleCaseFromDomain(humanDomain(sourceUrl)),
+    dispensaryName: data.dutchie?.slug ? titleCaseFromDomain(data.dutchie.slug) : titleCaseFromDomain(humanDomain(sourceUrl)),
     source: 'overseer-products-crawl',
     warnings,
   };
@@ -676,6 +676,7 @@ function liveImportError(sourceLabel: string, errors: string[]): Error {
   const details = errors.filter(Boolean).join('; ');
   return new Error(`Could not import live menu products from ${sourceLabel}${details ? ` (${details})` : ''}. Configure a Dutchie API key or Browserless token, or import a CSV.`);
 }
+
 function isUsableResult(result: MenuImportResult | undefined): boolean {
   return !!(
     result &&
@@ -685,7 +686,6 @@ function isUsableResult(result: MenuImportResult | undefined): boolean {
   );
 }
 
-
 async function importDutchieFromSlug(
   slug: string,
   env: MenuImportEnv,
@@ -694,73 +694,27 @@ async function importDutchieFromSlug(
   const errors: string[] = [];
   let result: MenuImportResult | undefined;
 
-  const shouldTryPrivateFirst = sourceLabel === 'dutchie-slug' && !!env.DUTCHIE_API_KEY;
-
-  if (!shouldTryPrivateFirst) {
-    try {
-      const publicResult = await importDutchiePublicMenu(slug);
-      result = {
-        categories: publicResult.categories,
-        productCount: publicResult.productCount,
-        dispensaryName: publicResult.dispensaryName,
-        logo: publicResult.logo,
-        brandStyle: publicResult.brandStyle,
-        source: sourceLabel,
-        apiUsed: false,
-        warnings: [],
-      };
-      if (isUsableResult(result)) return result;
-      errors.push('Dutchie public API returned no usable products');
-      result = undefined;
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'Dutchie public API import failed');
-      console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
-    }
+  try {
+    const publicResult = await importDutchiePublicMenu(slug);
+    result = {
+      categories: publicResult.categories,
+      productCount: publicResult.productCount,
+      dispensaryName: publicResult.dispensaryName,
+      logo: publicResult.logo,
+      brandStyle: publicResult.brandStyle,
+      source: sourceLabel,
+      apiUsed: false,
+      warnings: [],
+    };
+    if (isUsableResult(result)) return result;
+    errors.push('Dutchie public API returned no usable products');
+    result = undefined;
+  } catch (err) {
+    errors.push(err instanceof Error ? err.message : 'Dutchie public API import failed');
+    console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
   }
 
-  if (env.DUTCHIE_API_KEY) {
-    try {
-      const apiResult = await importDutchieMenu(slug, env.DUTCHIE_API_KEY);
-      result = {
-        categories: apiResult.categories,
-        productCount: apiResult.productCount,
-        dispensaryName: apiResult.dispensaryName,
-        logo: apiResult.logo,
-        source: sourceLabel,
-        apiUsed: true,
-        warnings: shouldTryPrivateFirst ? [] : [`Dutchie public GraphQL unavailable; used private API fallback (${errors.join('; ')}).`],
-      };
-      if (isUsableResult(result)) return result;
-      errors.push('Dutchie API returned no usable products');
-      result = undefined;
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'Dutchie API import failed');
-      console.error(`Dutchie API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
-    }
-  }
-
-  if (shouldTryPrivateFirst) {
-    try {
-      const publicResult = await importDutchiePublicMenu(slug);
-      result = {
-        categories: publicResult.categories,
-        productCount: publicResult.productCount,
-        dispensaryName: publicResult.dispensaryName,
-        logo: publicResult.logo,
-        brandStyle: publicResult.brandStyle,
-        source: sourceLabel,
-        apiUsed: false,
-        warnings: errors.length ? [`Dutchie API unavailable; used public GraphQL fallback (${errors.join('; ')}).`] : [],
-      };
-      if (isUsableResult(result)) return result;
-      errors.push('Dutchie public API returned no usable products');
-      result = undefined;
-    } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'Dutchie public API import failed');
-      console.error(`Dutchie public API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
-    }
-  }
-  if (!result && env.BROWSERLESS_TOKEN) {
+  if (env.BROWSERLESS_TOKEN) {
     try {
       const scraperResult = await scrapeDutchie(slug, env.BROWSERLESS_TOKEN);
       result = {
@@ -770,14 +724,35 @@ async function importDutchieFromSlug(
         logo: undefined,
         source: sourceLabel,
         apiUsed: false,
-        warnings: errors.length ? [`Dutchie API/public GraphQL unavailable; used Browserless scraper (${errors.join('; ')}).`] : [],
+        warnings: errors.length ? [`Dutchie public GraphQL unavailable; used browser scraper (${errors.join('; ')}).`] : [],
       };
       if (isUsableResult(result)) return result;
-      errors.push('Browserless scraper returned no usable products');
+      errors.push('Browser scraper returned no usable products');
       result = undefined;
     } catch (err) {
-      errors.push(err instanceof Error ? err.message : 'Browserless scraper failed');
-      console.error(`Browserless scraper failed for slug "${slug}": ${errors[errors.length - 1]}`);
+      errors.push(err instanceof Error ? err.message : 'Browser scraper failed');
+      console.error(`Browser scraper failed for slug "${slug}": ${errors[errors.length - 1]}`);
+    }
+  }
+
+  if (env.DUTCHIE_API_KEY) {
+    const failedSources = env.BROWSERLESS_TOKEN ? 'public GraphQL and browser scraper' : 'public GraphQL';
+    try {
+      const apiResult = await importDutchieMenu(slug, env.DUTCHIE_API_KEY);
+      result = {
+        categories: apiResult.categories,
+        productCount: apiResult.productCount,
+        dispensaryName: apiResult.dispensaryName,
+        logo: apiResult.logo,
+        source: sourceLabel,
+        apiUsed: true,
+        warnings: [`Dutchie ${failedSources} unavailable; used private API fallback (${errors.join('; ')}).`],
+      };
+      if (isUsableResult(result)) return result;
+      errors.push('Dutchie API returned no usable products');
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : 'Dutchie API import failed');
+      console.error(`Dutchie API import failed for slug "${slug}": ${errors[errors.length - 1]}`);
     }
   }
 

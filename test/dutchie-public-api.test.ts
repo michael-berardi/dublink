@@ -188,6 +188,30 @@ describe('importDutchiePublicMenu', () => {
     }
   });
 
+  it('sends the Apollo preflight header required by Dutchie GraphQL', async () => {
+    const captured: RequestInit[] = [];
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      captured.push(init || {});
+      if (requestOperation(init) === 'ConsumerDispensaries') {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'disp-123', name: 'Simply Green' }],
+        });
+      }
+      return graphqlResponse({
+        filteredProducts: {
+          products: [{ id: 'p1', Name: 'Blue Dream', type: 'Flower', recPrices: [35] }],
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    await importDutchiePublicMenu('simply-green');
+
+    expect(captured).toHaveLength(2);
+    for (const init of captured) {
+      expect(new Headers(init.headers).get('Apollo-Require-Preflight')).toBe('true');
+    }
+  });
+
   it('extracts images from the images array and POSMetaData fallback', async () => {
     globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
       if (requestOperation(init) === 'ConsumerDispensaries') {

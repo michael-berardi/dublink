@@ -731,6 +731,7 @@ async function fetchDutchiePublicGraphQL<T>(
     headers: {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'Apollo-Require-Preflight': 'true',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Referer': 'https://dutchie.com/embedded-menu',
       'Origin': 'https://dutchie.com',

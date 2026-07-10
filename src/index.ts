@@ -263,7 +263,7 @@ async function buildMenuImport(
   report?: (job: Partial<ImportJobStatus> & { message: string; progress: number; stage: number }) => Promise<void>
 ): Promise<MenuImportBuildResult> {
   await report?.({ stage: 1, progress: 18, message: 'Normalized menu source and checking live import routes.' });
-  await report?.({ stage: 1, progress: 26, message: 'Scanning the website for Dutchie embeds and product pages.' });
+  await report?.({ stage: 1, progress: 26, message: 'Reading live menu products from the detected source.' });
   const raw = await resolveMenuSource(urlStr, {
     DUTCHIE_API_KEY: env.DUTCHIE_API_KEY,
     BROWSERLESS_TOKEN: env.BROWSERLESS_TOKEN,
@@ -746,7 +746,7 @@ export function shouldRedirectToHttps(url: URL, requestHost: string, configuredA
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const requestHost = (request.headers.get('host') || url.host).toLowerCase();
 
@@ -1478,7 +1478,7 @@ export default {
           debug: [`${startedAt} Import job queued for ${urlStr.slice(0, 160)}`],
         }));
 
-        ctx.waitUntil(runMenuImportJob({ env, accountId: auth.accountId, sessionId, jobId, urlStr, styleNotes, displayCount, startedAt }));
+        await runMenuImportJob({ env, accountId: auth.accountId, sessionId, jobId, urlStr, styleNotes, displayCount, startedAt });
         return jsonResponse({ success: true, jobId, status: 'queued', statusUrl: `/api/import/jobs/${encodeURIComponent(jobId)}?session=${encodeURIComponent(sessionId)}` }, 202);
       } catch {
         return jsonResponse({ error: 'Invalid import job request' }, 400);
