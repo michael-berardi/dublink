@@ -139,14 +139,14 @@ describe('Dutchie scraper image extraction', () => {
           type: 'edible',
           recPrices: [26.55, 30],
           Options: ['.1g', '.1g'],
-          THCContent: { range: [100], unit: 'MILLIGRAMS_PER_PACKAGE' },
+          THCContent: { range: [100], unit: 'PERCENTAGE' },
           CBDContent: { range: [0], unit: 'MILLIGRAMS_PER_PACKAGE' },
         }),
         baseProduct('tincture-dose', {
           type: 'tincture',
           recPrices: [50.44, 57],
           Options: ['427.8g', '427.8g'],
-          THCContent: { range: [150], unit: 'MILLIGRAM' },
+          THCContent: { range: [150], unit: 'PERCENTAGE' },
         }),
       ]);
     }) as unknown as typeof fetch;

@@ -105,7 +105,7 @@ function potencyValue(content: unknown, category?: string): string | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
   const unit = typeof content.unit === 'string' ? content.unit.toUpperCase() : '';
   const usesMilligrams = unit.includes('MILLIGRAM')
-    || (!unit.includes('PERCENT') && (category === 'Edibles' || category === 'Tinctures' || category === 'CBD'));
+    || category === 'Edibles' || category === 'Tinctures' || category === 'CBD';
   return usesMilligrams ? `${value}mg` : `${value}%`;
 }
 
