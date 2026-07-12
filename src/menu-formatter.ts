@@ -342,20 +342,24 @@ export function dedupeAndFormatCategories(
         category: name,
         inStock: p.inStock !== false,
       });
-      if (products.length >= maxProductsPerCategory) break;
     }
+    products.sort((a, b) => {
+      const nameOrder = a.name.localeCompare(b.name, 'en', { sensitivity: 'base', numeric: true });
+      return nameOrder || a.id.localeCompare(b.id, 'en', { sensitivity: 'base', numeric: true });
+    });
+    const selectedProducts = products.slice(0, maxProductsPerCategory);
 
-    if (products.length === 0) continue;
+    if (selectedProducts.length === 0) continue;
     if (group.products.length > maxProductsPerCategory) {
       warnings.push(`"${name}" limited to ${maxProductsPerCategory} products for TV readability.`);
     }
 
-    productCount += products.length;
+    productCount += selectedProducts.length;
     outCategories.push({
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products,
+      products: selectedProducts,
     });
   }
 

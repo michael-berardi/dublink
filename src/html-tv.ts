@@ -13,6 +13,18 @@ function isTvTemplate(value: unknown): value is (typeof TV_TEMPLATES)[number] {
   return typeof value === 'string' && (TV_TEMPLATES as readonly string[]).includes(value);
 }
 
+export function shouldResetTvCycle(previousSignature: string, nextSignature: string): boolean {
+  return previousSignature !== nextSignature;
+}
+
+export function shouldRunTvCycle(autoScroll: unknown, totalPages: number, hidden: boolean): boolean {
+  return autoScroll === true && totalPages > 1 && !hidden;
+}
+
+export function nextTvCyclePage(currentPage: number, totalPages: number): number {
+  return totalPages > 0 ? (currentPage + 1) % totalPages : 0;
+}
+
 export function normalizeTvUploadImageUrl(value: unknown, pageOrigin: string): string {
   if (!value || typeof value !== 'string') return '';
   const url = value.trim();
@@ -215,15 +227,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:100%;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;}
-  body.font-small{font-size:16px;}
+  body.font-small{font-size:14px;}
   body.font-medium{font-size:18px;}
-  body.font-large{font-size:20px;}
-  body.font-small .layout-grid .card-name{font-size:clamp(1.05rem,1.32vw,1.52rem);}
-  body.font-large .layout-grid .card-name{font-size:clamp(1.32rem,1.7vw,2rem);}
-  body.font-small .layout-grid .card-price{font-size:clamp(1.35rem,1.65vw,1.95rem);}
-  body.font-large .layout-grid .card-price{font-size:clamp(1.78rem,2.15vw,2.55rem);}
-  body.font-small .row-name{font-size:0.92em;}
-  body.font-large .row-name{font-size:1.12em;}
+  body.font-large{font-size:24px;}
+  body.font-small .layout-grid .card-name{font-size:clamp(0.95rem,1.18vw,1.35rem);}
+  body.font-large .layout-grid .card-name{font-size:clamp(1.5rem,1.95vw,2.25rem);}
+  body.font-small .layout-grid .card-price{font-size:clamp(1.2rem,1.48vw,1.75rem);}
+  body.font-large .layout-grid .card-price{font-size:clamp(2rem,2.4vw,2.85rem);}
+  body.font-small .row-name{font-size:0.82em;}
+  body.font-large .row-name{font-size:1.28em;}
   .font-custom-serif{font-family:Georgia,'Times New Roman',serif;}
   .font-custom-slab{font-family:Rockwell,Georgia,'Times New Roman',serif;}
   .font-custom-mono{font-family:'SF Mono','JetBrains Mono','Fira Code',monospace;}
@@ -640,6 +652,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 (function(){
   var WS_URL = location.origin.replace(/^http/, 'ws') + '/ws/${safeSessionId}?role=tv';
   var DEMO_MODE = ${options?.demo ? 'true' : 'false'};
+  var shouldResetTvCycle = ${shouldResetTvCycle.toString()};
+  var shouldRunTvCycle = ${shouldRunTvCycle.toString()};
+  var nextTvCyclePage = ${nextTvCyclePage.toString()};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
   var displayParams = new URLSearchParams(location.search);
   function boundedDisplayParam(name,fallback){
@@ -661,6 +676,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var v = new URLSearchParams(location.search).get('theme');
     if(v){ v = String(v).toLowerCase().trim(); if(ALLOWED_TEMPLATES.indexOf(v) !== -1) return v; else console.warn('[DubMenu TV] Invalid ?theme= "' + v + '" — falling back to config template. Allowed: ' + ALLOWED_TEMPLATES.join(', ')); }
     return null;
+  })();
+  var URL_FONT_SIZE = (function(){
+    var v = new URLSearchParams(location.search).get('fontSize');
+    return v === 'small' || v === 'medium' || v === 'large' ? v : null;
   })();
 
   var CATEGORY_ICON_SVGS = ${JSON.stringify(CATEGORY_ICON_SVGS)};
@@ -1024,6 +1043,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   function startCycling(){
+
     if(cycleState.totalPages<=1){stopCycling();return;}
     var intervalMs=getCycleInterval();
     if(cycleState.interval && cycleState.intervalMs===intervalMs) return;
@@ -1032,7 +1052,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cycleState.interval = setInterval(function(){
       if(cycleState.isTransitioning) return;
       cycleState.isTransitioning = true;
-      cycleState.currentPage = (cycleState.currentPage + 1) % cycleState.totalPages;
+      cycleState.currentPage = nextTvCyclePage(cycleState.currentPage,cycleState.totalPages);
       renderCurrentPage();
       var content = document.getElementById('menu-content');
       if(content){
@@ -1042,6 +1062,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       }
       setTimeout(function(){cycleState.isTransitioning=false;},180);
     },intervalMs);
+  }
+
+  function resumeCycling(){
+    if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) startCycling();
+    else stopCycling();
   }
 
   function emptyMenuMarkup(){
@@ -1147,7 +1172,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderMenu(){
     if(!config) return;
-    document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + safeFontSize(config.fontSize) + ' ' + customFontClass(config.customFont)).trim();
+    document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + safeFontSize(URL_FONT_SIZE || config.fontSize) + ' ' + customFontClass(config.customFont)).trim();
     applyBrandStyle(config);
     var demoPill = document.getElementById('demo-pill');
     if(demoPill) demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo);
@@ -1187,15 +1212,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
     var nextTotalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : getPagingInfo(cats, perPage, maxCategories).totalPages;
     var nextPageSignature = getPageSignature(layout,cats,bannerActive);
-    var pageModelChanged = cycleState.pageSignature !== nextPageSignature;
+    var pageModelChanged = shouldResetTvCycle(cycleState.pageSignature,nextPageSignature);
     cycleState.totalPages = nextTotalPages;
     cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1));
     cycleState.pageSignature = nextPageSignature;
     
     renderCurrentPage();
     
-    if(config.autoScroll === true && cycleState.totalPages > 1) startCycling();
-    else stopCycling();
+    resumeCycling();
 
     showTvInfo(layout);
   }
@@ -1531,6 +1555,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       reconnectAttempts=0;
       setConn('connected');
       ws.send(JSON.stringify({type:'join',payload:{role:'tv'}}));
+      if(config && hasProducts(config)) renderMenu();
       if(heartbeatTimer) clearInterval(heartbeatTimer);
       heartbeatTimer=setInterval(function(){if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'pong'}));},25000);
     };
@@ -1621,7 +1646,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   window.addEventListener('resize',function(){fitToScreen();});
   document.addEventListener('visibilitychange',function(){
     if(document.hidden){stopCycling();return;}
-    if(config&&paired)renderMenu();
+    if(config&&hasProducts(config))renderMenu();
+    else resumeCycling();
   });
 
   if(!DEMO_MODE){

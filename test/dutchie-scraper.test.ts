@@ -467,6 +467,46 @@ describe('Dutchie scraper image extraction', () => {
     ]));
   });
 
+  it('merges structured products captured from store and embedded menu routes', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      const sourceUrl = new URL(url).searchParams.get('url') || '';
+      return structuredResponse([
+        sourceUrl.includes('/embedded-menu/')
+          ? baseProduct('embedded-only', { name: 'Embedded Product' })
+          : baseProduct('store-only', { name: 'Store Product' }),
+      ]);
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('split-inventory', 'test-token');
+    const productIds = result.categories.flatMap((category) => category.products.map((product) => product.id));
+    expect(productIds).toEqual(['embedded-only', 'store-only']);
+    expect(result.productCount).toBe(2);
+  });
+
+  it('preserves distinct SKU variants that share a Dutchie product id', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      const sourceUrl = new URL(url).searchParams.get('url') || '';
+      const embedded = sourceUrl.includes('/embedded-menu/');
+      return structuredResponse([
+        baseProduct('shared-product', {
+          name: embedded ? 'Shared Product Small' : 'Shared Product Large',
+          sku: embedded ? 'SKU-SMALL' : 'SKU-LARGE',
+        }),
+      ]);
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('shared-product-variants', 'test-token');
+    const products = result.categories.flatMap((category) => category.products);
+
+    expect(products.map((product) => product.sku).sort()).toEqual(['SKU-LARGE', 'SKU-SMALL']);
+    expect(new Set(products.map((product) => product.id)).size).toBe(2);
+    expect(result.productCount).toBe(2);
+  });
+
   it('keeps all structured products for the formatter to rank and cap', async () => {
     globalThis.fetch = vi.fn(async (input: string | Request) => {
       const url = typeof input === 'string' ? input : input.url;

@@ -2092,6 +2092,7 @@ function updateSimFrame(frameId,displayNum){
   var url='/tv/'+SESSION_ID+'?embed=1&display='+displayNum+'&displays='+simState.displayCount;
   if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
   if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
+  if(config&&/^(small|medium|large)$/.test(config.fontSize||'')) url+='&fontSize='+encodeURIComponent(config.fontSize);
   var full=location.origin+url;
   if(frame.src!==full) frame.src=full;
 }
@@ -2161,6 +2162,12 @@ function syncSimulatorFromConfig(){
     simState.selectedDisplay=Math.min(simState.selectedDisplay,simState.displayCount);
     renderSimulatorControls();
     renderSimulatorPreview();
+    return;
+  }
+  if(simState.viewMode==='compact'){
+    for(var i=1;i<=simState.displayCount;i++)updateSimFrame('simFrame-'+i,i);
+  }else{
+    updateSimFrame('simFrame',simState.selectedDisplay);
   }
 }
 
@@ -2217,6 +2224,7 @@ function renderMobilePreview(){
   var frame=document.getElementById('mobilePreviewFrame');
   if(!frame)return;
   var url='/tv/'+SESSION_ID+'?embed=1&display=1&displays=1';
+  if(config&&/^(small|medium|large)$/.test(config.fontSize||''))url+='&fontSize='+encodeURIComponent(config.fontSize);
   frame.src=location.origin+url;
   scaleMobilePreview();
 }

@@ -338,6 +338,24 @@ function guessCategory(href: string, text: string, parsedCategory?: string): str
 
 
 
+function compareProductNames(a: ScrapedProduct, b: ScrapedProduct): number {
+  const nameOrder = a.name.localeCompare(b.name, 'en', { sensitivity: 'base', numeric: true });
+  return nameOrder || a.id.localeCompare(b.id, 'en', { sensitivity: 'base', numeric: true });
+}
+
+function structuredInventoryKey(id: string, sku?: string): string {
+  const normalizedSku = sku?.trim().toLowerCase();
+  return normalizedSku ? `sku:${normalizedSku}` : `id:${id.trim().toLowerCase()}`;
+}
+
+function structuredProductId(id: string, sku?: string): string {
+  const normalizedSku = sku?.trim();
+  const value = normalizedSku && normalizedSku.toLowerCase() !== id.trim().toLowerCase()
+    ? `${id}-${normalizedSku}`
+    : id;
+  return value.replace(/[^a-zA-Z0-9_-]/g, '-');
+}
+
 export async function scrapeDutchie(dispensarySlug: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
   // Prefer the store page: Simply Green currently emits FilteredProducts
   // responses there, while its embedded-menu shell can render without exposing
@@ -351,16 +369,51 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     `https://dutchie.com/embedded-menu/${dispensarySlug}`,
   ];
   let structuredError: string | undefined;
-
-  for (const dutchieUrl of structuredUrls) {
+  const structuredAttempts = await Promise.all(structuredUrls.map(async (dutchieUrl) => {
     try {
-      const result = await scrapeDutchieStructured(dutchieUrl, token);
-      if (result.categories.length) return result;
-      structuredError = `Structured Dutchie scrape returned no products for ${dutchieUrl}`;
+      return { result: await scrapeDutchieStructured(dutchieUrl, token) };
     } catch (err) {
-      structuredError = err instanceof Error ? err.message : 'Structured Dutchie scrape failed';
+      return { error: err instanceof Error ? err.message : 'Structured Dutchie scrape failed' };
     }
+  }));
+  const structuredResults = structuredAttempts
+    .map((attempt) => attempt.result)
+    .filter((result): result is NonNullable<typeof result> => Boolean(result?.categories.length));
+  if (structuredResults.length > 0) {
+    const mergedCategories = new Map<string, ScrapedProduct[]>();
+    const seenProducts = new Set<string>();
+    for (const result of structuredResults) {
+      for (const category of result.categories) {
+        if (!mergedCategories.has(category.name)) mergedCategories.set(category.name, []);
+        for (const product of category.products) {
+          const productKey = structuredInventoryKey(product.id, product.sku);
+          if (seenProducts.has(productKey)) continue;
+          seenProducts.add(productKey);
+          mergedCategories.get(category.name)!.push(product);
+        }
+      }
+    }
+    const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
+    const categories = [...mergedCategories.entries()]
+      .sort(([a], [b]) => {
+        const ai = categoryOrder.indexOf(a);
+        const bi = categoryOrder.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      })
+      .map(([name, products], order) => ({
+        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        name,
+        order,
+        products: products.sort(compareProductNames),
+      }));
+    return {
+      categories,
+      dispensaryName: structuredResults[0].dispensaryName,
+      productCount: seenProducts.size,
+    };
   }
+  structuredError = structuredAttempts.map((attempt) => attempt.error).filter(Boolean).join('; ')
+    || 'Structured Dutchie scrape returned no products';
 
   let data: { products: Array<{ href: string; text: string; img: string }>; count: number } | undefined;
   let scrapeError: string | undefined;
@@ -484,7 +537,9 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
     const products = response.json?.data?.filteredProducts?.products || [];
     for (const p of products) {
       const id = String(p.id || p._id || p.Name || crypto.randomUUID());
-      if (seen.has(id)) continue;
+      const sku = typeof p.sku === 'string' ? p.sku.trim() : '';
+      const productKey = structuredInventoryKey(id, sku);
+      if (seen.has(productKey)) continue;
 
 
       const rawName = String(p.Name || p.name || 'Product');
@@ -494,7 +549,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const name = parts.length >= 4 ? parts.slice(3).join(' | ') : rawName;
       const price = firstNumber(p.recPrices) || firstNumber(p.prices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price) || firstNumber(p.posMetadata?.children?.[0]?.recPrice) || firstNumber(p.posMetadata?.children?.[0]?.price);
       if (!price) continue;
-      seen.add(id);
+      seen.add(productKey);
 
       const image = cleanImageUrl(firstImageUrl(p.Image, p.image, p.images, p.POSMetaData?.canonicalImgUrl, p.posMetadata?.canonicalImgUrl, p.thumbnail, p.productImage));
       const strain = parseStrain(String(p.strainType || parts[2] || rawName));
@@ -504,10 +559,10 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const weight = cleanWeight(rawWeight);
 
       const product: ScrapedProduct = {
-        id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
+        id: structuredProductId(id, sku),
         name: cleanScrapedDisplayName(name, brand, category),
         price,
-        sku: p.sku || id,
+        sku: sku || id,
         category,
         thc,
         cbd,

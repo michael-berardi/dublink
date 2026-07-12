@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { isVisuallyBlankImageSample, normalizeTvUploadImageUrl, tvPage } from '../src/html-tv';
+import {
+  isVisuallyBlankImageSample,
+  nextTvCyclePage,
+  normalizeTvUploadImageUrl,
+  shouldResetTvCycle,
+  shouldRunTvCycle,
+  tvPage,
+} from '../src/html-tv';
 
 describe('tvPage', () => {
   const sampleConfig = {
@@ -309,6 +316,20 @@ describe('tvPage', () => {
     expect(page).toContain("if(URL_LAYOUT) return URL_LAYOUT");
   });
 
+  it('models playback reset, enablement, pause, resume, and wraparound decisions', () => {
+    expect(shouldResetTvCycle('same-page-model', 'same-page-model')).toBe(false);
+    expect(shouldResetTvCycle('old-page-model', 'new-page-model')).toBe(true);
+
+    expect(shouldRunTvCycle(true, 2, false)).toBe(true);
+    expect(shouldRunTvCycle(false, 2, false)).toBe(false);
+    expect(shouldRunTvCycle(true, 1, false)).toBe(false);
+    expect(shouldRunTvCycle(true, 2, true)).toBe(false);
+
+    expect(nextTvCyclePage(0, 3)).toBe(1);
+    expect(nextTvCyclePage(2, 3)).toBe(0);
+    expect(nextTvCyclePage(2, 0)).toBe(0);
+  });
+
   it('computes the cycle interval from autoScrollSpeed', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true, autoScrollSpeed: 75 } });
     expect(page).toContain('function getCycleInterval');
@@ -318,14 +339,14 @@ describe('tvPage', () => {
 
   it('auto-rotates overflow category pages only when enabled', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
-    expect(page).toContain('if(config.autoScroll === true && cycleState.totalPages > 1) startCycling();');
+    expect(page).toContain('if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) startCycling();');
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
   });
 
   it('keeps playback stable across duplicate or cosmetic config broadcasts', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
     expect(page).toContain('var nextPageSignature = getPageSignature(layout,cats,bannerActive)');
-    expect(page).toContain('var pageModelChanged = cycleState.pageSignature !== nextPageSignature');
+    expect(page).toContain('var pageModelChanged = shouldResetTvCycle(cycleState.pageSignature,nextPageSignature)');
     expect(page).toContain('cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1))');
     expect(page).toContain('if(cycleState.interval && cycleState.intervalMs===intervalMs) return');
   });
@@ -334,7 +355,7 @@ describe('tvPage', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
     expect(page).toContain("document.addEventListener('visibilitychange'");
     expect(page).toContain('if(document.hidden){stopCycling();return;}');
-    expect(page).toContain('if(config&&paired)renderMenu();');
+    expect(page).toContain('if(config&&hasProducts(config))renderMenu();');
   });
 
   it('bounds multi-screen URL topology to four displays', () => {

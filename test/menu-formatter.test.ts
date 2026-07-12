@@ -344,6 +344,34 @@ describe('formatMenu', () => {
     expect(result.warnings.join(' ')).not.toContain('TV-ready products');
   });
 
+  it('orders every imported category alphabetically by cleaned product name', () => {
+    const categories: ScrapedCategory[] = [{
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: [
+        { id: 'z', name: 'Zulu Kush', price: 30, inStock: true },
+        { id: 'a10', name: 'apple fritter 10', price: 25, inStock: true },
+        { id: 'a2', name: 'Apple Fritter 2', price: 20, inStock: true },
+        { id: 'b', name: 'Blue Dream', price: 35, inStock: true },
+      ],
+    }];
+
+    const result = formatMenu(categories, 'Alphabetical Menu', undefined, {
+      maxCategories: 20,
+      maxProductsPerCategory: 500,
+      tvOptimize: false,
+      preserveSections: true,
+    });
+
+    expect(result.categories[0].products.map((product) => product.name)).toEqual([
+      'Apple Fritter 2',
+      'apple fritter 10',
+      'Blue Dream',
+      'Zulu Kush',
+    ]);
+  });
+
 
   it('TV-optimizes imported menus and preserves selected assets', () => {
     const categories: ScrapedCategory[] = [
@@ -398,7 +426,7 @@ describe('formatMenu', () => {
       },
     ], 'Green Leaf');
 
-    expect(result.categories[0].products.map((p) => p.name)).toEqual(['Black Zskittles', 'ayrloom 2g']);
+    expect(result.categories[0].products.map((p) => p.name)).toEqual(['ayrloom 2g', 'Black Zskittles']);
   });
 
   it('title-cases all-uppercase imported product names while preserving cannabis acronyms', () => {
@@ -416,9 +444,9 @@ describe('formatMenu', () => {
     ], 'Green Leaf');
 
     expect(result.categories[0].products.map((product) => product.name)).toEqual([
-      'Watermelon Kush Distillate All-In-One',
-      'CBD Topical Roll-On (1:1 CBD:THC)',
       'Blueberry Tincture 2oz',
+      'CBD Topical Roll-On (1:1 CBD:THC)',
+      'Watermelon Kush Distillate All-In-One',
     ]);
   });
 
