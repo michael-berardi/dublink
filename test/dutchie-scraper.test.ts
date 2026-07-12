@@ -397,6 +397,34 @@ describe('Dutchie scraper image extraction', () => {
     });
   });
 
+  it('removes placeholder fragments from structured product display names', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      return structuredResponse([
+        baseProduct('dangling-pack', { name: 'Sour Unicorn | . x', type: 'pre-roll', brandName: 'Hudson Cannabis' }),
+        baseProduct('empty-segment', { name: 'Ceramic Tip | | Strawberry Runtz', type: 'pre-roll', brandName: 'Torrwood Farm' }),
+        baseProduct('potency-only', { name: 'THC : CBD', type: 'vape', brandName: 'ayrloom' }),
+        baseProduct('unbranded-potency', { name: 'THC : CBD', type: 'vape' }),
+        baseProduct('placeholder-only', { name: 'x', type: 'edible', brandName: 'Incredibles' }),
+        baseProduct('empty-brackets', { name: 'Camino Watermelon Gummies [ ]', type: 'edible', brandName: 'Camino' }),
+      ]);
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('structured-names', 'test-token');
+    const names = new Map(result.categories.flatMap((category) =>
+      category.products.map((product) => [product.id, product.name])
+    ));
+    expect(names).toEqual(new Map([
+      ['dangling-pack', 'Sour Unicorn'],
+      ['empty-segment', 'Ceramic Tip | Strawberry Runtz'],
+      ['potency-only', 'ayrloom THC + CBD'],
+      ['unbranded-potency', 'Cannabis Vape'],
+      ['placeholder-only', 'Incredibles Edible'],
+      ['empty-brackets', 'Camino Watermelon Gummies'],
+    ]));
+  });
+
   it('keeps all structured products for the formatter to rank and cap', async () => {
     globalThis.fetch = vi.fn(async (input: string | Request) => {
       const url = typeof input === 'string' ? input : input.url;

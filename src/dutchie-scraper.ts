@@ -169,7 +169,7 @@ function parseName(rawName: string): { name: string; brand?: string; category?: 
   return { name: rawName, brand: undefined };
 }
 
-function cleanScrapedDisplayName(name: string): string {
+function cleanScrapedDisplayName(name: string, brand?: string, category?: string): string {
   const cleaned = name
     .replace(/\bTHC:?\s*\d+(?:\.\d+)?%?\b/gi, ' ')
     .replace(/\b\d+(?:\.\d+)?%THC\b/gi, ' ')
@@ -177,11 +177,38 @@ function cleanScrapedDisplayName(name: string): string {
     .replace(/\b(?:\d+(?:\.\d+)?\s*)?(?:g|gm|mg|ml|oz|ct|pack|pk)\b/gi, ' ')
     .replace(/\([^)]*(?:g|oz|ct|pack|pk)[^)]*\)/gi, ' ')
     .replace(/\b(jar|bag|cartridge|disposable|multipack|pack|totalnetweight|offlower|0fflower|vaporizerorcartridge|pre-rollpack)\b/gi, ' ')
+    .replace(/\[\s*\]/g, ' ')
     .replace(/[-_/]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  const withoutUntitled = cleaned.replace(/^untitled\s+/i, '').trim();
-  return (withoutUntitled || cleaned || name).slice(0, 90);
+  const withoutPlaceholders = cleaned
+    .split('|')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0 && !/^(?:x|\.|\.?\s*x)$/i.test(part))
+    .join(' | ')
+    .replace(/^untitled\s+/i, '')
+    .trim();
+  const categoryLabel = category === 'Accessories'
+    ? 'Accessory'
+    : category === 'Pre-Rolls'
+      ? 'Pre-Roll'
+      : category?.replace(/s$/, '') || 'Product';
+  const cannabinoidOnly = /\b(?:THC|CBD|CBN|CBC)\b/i.test(withoutPlaceholders)
+    && withoutPlaceholders
+      .replace(/\b(?:THC|CBD|CBN|CBC)\b/gi, '')
+      .replace(/[\d\s:()+.%x|-]/gi, '') === '';
+  if (cannabinoidOnly) {
+    if (!brand) return `Cannabis ${categoryLabel}`.slice(0, 90);
+    const potencyLabel = withoutPlaceholders
+      .replace(/:\s*:/g, ':')
+      .replace(/\b(THC|CBD|CBN|CBC)\s*:\s*(?=(?:THC|CBD|CBN|CBC)\b)/gi, '$1 + ')
+      .replace(/\b(THC|CBD|CBN|CBC)\s*:\s*(?=\d+:\d+\b)/gi, '$1 ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return `${brand} ${potencyLabel}`.slice(0, 90);
+  }
+  if (withoutPlaceholders) return withoutPlaceholders.slice(0, 90);
+  return `${brand || 'Cannabis'} ${categoryLabel}`.slice(0, 90);
 }
 
 
@@ -372,7 +399,8 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     const pollutedLine = !firstLine || /^(indica|sativa|hybrid)$/i.test(firstLine) || /THC\s*:?\s*\d|CBD\s*:?\s*\d|\$|Add to cart/i.test(firstLine) || firstLine.length > 110;
     const rawName = pollutedLine ? titleFromSlug(slug) : firstLine;
     const { name, brand, category: parsedCategory } = parseName(rawName);
-    const cleanName = cleanScrapedDisplayName(name);
+    const category = guessCategory(p.href || '', text || rawName, parsedCategory);
+    const cleanName = cleanScrapedDisplayName(name, brand, category);
     const strain = parseStrain(text || rawName);
     const thc = parseTHC(text);
     const cbd = parseCBD(text);
@@ -380,7 +408,6 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     if (!price) continue;
     seen.add(slug);
     const weight = cleanWeight(parseWeight(`${rawName} ${text}`));
-    const category = guessCategory(p.href || '', text || rawName, parsedCategory);
     const specialLabel = saleLabel(text, originalPrice);
 
     const product: ScrapedProduct = {
@@ -458,7 +485,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const rawName = String(p.Name || p.name || 'Product');
       const parts = rawName.split('|').map((part) => part.trim()).filter(Boolean);
       const category = normalizeCategory(p.type) || normalizeCategory(p.POSMetaData?.canonicalCategory) || normalizeCategory(p.posMetadata?.canonicalCategory) || normalizeCategory(parts[1]) || 'Other';
-      const brand = p.brandName || p.brand?.name || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName || parts[0];
+      const brand = p.brandName || p.brand?.name || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName || (parts.length >= 2 ? parts[0] : undefined);
       const name = parts.length >= 4 ? parts.slice(3).join(' | ') : rawName;
       const price = firstNumber(p.recPrices) || firstNumber(p.prices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price) || firstNumber(p.posMetadata?.children?.[0]?.recPrice) || firstNumber(p.posMetadata?.children?.[0]?.price);
       if (!price) continue;
@@ -473,7 +500,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
 
       const product: ScrapedProduct = {
         id: id.replace(/[^a-zA-Z0-9_-]/g, '-'),
-        name: cleanScrapedDisplayName(name),
+        name: cleanScrapedDisplayName(name, brand, category),
         price,
         sku: p.sku || id,
         category,
