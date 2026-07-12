@@ -408,6 +408,7 @@ describe('Dutchie scraper image extraction', () => {
         baseProduct('unbranded-potency', { name: 'THC : CBD', type: 'vape' }),
         baseProduct('placeholder-only', { name: 'x', type: 'edible', brandName: 'Incredibles' }),
         baseProduct('empty-brackets', { name: 'Camino Watermelon Gummies [ ]', type: 'edible', brandName: 'Camino' }),
+        baseProduct('count-suffix', { name: 'Sweet Chili x Sea Salt Caramel x Chicago | 20 x', type: 'edible', brandName: 'Space Poppers' }),
       ]);
     }) as unknown as typeof fetch;
 
@@ -422,6 +423,7 @@ describe('Dutchie scraper image extraction', () => {
       ['unbranded-potency', 'Cannabis Vape'],
       ['placeholder-only', 'Incredibles Edible'],
       ['empty-brackets', 'Camino Watermelon Gummies'],
+      ['count-suffix', 'Sweet Chili x Sea Salt Caramel x Chicago'],
     ]));
   });
 

@@ -184,7 +184,7 @@ function cleanScrapedDisplayName(name: string, brand?: string, category?: string
   const withoutPlaceholders = cleaned
     .split('|')
     .map((part) => part.trim())
-    .filter((part) => part.length > 0 && !/^(?:x|\.|\.?\s*x)$/i.test(part))
+    .filter((part) => part.length > 0 && !/^(?:\.|\.?\s*(?:\d+\s*)?x)$/i.test(part))
     .join(' | ')
     .replace(/^untitled\s+/i, '')
     .trim();
