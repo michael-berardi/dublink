@@ -130,6 +130,44 @@ describe('Dutchie scraper image extraction', () => {
     ]);
   });
 
+  it('normalizes edible dosages and rejects impossible tier weights', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      return structuredResponse([
+        baseProduct('edible-dose', {
+          type: 'edible',
+          recPrices: [26.55, 30],
+          Options: ['.1g', '.1g'],
+          THCContent: { range: [100], unit: 'MILLIGRAMS_PER_PACKAGE' },
+          CBDContent: { range: [0], unit: 'MILLIGRAMS_PER_PACKAGE' },
+        }),
+        baseProduct('tincture-dose', {
+          type: 'tincture',
+          recPrices: [50.44, 57],
+          Options: ['427.8g', '427.8g'],
+          THCContent: { range: [150], unit: 'MILLIGRAM' },
+        }),
+      ]);
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('dose-test', 'test-token');
+    const products = new Map(result.categories.flatMap((category) =>
+      category.products.map((product) => [product.id, product])
+    ));
+    expect(products.get('edible-dose')).toMatchObject({
+      thc: '100mg',
+      weight: '100mg',
+      priceTiers: undefined,
+    });
+    expect(products.get('edible-dose')?.cbd).toBeUndefined();
+    expect(products.get('tincture-dose')).toMatchObject({
+      thc: '150mg',
+      weight: undefined,
+      priceTiers: undefined,
+    });
+  });
+
   it('preserves Dutchie product descriptions for richer TV cards', async () => {
     globalThis.fetch = vi.fn(async (input: string | Request) => {
       const url = typeof input === 'string' ? input : input.url;

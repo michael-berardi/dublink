@@ -96,14 +96,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 
-function potencyValue(content: unknown): string | undefined {
+function potencyValue(content: unknown, category?: string): string | undefined {
   if (!content) return undefined;
   if (typeof content === 'string') return content;
   if (!isRecord(content)) return undefined;
   const range = content.range;
   const value = Array.isArray(range) ? range[0] : content.value;
-  if (typeof value !== 'number') return undefined;
-  return content.unit === 'MILLIGRAMS' ? `${value}mg` : `${value}%`;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined;
+  const unit = typeof content.unit === 'string' ? content.unit.toUpperCase() : '';
+  const usesMilligrams = unit.includes('MILLIGRAM')
+    || (!unit.includes('PERCENT') && (category === 'Edibles' || category === 'Tinctures' || category === 'CBD'));
+  return usesMilligrams ? `${value}mg` : `${value}%`;
 }
 
 function imageCandidateUrl(value: unknown): string | undefined {
@@ -225,7 +228,8 @@ function cleanWeight(value: unknown): string | undefined {
   const gramMatch = weight.match(/^(\d*\.?\d+)g$/i);
   if (gramMatch) {
     const grams = Number(gramMatch[1]);
-    if (grams < 0.5 || grams > 56) return undefined;
+    if (grams <= 0 || grams > 56) return undefined;
+    if (grams < 0.5) return `${Number((grams * 1000).toFixed(2))}mg`;
   }
   return weight;
 }
@@ -278,7 +282,7 @@ function tierLabel(value: unknown): string | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const raw = String(value).trim();
   if (!raw) return undefined;
-  return cleanWeight(raw) || raw;
+  return cleanWeight(raw);
 }
 
 function productPriceTiers(product: ScraperPriceSource): ImportedPriceTier[] | undefined {
@@ -288,7 +292,7 @@ function productPriceTiers(product: ScraperPriceSource): ImportedPriceTier[] | u
     const price = firstNumber(priceValue);
     const label = tierLabel(labelValue);
     if (!label || !price) return;
-    const key = `${label.toLowerCase()}|${price}`;
+    const key = label.toLowerCase();
     if (seen.has(key)) return;
     seen.add(key);
     tiers.push({ label, price: formatTierPrice(price) });
@@ -494,8 +498,8 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
 
       const image = cleanImageUrl(firstImageUrl(p.Image, p.image, p.images, p.POSMetaData?.canonicalImgUrl, p.posMetadata?.canonicalImgUrl, p.thumbnail, p.productImage));
       const strain = parseStrain(String(p.strainType || parts[2] || rawName));
-      const thc = potencyValue(p.THCContent) || parseTHC(rawName);
-      const cbd = potencyValue(p.CBDContent);
+      const thc = potencyValue(p.THCContent, category) || parseTHC(rawName);
+      const cbd = potencyValue(p.CBDContent, category);
       const rawWeight = Array.isArray(p.options) ? p.options[0] : Array.isArray(p.Options) ? p.Options[0] : p.POSMetaData?.children?.[0]?.option || p.posMetadata?.children?.[0]?.option;
       const weight = cleanWeight(rawWeight);
 
