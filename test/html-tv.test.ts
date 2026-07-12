@@ -316,10 +316,32 @@ describe('tvPage', () => {
     expect(page).toContain('Math.max(4000, Math.min(20000, 5000 + raw * 100))');
   });
 
-  it('auto-cycles overflow category pages so all imported categories become visible', () => {
-    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: false } });
-    expect(page).toContain('if(config.autoScroll || cycleState.totalPages > 1) startCycling();');
+  it('auto-rotates overflow category pages only when enabled', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
+    expect(page).toContain('if(config.autoScroll === true && cycleState.totalPages > 1) startCycling();');
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
+  });
+
+  it('keeps playback stable across duplicate or cosmetic config broadcasts', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
+    expect(page).toContain('var nextPageSignature = getPageSignature(layout,cats,bannerActive)');
+    expect(page).toContain('var pageModelChanged = cycleState.pageSignature !== nextPageSignature');
+    expect(page).toContain('cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1))');
+    expect(page).toContain('if(cycleState.interval && cycleState.intervalMs===intervalMs) return');
+  });
+
+  it('pauses and resumes page rotation when a TV becomes visible again', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
+    expect(page).toContain("document.addEventListener('visibilitychange'");
+    expect(page).toContain('if(document.hidden){stopCycling();return;}');
+    expect(page).toContain('if(config&&paired)renderMenu();');
+  });
+
+  it('bounds multi-screen URL topology to four displays', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
+    expect(page).toContain("Math.max(1,Math.min(4,value))");
+    expect(page).toContain("var DISPLAY_TOTAL = boundedDisplayParam('displays',1)");
+    expect(page).toContain("var DISPLAY_NUM = Math.min(boundedDisplayParam('display',1),DISPLAY_TOTAL)");
   });
 
   it('compacts the TV board and centers scaled previews when a promo banner is active', () => {
@@ -481,7 +503,7 @@ describe('tvPage', () => {
 
   it('keeps layout configurability and renderer state aligned', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
-    expect(page).toContain("cycleState.totalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats}))");
+    expect(page).toContain("var nextTotalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats}))");
     expect(page).toContain('function renderPricewall(cats, container, allCats)');
     expect(page).toContain('renderPricewallShell(allCats || cats, container)');
   });

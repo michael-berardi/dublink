@@ -369,6 +369,34 @@ describe('Dutchie scraper image extraction', () => {
     });
   });
 
+  it('maps modern Dutchie product types into every supported menu section', async () => {
+    const cases = [
+      ['clone', 'Flower'],
+      ['joint', 'Pre-Rolls'],
+      ['disposable', 'Vapes'],
+      ['live rosin', 'Concentrates'],
+      ['beverage', 'Edibles'],
+      ['sublingual', 'Tinctures'],
+      ['transdermal patch', 'Topicals'],
+      ['cbd wellness', 'CBD'],
+      ['apparel', 'Accessories'],
+    ];
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (!url.startsWith(DUTCHIE_MENU_URL)) return new Response('Not Found', { status: 404 });
+      return structuredResponse(cases.map(([type], index) => baseProduct(`taxonomy-${index}`, { type })));
+    }) as unknown as typeof fetch;
+
+    const result = await scrapeDutchie('structured-taxonomy', 'test-token');
+    const categoryByProduct = new Map(result.categories.flatMap((category) =>
+      category.products.map((product) => [product.id, category.name])
+    ));
+
+    cases.forEach(([, expectedCategory], index) => {
+      expect(categoryByProduct.get(`taxonomy-${index}`)).toBe(expectedCategory);
+    });
+  });
+
   it('keeps all structured products for the formatter to rank and cap', async () => {
     globalThis.fetch = vi.fn(async (input: string | Request) => {
       const url = typeof input === 'string' ? input : input.url;

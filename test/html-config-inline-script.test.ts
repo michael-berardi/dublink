@@ -74,11 +74,30 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('body:not(.section-open){height:100dvh;overflow:hidden;}');
   });
 
-  it('uploads logos directly from the Brand section and sends the uploaded URL to the TV', () => {
+  it('uploads supported logos through DubMenu and reports sent versus queued delivery truthfully', () => {
     expect(html).toContain('id="logoFile"');
+    expect(html).toContain('accept="image/jpeg,image/png,image/gif,image/webp"');
     expect(html).toContain('uploadLogoImage(this)');
-    expect(html).toContain('function uploadLogoImage(input)');
-    expect(html).toContain("sendConfig('logo',url)");
+    expect(html).toContain('function parseUploadResponse');
+    expect(html).toContain("var delivery=sendConfig('logo',url)");
+    expect(html).toContain("delivery==='sent'?'Logo uploaded & sent to TV':'Logo uploaded. It will sync when reconnected.'");
+  });
+
+  it('queues config controls across reconnects without losing font or layout choices', () => {
+    expect(html).toContain('let pendingConfigPatch={}');
+    expect(html).toContain('function flushPendingConfig()');
+    expect(html).toContain("ws.send(JSON.stringify({type:'join',payload:{role:'phone'}}));");
+    expect(html).toContain('flushPendingConfig();');
+    expect(html).toContain('config=Object.assign({},incoming,pendingConfigPatch)');
+    expect(html).toContain('pendingConfigPatch[k]=v');
+  });
+
+  it('accepts only DubMenu-owned logo URLs and names page rotation accurately', () => {
+    expect(html).toContain('function normalizeOwnedLogoUrl');
+    expect(html).toContain("parsed.pathname.indexOf('/api/uploads/')===0");
+    expect(html).toContain('Upload the logo through DubMenu before using it on TV');
+    expect(html).toContain('Auto-Rotate Menu Pages');
+    expect(html).toContain('Page Duration');
   });
 
   it('makes the specials card actionable instead of a dead-looking heading', () => {

@@ -378,11 +378,11 @@ export function configPage(sessionId: string, origin: string): string {
     <div class="field">
       <label for="logoUrl">Logo</label>
       <div class="upload-row">
-        <input type="url" id="logoUrl" placeholder="/api/uploads/..." oninput="debounceConfig('logo',this.value)">
+        <input type="url" id="logoUrl" placeholder="/api/uploads/..." onchange="debounceLogo(this.value)">
         <label for="logoFile" class="lib-btn">Upload</label>
-        <input type="file" id="logoFile" accept="image/*" onchange="uploadLogoImage(this)" style="display:none;">
+        <input type="file" id="logoFile" accept="image/jpeg,image/png,image/gif,image/webp" onchange="uploadLogoImage(this)" style="display:none;">
       </div>
-      <div class="helper">Upload stores the logo in DubMenu and sends it to the TV immediately.</div>
+      <div class="helper">JPEG, PNG, GIF, or WebP up to 2 MB. DubMenu saves the logo before sending it to the TV.</div>
     </div>
     <div class="field"><label for="primaryColor">Accent Color</label><input type="color" id="primaryColor" value="#10b981" onchange="debounceConfig('primaryColor',this.value)"></div>
   </div>
@@ -512,8 +512,8 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="toggle-row"><span id="lbl-showBrandWeight">Show Brand & Weight</span><button type="button" class="switch" id="showBrandWeight" role="switch" aria-checked="false" aria-labelledby="lbl-showBrandWeight" onclick="toggleSwitch(this);updateBrandWeight()"></button></div>
   <div class="toggle-row"><span id="lbl-showImages">Show Product Images</span><button type="button" class="switch" id="showImages" role="switch" aria-checked="false" aria-labelledby="lbl-showImages" onclick="toggleSwitch(this,'showImages')"></button></div>
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
-  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Scroll Menu</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('scrollSpeedField').style.display=this.classList.contains('on')?'block':'none';showToast(this.classList.contains('on')?'Auto-scroll on':'Auto-scroll off')"></button></div>
-  <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Scroll Speed</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
+  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('scrollSpeedField').style.display=this.classList.contains('on')?'block':'none';showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
+  <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Page Duration</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
   <div class="field"><label for="customFont">Custom Font Style</label><input type="text" id="customFont" placeholder="e.g. bold serif, condensed, mono" oninput="debounceConfig('customFont',this.value)"><div class="helper">Supports style cues like bold serif, mono, slab serif, or condensed.</div></div>
 </div>
 <div class="card">
@@ -663,7 +663,7 @@ export function configPage(sessionId: string, origin: string): string {
     <div class="modal-body" id="imageLibraryBody">
       <div class="lib-toolbar">
         <button class="btn btn-primary btn-sm" type="button" id="imageLibraryUpload">Upload New</button>
-        <input type="file" id="imageLibraryUploadInput" accept="image/*" style="display:none;">
+        <input type="file" id="imageLibraryUploadInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display:none;">
       </div>
       <div id="imageLibraryGrid"></div>
     </div>
@@ -691,12 +691,39 @@ const SESSION_ID="${sessionId}";
 const ORIGIN="${origin}";
 const STARTER_CONFIG=${STARTER_CONFIG};
 let ws=null,config=null,reconnectTimer=null,reconnectAttempts=0,debounceTimer=null;
+let pendingConfigPatch={};
 
+function canSend(){return !!(ws&&ws.readyState===WebSocket.OPEN);}
+function configValuesMatch(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+function flushPendingConfig(){
+  if(!canSend()||Object.keys(pendingConfigPatch).length===0)return false;
+  ws.send(JSON.stringify({type:'config_update',payload:pendingConfigPatch}));
+  return true;
+}
 function connect(){
   const proto=location.protocol==='https:'?'wss:':'ws:';
   ws=new WebSocket(proto+'//'+location.host+'/ws/'+SESSION_ID+'?role=phone');
-  ws.onopen=function(){reconnectAttempts=0;setStatus('connecting');ws.send(JSON.stringify({type:'join',payload:{role:'phone'}}));};
-  ws.onmessage=function(ev){const m=JSON.parse(ev.data);if(m.type==='ping'){ws.send(JSON.stringify({type:'pong'}));return;}if(m.type==='config'){config=m.payload;setStatus('connected');render();return;}if(m.type==='error'){showToast(m.payload||'Update failed');return;}};
+  ws.onopen=function(){
+    reconnectAttempts=0;
+    setStatus('connecting');
+    ws.send(JSON.stringify({type:'join',payload:{role:'phone'}}));
+    flushPendingConfig();
+  };
+  ws.onmessage=function(ev){
+    const m=JSON.parse(ev.data);
+    if(m.type==='ping'){ws.send(JSON.stringify({type:'pong'}));return;}
+    if(m.type==='config'){
+      const incoming=m.payload||{};
+      Object.keys(pendingConfigPatch).forEach(function(key){
+        if(configValuesMatch(incoming[key],pendingConfigPatch[key]))delete pendingConfigPatch[key];
+      });
+      config=Object.assign({},incoming,pendingConfigPatch);
+      setStatus('connected');
+      render();
+      return;
+    }
+    if(m.type==='error'){showToast(m.payload||'Update failed');return;}
+  };
   ws.onclose=function(){setStatus('disconnected');if(reconnectAttempts<10){reconnectAttempts++;reconnectTimer=setTimeout(connect,2000*reconnectAttempts);}};
   ws.onerror=function(){ws.close();};
 }
@@ -704,9 +731,12 @@ function setStatus(s){
   document.getElementById('statusDot').className='status-dot status-'+s;
   document.getElementById('statusText').textContent=s==='connected'?'Connected':s==='disconnected'?'Disconnected':'Connecting...';
 }
-function canSend(){return !!(ws&&ws.readyState===WebSocket.OPEN);}
-function send(t,p){if(canSend())ws.send(JSON.stringify({type:t,payload:p}));}
-function sendConfig(k,v){const u={};u[k]=v;send('config_update',u);}
+function send(t,p){if(!canSend())return false;ws.send(JSON.stringify({type:t,payload:p}));return true;}
+function sendConfig(k,v){
+  pendingConfigPatch[k]=v;
+  if(config){config=Object.assign({},config);config[k]=v;}
+  return flushPendingConfig()?'sent':'queued';
+}
 function debounceConfig(k,v){clearTimeout(debounceTimer);debounceTimer=setTimeout(function(){sendConfig(k,v);},400);}
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
 function setSwitch(id,on){var el=document.getElementById(id);if(el){el.classList.toggle('on',on);el.setAttribute('aria-checked',on?'true':'false');}}
@@ -1343,6 +1373,28 @@ function updateScreenSet(){
 function getCookie(n){var m=document.cookie.match(new RegExp('(^| )'+n+'=([^;]+)'));return m?m[2]:null;}
 function setCookie(n,v,days){var d=new Date();d.setTime(d.getTime()+(days||7)*86400000);document.cookie=n+'='+v+';expires='+d.toUTCString()+';path=/';}
 
+function normalizeOwnedLogoUrl(value){
+  var trimmed=String(value||'').trim();
+  if(!trimmed)return '';
+  try{
+    var parsed=new URL(trimmed,ORIGIN);
+    var allowedOrigin=parsed.origin===new URL(ORIGIN).origin||(parsed.protocol==='https:'&&(parsed.hostname==='dubmenu.com'||parsed.hostname==='www.dubmenu.com'));
+    if(allowedOrigin&&parsed.pathname.indexOf('/api/uploads/')===0)return parsed.toString();
+  }catch(err){}
+  return null;
+}
+function debounceLogo(value){
+  var normalized=normalizeOwnedLogoUrl(value);
+  if(normalized===null){clearTimeout(debounceTimer);showToast('Upload the logo through DubMenu before using it on TV');return;}
+  debounceConfig('logo',normalized);
+}
+function parseUploadResponse(response,fallbackMessage){
+  return response.json().catch(function(){return {};}).then(function(data){
+    if(!response.ok)throw new Error(data.error||fallbackMessage);
+    return data;
+  });
+}
+
 function filterProducts(){renderCategories();}
 function uploadProductImage(input,cid,pid){
   var file=input.files[0];
@@ -1367,15 +1419,15 @@ function uploadLogoImage(input){
   var fd=new FormData();
   fd.append('file',file);
   fetch('/api/upload',{method:'POST',body:fd})
-    .then(function(r){if(!r.ok)throw new Error('Logo upload failed');return r.json();})
+    .then(function(r){return parseUploadResponse(r,'Logo upload failed');})
     .then(function(data){
       var url=data.url;
       if(!url)throw new Error('Logo upload failed');
       var logoField=document.getElementById('logoUrl');
       logoField.value=url;
       var aid=extractAccountId(url);if(aid)ACCOUNT_ID=aid;
-      sendConfig('logo',url);
-      showToast('Logo uploaded & sent to TV');
+      var delivery=sendConfig('logo',url);
+      showToast(delivery==='sent'?'Logo uploaded & sent to TV':'Logo uploaded. It will sync when reconnected.');
       input.value='';
     })
     .catch(function(err){showToast(err.message||'Logo upload failed');});

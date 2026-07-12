@@ -277,30 +277,30 @@ function productPriceTiers(product: ScraperPriceSource): ImportedPriceTier[] | u
 function normalizeCategory(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const lower = value.toLowerCase();
-  if (lower.includes('flower')) return 'Flower';
-  if (lower.includes('pre-roll') || lower.includes('preroll')) return 'Pre-Rolls';
-  if (lower.includes('vape') || lower.includes('vaporizer')) return 'Vapes';
-  if (lower.includes('concentrate') || lower.includes('extract')) return 'Concentrates';
-  if (lower.includes('edible')) return 'Edibles';
-  if (lower.includes('tincture')) return 'Tinctures';
-  if (lower.includes('topical')) return 'Topicals';
+  if (lower.includes('flower') || lower.includes('clone') || lower.includes('seed')) return 'Flower';
+  if (lower.includes('pre-roll') || lower.includes('preroll') || lower.includes('joint') || lower.includes('blunt') || lower.includes('cone')) return 'Pre-Rolls';
+  if (lower.includes('vape') || lower.includes('vaporizer') || lower.includes('inhaler') || lower.includes('cartridge') || lower.includes('disposable') || lower.includes('aio')) return 'Vapes';
+  if (lower.includes('concentrate') || lower.includes('extract') || lower.includes('resin') || lower.includes('rosin') || lower.includes('wax') || lower.includes('shatter') || lower.includes('badder') || lower.includes('crumble') || lower.includes('sauce')) return 'Concentrates';
+  if (lower.includes('edible') || lower.includes('beverage') || lower.includes('drink') || lower.includes('capsule') || lower.includes('tablet') || lower.includes('pill') || lower.includes('oral')) return 'Edibles';
+  if (lower.includes('tincture') || lower.includes('sublingual')) return 'Tinctures';
+  if (lower.includes('topical') || lower.includes('transdermal') || lower.includes('suppository') || lower.includes('patch')) return 'Topicals';
   if (lower === 'cbd' || lower.includes('cbd')) return 'CBD';
-  if (lower.includes('accessor')) return 'Accessories';
+  if (lower.includes('accessor') || lower.includes('apparel') || lower.includes('merch') || lower.includes('gear')) return 'Accessories';
   return undefined;
 }
 
 function guessCategory(href: string, text: string, parsedCategory?: string): string {
   if (parsedCategory) return parsedCategory;
   const value = `${href} ${text}`.toLowerCase();
-  if (value.includes('pre-roll') || value.includes('preroll')) return 'Pre-Rolls';
-  if (value.includes('flower')) return 'Flower';
-  if (value.includes('vape') || value.includes('vaporizer') || value.includes('aio') || value.includes('cartridge') || value.includes('disposable')) return 'Vapes';
-  if (value.includes('concentrate') || value.includes('extract') || value.includes('resin') || value.includes('rosin') || value.includes('wax') || value.includes('shatter')) return 'Concentrates';
-  if (value.includes('edible') || value.includes('gummy') || value.includes('chocolate') || value.includes('chew') || value.includes('cookie')) return 'Edibles';
+  if (value.includes('pre-roll') || value.includes('preroll') || value.includes('joint') || value.includes('blunt') || value.includes('cone')) return 'Pre-Rolls';
+  if (value.includes('flower') || value.includes('bud') || value.includes('clone') || value.includes('seed')) return 'Flower';
+  if (value.includes('vape') || value.includes('vaporizer') || value.includes('inhaler') || value.includes('aio') || value.includes('cartridge') || value.includes('disposable')) return 'Vapes';
+  if (value.includes('concentrate') || value.includes('extract') || value.includes('resin') || value.includes('rosin') || value.includes('wax') || value.includes('shatter') || value.includes('badder') || value.includes('crumble') || value.includes('sauce')) return 'Concentrates';
+  if (value.includes('edible') || value.includes('gummy') || value.includes('chocolate') || value.includes('chew') || value.includes('cookie') || value.includes('beverage') || value.includes('drink') || value.includes('capsule') || value.includes('tablet') || value.includes('pill') || value.includes('oral')) return 'Edibles';
   if (value.includes('tincture') || value.includes('sublingual')) return 'Tinctures';
-  if (value.includes('topical') || value.includes('cream') || value.includes('balm')) return 'Topicals';
+  if (value.includes('topical') || value.includes('cream') || value.includes('balm') || value.includes('lotion') || value.includes('transdermal') || value.includes('suppository') || value.includes('patch')) return 'Topicals';
   if (value.includes('cbd')) return 'CBD';
-  if (value.includes('accessor') || value.includes('battery') || value.includes('paper')) return 'Accessories';
+  if (value.includes('accessor') || value.includes('battery') || value.includes('paper') || value.includes('grinder') || value.includes('apparel') || value.includes('merch') || value.includes('gear')) return 'Accessories';
   return 'Other';
 }
 

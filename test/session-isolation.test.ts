@@ -108,6 +108,48 @@ describe('Session Durable Object integrity', () => {
       },
     });
   });
+
+  it('retains manual layout and font choices across ordinary inventory imports', async () => {
+    const session = new SessionDurableObject(fakeSessionState(), {} as Env);
+    const importedCategory = (id: string) => [{
+      id,
+      name: id === 'flower' ? 'Flower' : 'Edibles',
+      order: 0,
+      products: [{ id: `${id}-product`, name: `${id} product`, price: 20, inStock: true }],
+    }];
+    const first = await session.fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({
+        categories: importedCategory('flower'),
+        layout: 'grid',
+        layoutMode: 'columns',
+        fontSize: 'large',
+        autoScroll: false,
+      }),
+    }));
+    expect(first.status).toBe(200);
+
+    const second = await session.fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({ categories: importedCategory('edibles'), autoScroll: true }),
+    }));
+    expect(second.status).toBe(200);
+
+    const configResponse = await session.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    await expect(configResponse.json()).resolves.toMatchObject({
+      config: {
+        categories: [{ id: 'edibles' }],
+        layout: 'grid',
+        layoutMode: 'columns',
+        fontSize: 'large',
+        autoScroll: true,
+      },
+    });
+  });
 });
 
 describe('session ownership isolation', () => {
@@ -277,6 +319,41 @@ describe('session ownership isolation', () => {
     await disconnected;
     tv.close(1000, 'test complete');
   });
+  it('fans persisted config updates out to multiple TVs in receipt order', async () => {
+    const sessionId = `MULTI-TV-${unique()}`;
+    const cookie = await signupCookie();
+    expect((await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' })).status).toBe(200);
+
+    const [tvOneResponse, tvTwoResponse, phoneResponse] = await Promise.all([
+      SELF.fetch(`${BASE}/ws/${sessionId}?role=tv`, { headers: { Upgrade: 'websocket' } }),
+      SELF.fetch(`${BASE}/ws/${sessionId}?role=tv`, { headers: { Upgrade: 'websocket' } }),
+      SELF.fetch(`${BASE}/ws/${sessionId}?role=phone`, { headers: { Upgrade: 'websocket', Cookie: `dubmenu_auth=${cookie}` } }),
+    ]);
+    const tvOne = tvOneResponse.webSocket;
+    const tvTwo = tvTwoResponse.webSocket;
+    const phone = phoneResponse.webSocket;
+    if (!tvOne || !tvTwo || !phone) throw new Error('Expected three WebSockets');
+    tvOne.accept();
+    tvTwo.accept();
+    phone.accept();
+
+    const waitForLargeGrid = (socket: WebSocket) => new Promise<void>((resolve) => {
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; layout?: string } };
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.layout === 'grid') resolve();
+      });
+    });
+    const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
+
+    phone.send(JSON.stringify({ type: 'config_update', payload: { fontSize: 'large' } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { layout: 'grid' } }));
+    await bothTVsUpdated;
+
+    tvOne.close(1000, 'test complete');
+    tvTwo.close(1000, 'test complete');
+    phone.close(1000, 'test complete');
+  });
+
   it('rejects custom-domain mappings to sessions the account does not own', async () => {
     const cookie = await signupCookie();
     const res = await authedFetch('/api/domains', cookie, {

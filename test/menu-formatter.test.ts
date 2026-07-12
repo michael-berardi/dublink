@@ -318,6 +318,32 @@ describe('formatMenu', () => {
     expect(getImportedTemplateStyle('gold').primaryColor).toBe('#fbbf24');
   });
 
+  it('retains complete normalized inventory when TV optimization is disabled at ingest', () => {
+    const categories: ScrapedCategory[] = Array.from({ length: 12 }, (_, categoryIndex) => ({
+      id: `category-${categoryIndex}`,
+      name: `Source Section ${categoryIndex}`,
+      order: categoryIndex,
+      products: Array.from({ length: 14 }, (_, productIndex) => ({
+        id: `product-${categoryIndex}-${productIndex}`,
+        name: `Product ${categoryIndex}-${productIndex}`,
+        price: 10 + productIndex,
+        inStock: true,
+      })),
+    }));
+
+    const result = formatMenu(categories, 'Complete Menu', undefined, {
+      maxCategories: 20,
+      maxProductsPerCategory: 500,
+      tvOptimize: false,
+      preserveSections: true,
+    });
+
+    expect(result.categories).toHaveLength(12);
+    expect(result.categories.every((category) => category.products.length === 14)).toBe(true);
+    expect(result.productCount).toBe(168);
+    expect(result.warnings.join(' ')).not.toContain('TV-ready products');
+  });
+
 
   it('TV-optimizes imported menus and preserves selected assets', () => {
     const categories: ScrapedCategory[] = [

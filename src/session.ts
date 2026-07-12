@@ -78,6 +78,7 @@ export class SessionDurableObject implements DurableObject {
   private messageCounts: Map<string, { count: number; resetAt: number }> = new Map();
   private heartbeatTimer: number | null = null;
   private ownerAccountId?: string;
+  private messageQueue: Promise<void> = Promise.resolve();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -253,13 +254,14 @@ export class SessionDurableObject implements DurableObject {
           logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
           categories: this.sanitizeCategories(data.categories),
           layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
-          layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? 'auto',
+          layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? this.config.layoutMode,
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
           theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
           template: this.sanitizeTemplate(data.template) ?? this.config.template,
           primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
           secondaryColor: this.sanitizeHexColor(data.secondaryColor) ?? this.config.secondaryColor,
           displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
+          autoScroll: typeof data.autoScroll === 'boolean' ? data.autoScroll : this.config.autoScroll,
           showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
           showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
           showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
@@ -451,7 +453,9 @@ export class SessionDurableObject implements DurableObject {
     this.startHeartbeat();
 
     server.addEventListener('message', (event) => {
-      void this.handleWebSocketEvent(event, connId, server);
+      this.messageQueue = this.messageQueue
+        .then(() => this.handleWebSocketEvent(event, connId, server))
+        .catch((err) => console.error('WS message queue error:', err));
     });
 
     server.addEventListener('close', () => this.cleanupConnection(connId));

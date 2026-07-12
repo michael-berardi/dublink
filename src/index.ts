@@ -82,9 +82,10 @@ type MenuImportPayload = {
   categories: MenuImportResult['categories'];
   productCount: number;
   displayCount: number;
-  layout: string;
-  layoutMode: string;
-  fontSize: string;
+  layout?: string;
+  layoutMode?: string;
+  fontSize?: string;
+  autoScroll: boolean;
   showImages: boolean;
   showDescription: boolean;
   showBrand: boolean;
@@ -273,7 +274,7 @@ async function buildMenuImport(
   await report?.({
     stage: 2,
     progress: 48,
-    message: `Found ${raw.productCount} raw products from ${raw.source}. Formatting for TV readability.`,
+    message: `Found ${raw.productCount} raw products from ${raw.source}. Normalizing the complete menu inventory.`,
     productCount: raw.productCount,
     categoryCount: raw.categories.length,
     source: raw.source,
@@ -283,9 +284,9 @@ async function buildMenuImport(
 
 
   const formatted = formatMenu(raw.categories, raw.dispensaryName, raw.logo, {
-    tvOptimize: true,
-    maxTvCategories: 10,
-    maxTvProductsPerCategory: 8,
+    maxCategories: 20,
+    maxProductsPerCategory: 500,
+    tvOptimize: false,
     preserveSections: true,
   });
   const style = analyzeReferenceStyle({
@@ -316,9 +317,7 @@ async function buildMenuImport(
     categories: formatted.categories,
     productCount: formatted.productCount,
     displayCount: style.displayCount,
-    layout: resolvedLayout,
-    layoutMode: style.layoutMode,
-    fontSize: style.fontSize,
+    autoScroll: true,
     showImages: style.showImages,
     showDescription: style.showDescription,
     showBrand: style.showBrand,
@@ -336,7 +335,7 @@ async function buildMenuImport(
   await report?.({
     stage: 3,
     progress: 78,
-    message: `Bundling imported images and preparing ${formatted.categories.length} TV categories.`,
+    message: `Bundling imported images and preparing ${formatted.categories.length} complete menu categories.`,
     productCount: formatted.productCount,
     categoryCount: formatted.categories.length,
     categories: summarizeImportCategories(formatted.categories),

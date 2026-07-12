@@ -641,8 +641,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var WS_URL = location.origin.replace(/^http/, 'ws') + '/ws/${safeSessionId}?role=tv';
   var DEMO_MODE = ${options?.demo ? 'true' : 'false'};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
-  var DISPLAY_NUM = parseInt(new URLSearchParams(location.search).get('display') || '1');
-  var DISPLAY_TOTAL = parseInt(new URLSearchParams(location.search).get('displays') || '1');
+  var displayParams = new URLSearchParams(location.search);
+  function boundedDisplayParam(name,fallback){
+    var value = parseInt(displayParams.get(name) || String(fallback),10);
+    return isFinite(value) ? Math.max(1,Math.min(4,value)) : fallback;
+  }
+  var DISPLAY_TOTAL = boundedDisplayParam('displays',1);
+  var DISPLAY_NUM = Math.min(boundedDisplayParam('display',1),DISPLAY_TOTAL);
 
   // --- Per-TV URL overrides (do NOT persist to config) ---
   var ALLOWED_LAYOUTS = ['grid','list','pricewall','poster','cinematic','showcase','editorial','sparse'];
@@ -789,7 +794,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return '<span class="cat-icon-wrap" aria-hidden="true"><span class="cat-icon cat-icon-' + type + '">' + categoryIconSvg(type) + '</span></span>';
   }
 
-  var cycleState = {currentPage:0, totalPages:1, interval:null, isTransitioning:false};
+  var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:''};
 
 
   // Resolve the active layout for THIS TV:
@@ -994,6 +999,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }).filter(function(c){return c.products.length>0;});
   }
 
+  function getPageSignature(layout,cats,bannerActive){
+    return JSON.stringify([
+      layout,
+      bannerActive ? 1 : 0,
+      (cats || []).map(function(cat){
+        return [cat.id,cat.name,(cat.products || []).map(function(product){
+          return [product.id,product.name,product.price,product.originalPrice,product.inStock];
+        })];
+      })
+    ]);
+  }
+
   function getCycleInterval(){
     var raw = Number(config && config.autoScrollSpeed);
     if(!isFinite(raw)) return 10000;
@@ -1003,11 +1020,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function stopCycling(){
     clearInterval(cycleState.interval);
     cycleState.interval=null;
+    cycleState.intervalMs=0;
   }
 
   function startCycling(){
+    if(cycleState.totalPages<=1){stopCycling();return;}
+    var intervalMs=getCycleInterval();
+    if(cycleState.interval && cycleState.intervalMs===intervalMs) return;
     stopCycling();
-    if(cycleState.totalPages<=1) return;
+    cycleState.intervalMs=intervalMs;
     cycleState.interval = setInterval(function(){
       if(cycleState.isTransitioning) return;
       cycleState.isTransitioning = true;
@@ -1020,7 +1041,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         content.classList.add('content-refresh');
       }
       setTimeout(function(){cycleState.isTransitioning=false;},180);
-    },getCycleInterval());
+    },intervalMs);
   }
 
   function emptyMenuMarkup(){
@@ -1164,12 +1185,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var bannerActive = !!getActiveBanner();
     var perPage = getProductsPerPage(layout, bannerActive);
     var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
-    cycleState.totalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : getPagingInfo(cats, perPage, maxCategories).totalPages;
-    cycleState.currentPage = 0;
+    var nextTotalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : getPagingInfo(cats, perPage, maxCategories).totalPages;
+    var nextPageSignature = getPageSignature(layout,cats,bannerActive);
+    var pageModelChanged = cycleState.pageSignature !== nextPageSignature;
+    cycleState.totalPages = nextTotalPages;
+    cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1));
+    cycleState.pageSignature = nextPageSignature;
     
     renderCurrentPage();
     
-    if(config.autoScroll || cycleState.totalPages > 1) startCycling();
+    if(config.autoScroll === true && cycleState.totalPages > 1) startCycling();
     else stopCycling();
 
     showTvInfo(layout);
@@ -1594,6 +1619,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   });
 
   window.addEventListener('resize',function(){fitToScreen();});
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){stopCycling();return;}
+    if(config&&paired)renderMenu();
+  });
 
   if(!DEMO_MODE){
     var pollTimer=setInterval(function(){
