@@ -1,6 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, it, expect, vi } from 'vitest';
 import { SessionDurableObject } from '../src/session';
+import { DEFAULT_CONFIG, type Category } from '../src/types';
 
 const BASE = 'https://dubmenu.com';
 const unique = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -35,7 +36,43 @@ function fakeSessionState(failPut = false): DurableObjectState {
   const storage = {
     get: vi.fn(async () => undefined),
     put: vi.fn(async () => { if (failPut) throw new Error('storage unavailable'); }),
+    list: vi.fn(async () => new Map()),
+    delete: vi.fn(async () => undefined),
     deleteAll: vi.fn(async () => undefined),
+  };
+  return {
+    storage,
+    blockConcurrencyWhile: async (callback: () => Promise<unknown>) => callback(),
+  } as unknown as DurableObjectState;
+}
+
+function sizeLimitedSessionState(limit = 128 * 1024): DurableObjectState {
+  const values = new Map<string, unknown>();
+  const storage = {
+    get: vi.fn(async (key: string | string[]) => {
+      if (Array.isArray(key)) {
+        return new Map(key.filter((entry) => values.has(entry)).map((entry) => [entry, values.get(entry)]));
+      }
+      return values.get(key);
+    }),
+    put: vi.fn(async (keyOrEntries: string | Record<string, unknown>, value?: unknown) => {
+      const entries = typeof keyOrEntries === 'string'
+        ? [[keyOrEntries, value] as const]
+        : Object.entries(keyOrEntries);
+      for (const [, entryValue] of entries) {
+        if (new TextEncoder().encode(JSON.stringify(entryValue)).byteLength > limit) {
+          throw new RangeError('Value exceeds the Durable Object storage limit');
+        }
+      }
+      for (const [key, entryValue] of entries) values.set(key, entryValue);
+    }),
+    delete: vi.fn(async (keys: string | string[]) => {
+      for (const key of Array.isArray(keys) ? keys : [keys]) values.delete(key);
+    }),
+    list: vi.fn(async (options?: { prefix?: string }) => new Map(
+      [...values].filter(([key]) => !options?.prefix || key.startsWith(options.prefix))
+    )),
+    deleteAll: vi.fn(async () => values.clear()),
   };
   return {
     storage,
@@ -64,6 +101,41 @@ describe('Session Durable Object integrity', () => {
     }));
     expect(res.status).toBe(500);
     await expect(res.json()).resolves.toMatchObject({ ok: false, error: 'Import failed' });
+    const configResponse = await session.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    const payload = (await configResponse.json()) as { config: { categories: Category[] } };
+    expect(payload.config.categories.flatMap((category) => category.products).some((product) => product.id === 'p1')).toBe(false);
+  });
+
+  it('preserves session ownership when a persisted category chunk is missing', async () => {
+    const storage = {
+      get: vi.fn(async (key: string | string[]) => {
+        if (typeof key === 'string' && key === 'session') {
+          return {
+            config: { ...structuredClone(DEFAULT_CONFIG), categories: [] },
+            ownerAccountId: 'owner',
+            categoryChunkKeys: ['category:missing'],
+          };
+        }
+        return new Map();
+      }),
+      put: vi.fn(async () => undefined),
+      delete: vi.fn(async () => undefined),
+      list: vi.fn(async () => new Map()),
+      deleteAll: vi.fn(async () => undefined),
+    };
+    const state = {
+      storage,
+      blockConcurrencyWhile: async (callback: () => Promise<unknown>) => callback(),
+    } as unknown as DurableObjectState;
+    const session = new SessionDurableObject(state, {} as Env);
+
+    const claim = await session.fetch(new Request('https://internal/owner', {
+      method: 'POST',
+      headers: { 'X-Account-Id': 'attacker' },
+    }));
+    expect(claim.status).toBe(403);
   });
 
   it('preserves imported sale metadata as a visible promotion', async () => {
@@ -148,6 +220,73 @@ describe('Session Durable Object integrity', () => {
         fontSize: 'large',
         autoScroll: true,
       },
+    });
+  });
+
+  it('persists and reloads a 463-product import within per-value storage limits', async () => {
+    const state = sizeLimitedSessionState();
+    const categories = Array.from({ length: 9 }, (_, categoryIndex) => ({
+      id: `category-${categoryIndex}`,
+      name: `Category ${categoryIndex + 1}`,
+      order: categoryIndex,
+      products: Array.from({ length: categoryIndex === 8 ? 47 : 52 }, (_, productIndex) => ({
+        id: `product-${categoryIndex}-${productIndex}`,
+        name: `Product ${categoryIndex + 1}-${productIndex + 1}`,
+        price: 20 + productIndex,
+        description: 'Complete imported product description. '.repeat(12),
+        image: `https://dubmenu.com/api/uploads/test-account/${categoryIndex}-${productIndex}.webp`,
+        brand: 'Simply Green',
+        weight: '3.5g',
+        strain: 'hybrid',
+        inStock: true,
+      })),
+    }));
+    expect(categories.reduce((total, category) => total + category.products.length, 0)).toBe(463);
+
+    const imported = await new SessionDurableObject(state, {} as Env).fetch(new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({ categories, layout: 'grid', fontSize: 'large', displayCount: 4 }),
+    }));
+    expect(imported.status).toBe(200);
+
+    const reloaded = new SessionDurableObject(state, {} as Env);
+    const configResponse = await reloaded.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    const payload = (await configResponse.json()) as { config: { categories: Category[] } };
+    expect(payload.config.categories).toHaveLength(9);
+    expect(payload.config.categories.reduce((total, category) => total + category.products.length, 0)).toBe(463);
+    expect(payload.config.categories[8].products.at(-1)?.id).toBe('product-8-46');
+  });
+
+  it('rewrites category chunks after a session is deleted and reused', async () => {
+    const state = sizeLimitedSessionState();
+    const categories = [{
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: [{ id: 'same-product', name: 'Same Product', price: 25, inStock: true }],
+    }];
+    const importRequest = () => new Request('https://internal/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
+      body: JSON.stringify({ categories }),
+    });
+    const session = new SessionDurableObject(state, {} as Env);
+    expect((await session.fetch(importRequest())).status).toBe(200);
+    expect((await session.fetch(new Request('https://internal/', {
+      method: 'DELETE',
+      headers: { 'X-Account-Id': 'owner' },
+    }))).status).toBe(200);
+    expect((await session.fetch(importRequest())).status).toBe(200);
+
+    const reloaded = new SessionDurableObject(state, {} as Env);
+    const configResponse = await reloaded.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    await expect(configResponse.json()).resolves.toMatchObject({
+      config: { categories: [{ products: [{ id: 'same-product' }] }] },
     });
   });
 });

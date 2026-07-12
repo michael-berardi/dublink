@@ -14,6 +14,12 @@ interface WSConnection {
 interface StoredSession {
   config: MenuConfig;
   ownerAccountId?: string;
+  categoryChunkKeys?: string[];
+}
+
+interface StoredCategoryChunk {
+  categoryIndex: number;
+  category: Category;
 }
 
 interface ImportJobStatus {
@@ -64,6 +70,8 @@ const HEARTBEAT_INTERVAL_MS = 30000;
 const HEARTBEAT_TIMEOUT_MS = 90000;
 const MESSAGE_RATE_LIMIT = 30; // messages per 10 seconds per connection
 const RATE_LIMIT_WINDOW_MS = 10000;
+const CATEGORY_CHUNK_TARGET_BYTES = 80 * 1024;
+const STORAGE_BATCH_SIZE = 64;
 
 // Valid session ID pattern
 export const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -79,6 +87,11 @@ export class SessionDurableObject implements DurableObject {
   private heartbeatTimer: number | null = null;
   private ownerAccountId?: string;
   private messageQueue: Promise<void> = Promise.resolve();
+  private persistedCategoryChunkKeys: string[] = [];
+  private persistedCategoriesJson: string | null = null;
+  private persistedConfigSnapshot: MenuConfig;
+  private persistedOwnerAccountId?: string;
+  private categoryCleanupPending = true;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -90,6 +103,7 @@ export class SessionDurableObject implements DurableObject {
       });
     });
     this.config = cloned;
+    this.persistedConfigSnapshot = structuredClone(cloned);
   }
 
   private async initialize(): Promise<void> {
@@ -103,16 +117,31 @@ export class SessionDurableObject implements DurableObject {
         try {
           const stored = await this.state.storage.get<StoredSession>('session');
           if (stored) {
-            if (this.isValidConfig(stored.config)) {
-              this.config = stored.config;
-            }
             if (stored.ownerAccountId) {
               this.ownerAccountId = stored.ownerAccountId;
+            }
+            let storedConfig = stored.config;
+            const chunkKeys = Array.isArray(stored.categoryChunkKeys)
+              ? stored.categoryChunkKeys.filter((key): key is string => typeof key === 'string')
+              : [];
+            if (chunkKeys.length > 0) {
+              storedConfig = {
+                ...storedConfig,
+                categories: await this.loadCategoryChunks(chunkKeys),
+              };
+            }
+            if (this.isValidConfig(storedConfig)) {
+              this.config = storedConfig;
+              this.persistedCategoryChunkKeys = chunkKeys;
+              this.persistedCategoriesJson = JSON.stringify(storedConfig.categories);
             }
           }
         } catch (err) {
           console.error('Failed to load persisted config:', err);
         }
+        this.persistedConfigSnapshot = structuredClone(this.config);
+        this.persistedOwnerAccountId = this.ownerAccountId;
+        await this.cleanupInactiveCategoryChunks(this.persistedCategoryChunkKeys);
         this.initialized = true;
       });
     }
@@ -121,9 +150,126 @@ export class SessionDurableObject implements DurableObject {
 
   private async persistConfig(): Promise<void> {
     this.config = { ...this.config, updatedAt: new Date().toISOString() };
-    const stored: StoredSession = { config: this.config };
-    if (this.ownerAccountId) stored.ownerAccountId = this.ownerAccountId;
-    await this.state.storage.put('session', stored);
+    const categoriesJson = JSON.stringify(this.config.categories);
+    const hasPersistedCategoryStorage = this.config.categories.length === 0 || this.persistedCategoryChunkKeys.length > 0;
+    const categoriesChanged = categoriesJson !== this.persistedCategoriesJson || !hasPersistedCategoryStorage;
+    let nextChunkKeys = this.persistedCategoryChunkKeys;
+
+    try {
+      if (categoriesChanged) {
+        const version = crypto.randomUUID();
+        const chunks = this.buildCategoryChunks(this.config.categories);
+        const entries: Array<[string, StoredCategoryChunk]> = chunks.map((chunk, index) => [
+          `category:${version}:${index}`,
+          chunk,
+        ]);
+        nextChunkKeys = entries.map(([key]) => key);
+        for (let index = 0; index < entries.length; index += STORAGE_BATCH_SIZE) {
+          await this.state.storage.put(Object.fromEntries(entries.slice(index, index + STORAGE_BATCH_SIZE)));
+        }
+      }
+
+      const stored: StoredSession = {
+        config: { ...this.config, categories: [] },
+        categoryChunkKeys: nextChunkKeys,
+      };
+      if (this.ownerAccountId) stored.ownerAccountId = this.ownerAccountId;
+      await this.state.storage.put('session', stored);
+
+      this.persistedCategoryChunkKeys = nextChunkKeys;
+      this.persistedCategoriesJson = categoriesJson;
+      this.persistedConfigSnapshot = structuredClone(this.config);
+      this.persistedOwnerAccountId = this.ownerAccountId;
+      if (categoriesChanged) this.categoryCleanupPending = true;
+      if (this.categoryCleanupPending) {
+        await this.cleanupInactiveCategoryChunks(nextChunkKeys);
+      }
+    } catch (err) {
+      this.categoryCleanupPending = true;
+      await this.cleanupInactiveCategoryChunks(this.persistedCategoryChunkKeys);
+      this.config = structuredClone(this.persistedConfigSnapshot);
+      this.ownerAccountId = this.persistedOwnerAccountId;
+      throw err;
+    }
+  }
+
+  private buildCategoryChunks(categories: Category[]): StoredCategoryChunk[] {
+    const encoder = new TextEncoder();
+    const chunks: StoredCategoryChunk[] = [];
+    categories.forEach((category, categoryIndex) => {
+      const categoryBase = { ...category, products: [] };
+      let products: Product[] = [];
+      let byteLength = encoder.encode(JSON.stringify({ categoryIndex, category: categoryBase })).byteLength;
+      const flush = () => {
+        chunks.push({
+          categoryIndex,
+          category: { ...categoryBase, products },
+        });
+        products = [];
+        byteLength = encoder.encode(JSON.stringify({ categoryIndex, category: categoryBase })).byteLength;
+      };
+
+      for (const product of category.products) {
+        const productBytes = encoder.encode(JSON.stringify(product)).byteLength + 1;
+        if (products.length > 0 && byteLength + productBytes > CATEGORY_CHUNK_TARGET_BYTES) flush();
+        products.push(product);
+        byteLength += productBytes;
+      }
+      flush();
+    });
+    return chunks;
+  }
+
+  private async loadCategoryChunks(keys: string[]): Promise<Category[]> {
+    const chunks: StoredCategoryChunk[] = [];
+    for (let index = 0; index < keys.length; index += STORAGE_BATCH_SIZE) {
+      const batchKeys = keys.slice(index, index + STORAGE_BATCH_SIZE);
+      const stored = await this.state.storage.get<StoredCategoryChunk>(batchKeys);
+      for (const key of batchKeys) {
+        const chunk = stored.get(key);
+        if (!chunk) throw new Error(`Missing persisted category chunk: ${key}`);
+        chunks.push(chunk);
+      }
+    }
+
+    const categories: Category[] = [];
+    for (const chunk of chunks) {
+      const existing = categories[chunk.categoryIndex];
+      if (existing) {
+        existing.products.push(...chunk.category.products);
+      } else {
+        categories[chunk.categoryIndex] = {
+          ...chunk.category,
+          products: [...chunk.category.products],
+        };
+      }
+    }
+    return categories.filter(Boolean);
+  }
+
+  private async cleanupInactiveCategoryChunks(activeKeys: string[]): Promise<void> {
+    try {
+      const stored = await this.state.storage.list<StoredCategoryChunk>({ prefix: 'category:' });
+      const active = new Set(activeKeys);
+      const staleKeys = [...stored.keys()].filter((key) => !active.has(key));
+      this.categoryCleanupPending = !(await this.deleteStorageKeys(staleKeys));
+    } catch (err) {
+      this.categoryCleanupPending = true;
+      console.error('Failed to clean up stale category chunks:', err);
+    }
+  }
+
+  private async deleteStorageKeys(keys: string[]): Promise<boolean> {
+    let deleted = true;
+    for (let index = 0; index < keys.length; index += STORAGE_BATCH_SIZE) {
+      try {
+        await this.state.storage.delete(keys.slice(index, index + STORAGE_BATCH_SIZE));
+      } catch (err) {
+        deleted = false;
+        console.error('Failed to delete stale category chunks:', err);
+      }
+    }
+    return deleted;
   }
 
   private isValidConfig(config: unknown): config is MenuConfig {
@@ -428,6 +574,11 @@ export class SessionDurableObject implements DurableObject {
       });
       this.config = cloned;
       this.ownerAccountId = undefined;
+      this.persistedCategoryChunkKeys = [];
+      this.persistedCategoriesJson = null;
+      this.persistedConfigSnapshot = structuredClone(cloned);
+      this.persistedOwnerAccountId = undefined;
+      this.categoryCleanupPending = false;
       this.initialized = true;
       return new Response(JSON.stringify({ ok: true }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
