@@ -186,6 +186,7 @@ function cleanScrapedDisplayName(name: string, brand?: string, category?: string
     .map((part) => part.trim())
     .filter((part) => part.length > 0 && !/^(?:\.|\.?\s*(?:\d+\s*)?x)$/i.test(part))
     .join(' | ')
+    .replace(/\s+x$/, '')
     .replace(/^untitled\s+/i, '')
     .trim();
   const categoryLabel = category === 'Accessories'

@@ -409,6 +409,7 @@ describe('Dutchie scraper image extraction', () => {
         baseProduct('placeholder-only', { name: 'x', type: 'edible', brandName: 'Incredibles' }),
         baseProduct('empty-brackets', { name: 'Camino Watermelon Gummies [ ]', type: 'edible', brandName: 'Camino' }),
         baseProduct('count-suffix', { name: 'Sweet Chili x Sea Salt Caramel x Chicago | 20 x', type: 'edible', brandName: 'Space Poppers' }),
+        baseProduct('dangling-x', { name: 'Blue Raspberry Dream x', type: 'pre-roll', brandName: 'Test Brand' }),
       ]);
     }) as unknown as typeof fetch;
 
@@ -424,6 +425,7 @@ describe('Dutchie scraper image extraction', () => {
       ['placeholder-only', 'Incredibles Edible'],
       ['empty-brackets', 'Camino Watermelon Gummies'],
       ['count-suffix', 'Sweet Chili x Sea Salt Caramel x Chicago'],
+      ['dangling-x', 'Blue Raspberry Dream'],
     ]));
   });
 
