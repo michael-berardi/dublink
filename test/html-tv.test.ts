@@ -203,16 +203,14 @@ describe('tvPage', () => {
     expect(page).toContain('product-table-head');
   });
 
-  it('keeps imported grid boards dense enough for TV use', () => {
+  it('injects the exhaustive page planner for imported grid boards', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig } });
-    expect(page).toContain("case 'grid': base = 12");
+    expect(page).toContain('var buildTvCatalogPagePlan = function buildTvCatalogPagePlan');
   });
 
   it('keeps alternate no-photo TV layouts dense instead of showing empty image-first cards', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig } });
-    expect(page).toContain("case 'poster': base = isDemoDefault ? 8 : 6");
-    expect(page).toContain("case 'cinematic': base = isDemoDefault ? 8 : 6");
-    expect(page).toContain("case 'editorial': base = isDemoDefault ? 12 : 9");
+    expect(page).toContain('buildTvCatalogPagePlan(cats,{');
     expect(page).toContain("row.className = 'product-row ' + (rowHasImage ? 'has-image' : 'no-image')");
     expect(page).toContain("card.className = 'product-card ' + (hasImage ? 'has-image' : 'no-image')");
     expect(page).toContain('.layout-poster .poster-products.no-images');
@@ -392,11 +390,10 @@ describe('tvPage', () => {
     expect(page).toContain('return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL)');
   });
 
-  it('clamps stale cycle page state before rendering a smaller display slice', () => {
+  it('falls back to the first planned page when cycle state is stale', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig } });
-    expect(page).toContain('if(!pageCats.length && displayCats.length)');
-    expect(page).toContain('cycleState.currentPage = 0');
-    expect(page).toContain('pageCats = paginateCategories(displayCats, 0, perPage, maxCategories)');
+    expect(page).toContain('var pageCats = pagePlan[cycleState.currentPage] || pagePlan[0] || []');
+    expect(page).toContain('cycleState.currentPage = pageModelChanged ? 0 : Math.min');
   });
 
   it('uses the same safe image helper in sparse layouts as other layouts', () => {
@@ -483,13 +480,12 @@ describe('tvPage', () => {
     expect(page).toContain('flex:0 0 auto;');
   });
 
-  it('reserves the price-wall rail for explicit specials instead of duplicating sale products', () => {
+  it('keeps explicit specials in exhaustive price-wall pages and the featured rail', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
     expect(page).toContain('function getPricewallPromoProducts(cats)');
-    expect(page).toContain('var explicitSpecialCats = cats.filter(isSpecialCategory)');
-    expect(page).toContain('pricewallRailCats = explicitSpecialCats');
+    expect(page).toContain("var pricewallRailCats = layout === 'pricewall' ? cats : []");
     expect(page).toContain('if(!specials) return false');
-    expect(page).not.toContain('mergeSparsePricewallSpecials');
+    expect(page).not.toContain('explicitSpecialCats');
     expect(page).toContain('.layout-pricewall .card-price .promo-price');
   });
 
@@ -509,22 +505,21 @@ describe('tvPage', () => {
   it('allows monitor-level dense price wall layout overrides', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, layout: 'pricewall' } });
     expect(page).toContain("'pricewall'");
-    expect(page).toContain("case 'pricewall': base = isDemoDefault ? 18 : 16");
-    expect(page).toContain("case 'pricewall': base = 2");
+    expect(page).toContain('buildTvCatalogPagePlan(cats,{');
   });
 
   it('wires all exposed TV layouts to renderers', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
     expect(page).toContain("else if(layout==='poster') renderPoster(pageCats, content)");
     expect(page).toContain("else if(layout==='cinematic') renderCinematic(pageCats, content)");
-    expect(page).toContain("else if(layout==='showcase') renderShowcase(cats, content)");
+    expect(page).toContain("else if(layout==='showcase') renderShowcase(pageCats, content)");
     expect(page).toContain("else if(layout==='editorial') renderEditorial(pageCats, content)");
     expect(page).toContain("else if(layout==='sparse') renderSparse(pageCats, content)");
   });
 
   it('keeps layout configurability and renderer state aligned', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
-    expect(page).toContain("var nextTotalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats}))");
+    expect(page).toContain('var nextTotalPages = Math.max(1, pagePlan.length)');
     expect(page).toContain('function renderPricewall(cats, container, allCats)');
     expect(page).toContain('renderPricewallShell(allCats || cats, container)');
   });

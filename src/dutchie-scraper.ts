@@ -669,7 +669,7 @@ async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: Sc
       id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
       name,
       order: i,
-      products: prods.slice(0, 40),
+      products: prods,
     }));
 
   const path = new URL(dutchieUrl).pathname;

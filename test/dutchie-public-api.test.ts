@@ -159,6 +159,71 @@ describe('importDutchiePublicMenu', () => {
     expect(calls.filter((call) => call.url === 'https://dutchie.com/api-4/graphql')).toHaveLength(3);
   });
 
+  it('imports every product in a 452-item live catalog', async () => {
+    const productCalls: number[] = [];
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body.operationName === 'ConsumerDispensaries') {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'disp-452', name: 'Complete Catalog' }],
+        });
+      }
+
+      const page = body.variables.page as number;
+      productCalls.push(page);
+      const pageSize = page === 4 ? 52 : 100;
+      return graphqlResponse({
+        filteredProducts: {
+          products: Array.from({ length: pageSize }, (_, index) => ({
+            id: `product-${page * 100 + index}`,
+            Name: `Product ${page * 100 + index}`,
+            type: 'Flower',
+            recPrices: [30],
+            Status: 'Active',
+          })),
+          queryInfo: { totalCount: 452, totalPages: 5 },
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    const result = await importDutchiePublicMenu('complete-catalog');
+    const ids = result.categories.flatMap((category) => category.products.map((product) => product.id));
+
+    expect(result.productCount).toBe(452);
+    expect(new Set(ids).size).toBe(452);
+    expect(productCalls.sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('rejects an incomplete catalog instead of silently storing the first page', async () => {
+    globalThis.fetch = vi.fn(async (_input: string | Request, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : {};
+      if (body.operationName === 'ConsumerDispensaries') {
+        return graphqlResponse({
+          filteredDispensaries: [{ id: 'disp-incomplete', name: 'Incomplete Catalog' }],
+        });
+      }
+
+      const page = body.variables.page as number;
+      return graphqlResponse({
+        filteredProducts: {
+          products: page === 0
+            ? Array.from({ length: 100 }, (_, index) => ({
+                id: `product-${index}`,
+                Name: `Product ${index}`,
+                type: 'Flower',
+                recPrices: [30],
+              }))
+            : [],
+          queryInfo: { totalCount: 452 },
+        },
+      });
+    }) as unknown as typeof fetch;
+
+    await expect(importDutchiePublicMenu('incomplete-catalog')).rejects.toThrow(
+      'received 100 of 452 products'
+    );
+  });
+
   it('posts full query documents directly without an unregistered persisted-query round trip', async () => {
     const captured: Array<{ url: string; init?: RequestInit }> = [];
     globalThis.fetch = vi.fn(async (input: string | Request, init?: RequestInit) => {

@@ -1,5 +1,6 @@
 import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
 import { allocateCategoriesForDisplay } from './multi-display';
+import { buildTvCatalogPagePlan } from './tv-page-plan';
 
 export type TvPageInitialConfig = {
   template?: string;
@@ -655,6 +656,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var shouldResetTvCycle = ${shouldResetTvCycle.toString()};
   var shouldRunTvCycle = ${shouldRunTvCycle.toString()};
   var nextTvCyclePage = ${nextTvCyclePage.toString()};
+  var __name = function(target){return target;};
+  var buildTvCatalogPagePlan = ${buildTvCatalogPagePlan.toString()};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
   var displayParams = new URLSearchParams(location.search);
   function boundedDisplayParam(name,fallback){
@@ -943,79 +946,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return cfg && (cfg.tvDemo || (cfg.layout === 'auto' && cfg.layoutMode === 'auto'));
   }
 
-  function getProductsPerPage(layout, bannerActive){
-    // Default page sizes tuned for a 1080px viewport. Increase for demo/default
-    // displays so the board looks populated and premium. Reduce when a promo
-    // banner is active so the bottom row/category is not clipped by the
-    // banner's reserved space.
-    var isDemoDefault = isDemoOrDefaultDisplay(config);
-    var base;
-    switch(layout){
-      case 'grid': base = 12; break;
-      case 'pricewall': base = isDemoDefault ? 18 : 16; break;
-      case 'list': base = isDemoDefault ? 18 : 12; break;
-      case 'poster': base = isDemoDefault ? 8 : 6; break;
-      case 'cinematic': base = isDemoDefault ? 8 : 6; break;
-      case 'showcase': base = 1; break;
-      case 'editorial': base = isDemoDefault ? 12 : 9; break;
-      default: base = 10;
-    }
-    return bannerActive && layout !== 'pricewall' ? Math.max(1, base - (layout === 'showcase' ? 0 : 2)) : base;
-  }
-
-  function getMaxCategoriesPerPage(layout, bannerActive){
-    // Limit categories per page so headers + products fit in the viewport.
-    var isDemoDefault = isDemoOrDefaultDisplay(config);
-    var base;
-    switch(layout){
-      case 'grid': base = 3; break;
-      case 'pricewall': base = 2; break;
-      case 'list': base = isDemoDefault ? 4 : 3; break;
-      case 'poster': base = isDemoDefault ? 2 : 2; break;
-      case 'cinematic': base = isDemoDefault ? 2 : 2; break;
-      case 'showcase': base = 1; break;
-      case 'editorial': base = isDemoDefault ? 3 : 3; break;
-      case 'sparse': base = 1; break;
-      default: base = 3;
-    }
-    return bannerActive && layout !== 'pricewall' ? Math.max(1, base - 1) : base;
-  }
-
-  function getPagingInfo(cats, perPage, maxCategories){
-    var catsWithProducts = (cats || []).filter(function(c){return c && c.products && c.products.length>0;});
-    if(catsWithProducts.length===0) return {categoryPages:1,productPages:1,totalPages:1};
-    var categoryPages = Math.max(1, Math.ceil(catsWithProducts.length / maxCategories));
-    var maxProductPages = 1;
-    for(var page=0; page<categoryPages; page++){
-      var pageCats = catsWithProducts.slice(page * maxCategories, (page + 1) * maxCategories);
-      var perCategory = Math.max(1, Math.floor(perPage / Math.max(1, pageCats.length)));
-      pageCats.forEach(function(cat){
-        maxProductPages = Math.max(maxProductPages, Math.ceil(cat.products.length / perCategory));
-      });
-    }
-    return {categoryPages:categoryPages,productPages:maxProductPages,totalPages:categoryPages * maxProductPages};
-  }
-
-  function paginateCategories(cats, pageNum, perPage, maxCategories){
-    var catsWithProducts = cats.filter(function(c){return c.products.length>0;});
-    if(catsWithProducts.length===0) return [];
-    var paging = getPagingInfo(catsWithProducts, perPage, maxCategories);
-    var categoryPage = pageNum % paging.categoryPages;
-    var productPage = Math.floor(pageNum / paging.categoryPages);
-    var pageCats = catsWithProducts.slice(categoryPage * maxCategories, (categoryPage + 1) * maxCategories);
-    if(pageCats.length===0) return [];
-    var perCategory = Math.max(1, Math.floor(perPage / pageCats.length));
-    return pageCats.map(function(cat){
-      var total = cat.products.length;
-      var count = Math.min(perCategory, total);
-      var start = (productPage * count) % total;
-      var products = [];
-      for(var i=0;i<count;i++){
-        var idx = (start+i) % total;
-        products.push(cat.products[idx]);
-      }
-      return Object.assign({}, cat, {products: products});
-    }).filter(function(c){return c.products.length>0;});
+  function getCatalogPagePlan(cats, layout, bannerActive){
+    return buildTvCatalogPagePlan(cats,{
+      layout:layout,
+      bannerActive:bannerActive,
+      demoMode:isDemoOrDefaultDisplay(config)
+    });
   }
 
   function getPageSignature(layout,cats,bannerActive){
@@ -1024,7 +960,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       bannerActive ? 1 : 0,
       (cats || []).map(function(cat){
         return [cat.id,cat.name,(cat.products || []).map(function(product){
-          return [product.id,product.name,product.price,product.originalPrice,product.inStock];
+          return [product.id,product.name,product.price,product.originalPrice,product.inStock,product.strain];
         })];
       })
     ]);
@@ -1091,28 +1027,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(urlCat) cats = cats.filter(function(c){return c.id===urlCat;});
     if(config.showCategory) cats = cats.filter(function(c){return c.id===config.showCategory;});
     var displayCats = cats;
-    var pricewallRailCats = [];
-    if(layout === 'pricewall'){
-      var explicitSpecialCats = cats.filter(isSpecialCategory);
-      if(explicitSpecialCats.length){
-        displayCats = cats.filter(function(cat){return !isSpecialCategory(cat);});
-        pricewallRailCats = explicitSpecialCats;
-        if(!displayCats.length){
-          displayCats = explicitSpecialCats;
-          pricewallRailCats = [];
-        }
-      }
-    }
+    var pricewallRailCats = layout === 'pricewall' ? cats : [];
     if(!displayCats.length){renderEmptyMenu(layout);return;}
     
     var bannerActive = !!getActiveBanner();
-    var perPage = getProductsPerPage(layout, bannerActive);
-    var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
-    var pageCats = paginateCategories(displayCats, cycleState.currentPage, perPage, maxCategories);
-    if(!pageCats.length && displayCats.length){
-      cycleState.currentPage = 0;
-      pageCats = paginateCategories(displayCats, 0, perPage, maxCategories);
-    }
+    var pagePlan = getCatalogPagePlan(displayCats, layout, bannerActive);
+    var pageCats = pagePlan[cycleState.currentPage] || pagePlan[0] || [];
     if(!pageCats.length){renderEmptyMenu(layout);return;}
     
     var content = document.getElementById('menu-content');
@@ -1124,7 +1044,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     else if(layout==='list') renderList(pageCats, content);
     else if(layout==='poster') renderPoster(pageCats, content);
     else if(layout==='cinematic') renderCinematic(pageCats, content);
-    else if(layout==='showcase') renderShowcase(cats, content);
+    else if(layout==='showcase') renderShowcase(pageCats, content);
     else if(layout==='editorial') renderEditorial(pageCats, content);
     else if(layout==='sparse') renderSparse(pageCats, content);
     else renderGrid(pageCats, content);
@@ -1208,9 +1128,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     
     var layout = getActiveLayout(config);
     var bannerActive = !!getActiveBanner();
-    var perPage = getProductsPerPage(layout, bannerActive);
-    var maxCategories = getMaxCategoriesPerPage(layout, bannerActive);
-    var nextTotalPages = layout === 'showcase' ? Math.max(1, getTotalProductCount({categories: cats})) : getPagingInfo(cats, perPage, maxCategories).totalPages;
+    var pagePlan = getCatalogPagePlan(cats, layout, bannerActive);
+    var nextTotalPages = Math.max(1, pagePlan.length);
     var nextPageSignature = getPageSignature(layout,cats,bannerActive);
     var pageModelChanged = shouldResetTvCycle(cycleState.pageSignature,nextPageSignature);
     cycleState.totalPages = nextTotalPages;

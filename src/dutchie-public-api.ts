@@ -827,10 +827,18 @@ export async function importDutchiePublicMenu(slug: string): Promise<{
     parseFilteredProductsData
   );
   const firstResult = firstPage.filteredProducts;
-  const totalPages = Math.max(
-    1,
-    Math.min(DUTCHIE_MAX_PRODUCT_PAGES, firstResult?.queryInfo?.totalPages || 1)
-  );
+  const expectedProductCount = firstResult?.queryInfo?.totalCount;
+  const reportedPages = firstResult?.queryInfo?.totalPages;
+  const inferredPages = expectedProductCount
+    ? Math.ceil(expectedProductCount / DUTCHIE_PRODUCTS_PER_PAGE)
+    : 1;
+  const requestedPages = reportedPages || inferredPages;
+  if (requestedPages > DUTCHIE_MAX_PRODUCT_PAGES) {
+    throw new Error(
+      `Dutchie reported ${expectedProductCount || requestedPages * DUTCHIE_PRODUCTS_PER_PAGE} products across ${requestedPages} pages, exceeding the ${DUTCHIE_MAX_PRODUCT_PAGES * DUTCHIE_PRODUCTS_PER_PAGE}-product import limit.`
+    );
+  }
+  const totalPages = Math.max(1, requestedPages);
   const products = [...(firstResult?.products || [])];
   for (let page = 1; page < totalPages; page += 4) {
     const pageNumbers = Array.from(
@@ -856,6 +864,15 @@ export async function importDutchiePublicMenu(slug: string): Promise<{
     }
   }
 
+  const sourceProductKeys = new Set(
+    products.map((product) => String(product.id || product.name || product.Name || '').trim()).filter(Boolean)
+  );
+  if (expectedProductCount && sourceProductKeys.size < expectedProductCount) {
+    throw new Error(
+      `Dutchie catalog changed during import: received ${sourceProductKeys.size} of ${expectedProductCount} products. Retry to load the complete menu.`
+    );
+  }
+
   if (!products.length) {
     throw new Error(`Dutchie public API returned no products for "${slug}".`);
   }
@@ -867,6 +884,12 @@ export async function importDutchiePublicMenu(slug: string): Promise<{
     if (!product || seen.has(product.id)) continue;
     seen.add(product.id);
     scrapedProducts.push(product);
+  }
+
+  if (scrapedProducts.length < sourceProductKeys.size) {
+    throw new Error(
+      `Dutchie returned ${sourceProductKeys.size} products, but only ${scrapedProducts.length} had complete display data. Retry or correct missing product prices in Dutchie.`
+    );
   }
 
   const categories = toCategories(scrapedProducts);
