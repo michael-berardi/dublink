@@ -1,4 +1,5 @@
 import { createStarterConfig } from './starter-template';
+import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN } from './types';
 export function configPage(sessionId: string, origin: string): string {
   const STARTER_CONFIG = JSON.stringify(createStarterConfig());
   return `<!DOCTYPE html>
@@ -41,6 +42,11 @@ export function configPage(sessionId: string, origin: string): string {
     #dutchieForm{width:100%;}
     .field input:focus,.field textarea:focus,.field select:focus{box-shadow:0 0 0 2px var(--primary);}
     .field input[type="color"]{width:100%;height:2.5rem;background:var(--surface2);border:none;border-radius:0.5rem;cursor:pointer;padding:0.25rem;}
+    .font-scale-heading{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:0.45rem;}
+    .font-scale-heading label{margin-bottom:0;}
+    .font-scale-value{color:var(--primary);font-size:0.9rem;font-weight:800;font-variant-numeric:tabular-nums;}
+    .font-scale-range{width:100%;accent-color:var(--primary);min-height:2rem;cursor:pointer;}
+    .font-scale-limits{display:flex;justify-content:space-between;color:var(--muted);font-size:0.7rem;font-weight:650;margin-top:0.2rem;}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;}
     .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:0.75rem 0;border-top:1px solid var(--border);}
     .toggle-row:first-child{border-top:none;}
@@ -504,9 +510,12 @@ export function configPage(sessionId: string, origin: string): string {
       <option value="sparse">Single-Product Hero</option>
     </select>
   </div>
-  <div class="grid-2">
-    <div class="field"><label for="currency">Currency</label><input type="text" id="currency" value="$" maxlength="3" onchange="debounceConfig('currency',this.value)"></div>
-    <div class="field"><label for="fontSize">Text Size</label><select id="fontSize" onchange="sendConfig('fontSize',this.value)"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+  <div class="field"><label for="currency">Currency</label><input type="text" id="currency" value="$" maxlength="3" onchange="debounceConfig('currency',this.value)"></div>
+  <div class="field">
+    <div class="font-scale-heading"><label for="fontScale">TV Text Size</label><output class="font-scale-value" id="fontScaleValue" for="fontScale">${TV_FONT_SCALE_DEFAULT}%</output></div>
+    <input class="font-scale-range" type="range" id="fontScale" min="${TV_FONT_SCALE_MIN}" max="${TV_FONT_SCALE_MAX}" step="5" value="${TV_FONT_SCALE_DEFAULT}" aria-describedby="fontScaleHelp" oninput="syncFontScaleLabel(this.valueAsNumber);debounceConfig('fontScale',this.valueAsNumber)">
+    <div class="font-scale-limits" aria-hidden="true"><span>Compact</span><span>Extra large</span></div>
+    <div class="helper" id="fontScaleHelp">Adjust from ${TV_FONT_SCALE_MIN}% to ${TV_FONT_SCALE_MAX}%. Larger settings automatically show fewer products per page so the menu stays readable.</div>
   </div>
   <div class="toggle-row"><span id="lbl-showStrain">Show Strain Type</span><button type="button" class="switch" id="showStrain" role="switch" aria-checked="false" aria-labelledby="lbl-showStrain" onclick="toggleSwitch(this,'showStrain')"></button></div>
   <div class="toggle-row"><span id="lbl-showBrandWeight">Show Brand & Weight</span><button type="button" class="switch" id="showBrandWeight" role="switch" aria-checked="false" aria-labelledby="lbl-showBrandWeight" onclick="toggleSwitch(this);updateBrandWeight()"></button></div>
@@ -738,6 +747,19 @@ function sendConfig(k,v){
   return flushPendingConfig()?'sent':'queued';
 }
 function debounceConfig(k,v){clearTimeout(debounceTimer);debounceTimer=setTimeout(function(){sendConfig(k,v);},400);}
+function resolvedFontScale(cfg){
+  var raw=cfg&&cfg.fontScale;
+  var numeric=typeof raw==='number'?raw:Number(raw);
+  if(!isFinite(numeric)){
+    numeric=cfg&&cfg.fontSize==='small'?85:cfg&&cfg.fontSize==='large'?120:${TV_FONT_SCALE_DEFAULT};
+  }
+  return Math.round(Math.max(${TV_FONT_SCALE_MIN},Math.min(${TV_FONT_SCALE_MAX},numeric))/5)*5;
+}
+function syncFontScaleLabel(value){
+  var scale=Math.round(Math.max(${TV_FONT_SCALE_MIN},Math.min(${TV_FONT_SCALE_MAX},Number(value)||${TV_FONT_SCALE_DEFAULT}))/5)*5;
+  var output=document.getElementById('fontScaleValue');
+  if(output){output.value=scale+'%';output.textContent=scale+'%';}
+}
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
 function setSwitch(id,on){var el=document.getElementById(id);if(el){el.classList.toggle('on',on);el.setAttribute('aria-checked',on?'true':'false');}}
 function getSwitch(id){var el=document.getElementById(id);return el?el.classList.contains('on'):false;}
@@ -1203,6 +1225,7 @@ function analyzeReferenceStyle(url,notes){
     template:template,
     layoutMode:'auto',
     fontSize:fontSize,
+    fontScale:fontSize==='large'?120:100,
     showImages:showImages,
     showDescription:showDescription,
     showPromos:promos||layout==='pricewall',
@@ -1267,7 +1290,9 @@ function render(){
   document.getElementById('logoUrl').value=config.logo||'';
   document.getElementById('primaryColor').value=config.primaryColor||'#10b981';
   document.getElementById('currency').value=config.currency||'$';
-  document.getElementById('fontSize').value=config.fontSize||'medium';
+  var fontScale=resolvedFontScale(config);
+  document.getElementById('fontScale').value=String(fontScale);
+  syncFontScaleLabel(fontScale);
   renderStyleProfile();
   updateSetupWizard();
   var wizardDisplays=document.getElementById('dutchieDisplayCount');
@@ -2093,6 +2118,7 @@ function updateSimFrame(frameId,displayNum){
   if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
   if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
   if(config&&/^(small|medium|large)$/.test(config.fontSize||'')) url+='&fontSize='+encodeURIComponent(config.fontSize);
+  if(config) url+='&fontScale='+encodeURIComponent(String(resolvedFontScale(config)));
   var full=location.origin+url;
   if(frame.src!==full) frame.src=full;
 }
@@ -2225,6 +2251,7 @@ function renderMobilePreview(){
   if(!frame)return;
   var url='/tv/'+SESSION_ID+'?embed=1&display=1&displays=1';
   if(config&&/^(small|medium|large)$/.test(config.fontSize||''))url+='&fontSize='+encodeURIComponent(config.fontSize);
+  if(config)url+='&fontScale='+encodeURIComponent(String(resolvedFontScale(config)));
   frame.src=location.origin+url;
   scaleMobilePreview();
 }

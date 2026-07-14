@@ -1,12 +1,32 @@
 import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
 import { allocateCategoriesForDisplay } from './multi-display';
 import { buildTvCatalogPagePlan } from './tv-page-plan';
+import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN } from './types';
 
 export type TvPageInitialConfig = {
   template?: string;
   fontSize?: 'small' | 'medium' | 'large';
+  fontScale?: number;
   categories?: Array<{ id?: string; name?: string; order?: number; products?: unknown[] }>;
 } & Record<string, unknown>;
+
+export function normalizeTvFontScale(value: unknown, legacyFontSize: unknown = 'medium'): number {
+  const numeric = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim() !== ''
+      ? Number(value)
+      : Number.NaN;
+  const legacyScale = legacyFontSize === 'small' ? 85 : legacyFontSize === 'large' ? 120 : TV_FONT_SCALE_DEFAULT;
+  const requested = Number.isFinite(numeric) ? numeric : legacyScale;
+  const clamped = Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, requested));
+  return Math.round(clamped / 5) * 5;
+}
+
+export function tvFontSizeClass(fontScale: number): 'small' | 'medium' | 'large' {
+  if (fontScale < 95) return 'small';
+  if (fontScale >= 115) return 'large';
+  return 'medium';
+}
 
 const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;
 
@@ -88,7 +108,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     Array.isArray(initialConfig.categories) &&
     initialConfig.categories.some((cat) => Array.isArray(cat.products) && cat.products.length > 0);
   const initialTemplate = isTvTemplate(initialConfig?.template) ? initialConfig.template : 'default';
-  const initialFontSize = initialConfig?.fontSize || 'medium';
+  const initialFontScale = normalizeTvFontScale(initialConfig?.fontScale, initialConfig?.fontSize);
+  const initialFontSize = tvFontSizeClass(initialFontScale);
   const configOrigin = /^http:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(origin)
     ? origin
     : 'https://dubmenu.com';
@@ -227,14 +248,64 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
   *{margin:0;padding:0;box-sizing:border-box;}
   html,body{width:100%;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
-  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;}
-  body.font-small{font-size:14px;}
+  body{
+    --tv-category-size:clamp(2rem,2.45vw,2.55rem);
+    --tv-name-size:clamp(1.28rem,1.4vw,1.62rem);
+    --tv-meta-size:clamp(0.9rem,1vw,1.08rem);
+    --tv-price-size:clamp(1.9rem,2.25vw,2.5rem);
+    --tv-table-size:clamp(0.72rem,0.82vw,0.9rem);
+    --tv-footer-size:clamp(0.9rem,0.95vw,1.02rem);
+    --tv-tier-label-size:clamp(0.72rem,0.78vw,0.84rem);
+    --tv-tier-price-size:clamp(1.12rem,1.22vw,1.32rem);
+    --tv-feature-name-size:clamp(2rem,2.6vw,3rem);
+    --tv-feature-meta-size:clamp(1.1rem,1.35vw,1.55rem);
+    --tv-feature-price-size:clamp(2.4rem,3.2vw,3.8rem);
+    --tv-hero-name-size:clamp(3rem,5vw,5.5rem);
+    --tv-hero-meta-size:clamp(1.2rem,2vw,1.8rem);
+    --tv-hero-price-size:clamp(3rem,6vw,6.5rem);
+    --tv-brand-size:clamp(2.35rem,3.35vw,3.5rem);
+    --tv-promo-size:clamp(1.05rem,1.45vw,1.45rem);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;
+  }
+  body.font-small{
+    --tv-category-size:clamp(1.72rem,2vw,2.1rem);
+    --tv-name-size:clamp(1.08rem,1.18vw,1.32rem);
+    --tv-meta-size:clamp(0.78rem,0.86vw,0.94rem);
+    --tv-price-size:clamp(1.55rem,1.82vw,2rem);
+    --tv-table-size:clamp(0.66rem,0.72vw,0.78rem);
+    --tv-footer-size:0.84rem;
+    --tv-tier-label-size:0.68rem;
+    --tv-tier-price-size:1.02rem;
+    --tv-feature-name-size:clamp(1.7rem,2.2vw,2.5rem);
+    --tv-feature-meta-size:clamp(0.95rem,1.15vw,1.3rem);
+    --tv-feature-price-size:clamp(2rem,2.7vw,3.1rem);
+    --tv-hero-name-size:clamp(2.5rem,4.2vw,4.6rem);
+    --tv-hero-meta-size:clamp(1rem,1.65vw,1.5rem);
+    --tv-hero-price-size:clamp(2.5rem,5vw,5.5rem);
+    --tv-brand-size:clamp(2rem,2.85vw,3rem);
+    --tv-promo-size:clamp(0.9rem,1.2vw,1.25rem);
+    font-size:14px;
+  }
   body.font-medium{font-size:18px;}
-  body.font-large{font-size:24px;}
-  body.font-small .layout-grid .card-name{font-size:clamp(0.95rem,1.18vw,1.35rem);}
-  body.font-large .layout-grid .card-name{font-size:clamp(1.5rem,1.95vw,2.25rem);}
-  body.font-small .layout-grid .card-price{font-size:clamp(1.2rem,1.48vw,1.75rem);}
-  body.font-large .layout-grid .card-price{font-size:clamp(2rem,2.4vw,2.85rem);}
+  body.font-large{
+    --tv-category-size:clamp(2.3rem,2.75vw,2.9rem);
+    --tv-name-size:clamp(1.55rem,1.7vw,1.95rem);
+    --tv-meta-size:clamp(0.98rem,1.15vw,1.25rem);
+    --tv-price-size:clamp(2.15rem,2.65vw,2.95rem);
+    --tv-table-size:clamp(0.78rem,0.9vw,1rem);
+    --tv-footer-size:clamp(1rem,1.08vw,1.16rem);
+    --tv-tier-label-size:clamp(0.78rem,0.86vw,0.94rem);
+    --tv-tier-price-size:clamp(1.28rem,1.42vw,1.55rem);
+    --tv-feature-name-size:clamp(2.4rem,3.05vw,3.5rem);
+    --tv-feature-meta-size:clamp(1.28rem,1.55vw,1.8rem);
+    --tv-feature-price-size:clamp(2.8rem,3.75vw,4.4rem);
+    --tv-hero-name-size:clamp(3.5rem,5.8vw,6.3rem);
+    --tv-hero-meta-size:clamp(1.4rem,2.3vw,2.1rem);
+    --tv-hero-price-size:clamp(3.5rem,6.8vw,7.3rem);
+    --tv-brand-size:clamp(2.75rem,3.9vw,4.1rem);
+    --tv-promo-size:clamp(1.2rem,1.65vw,1.7rem);
+    font-size:24px;
+  }
   body.font-small .row-name{font-size:0.82em;}
   body.font-large .row-name{font-size:1.28em;}
   .font-custom-serif{font-family:Georgia,'Times New Roman',serif;}
@@ -267,17 +338,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     radial-gradient(circle at 88% 18%,rgba(255,255,255,0.045),transparent 28%),
     linear-gradient(135deg,rgba(255,255,255,0.025),transparent 42%),
     var(--bg);}
-  .promo-bar{width:100%;padding:0.7rem 2rem;text-align:center;font-weight:900;font-size:clamp(1rem,1.4vw,1.35rem);letter-spacing:0.08em;flex-shrink:0;z-index:10;display:none;text-transform:uppercase;overflow-wrap:break-word;word-wrap:break-word;min-width:0;box-shadow:0 8px 28px rgba(0,0,0,0.22);}
+  .promo-bar{width:100%;padding:0.8rem clamp(2.5rem,3vw,3.75rem);text-align:center;font-weight:900;font-size:var(--tv-promo-size);letter-spacing:0.06em;flex-shrink:0;z-index:10;display:none;text-transform:uppercase;overflow-wrap:break-word;word-wrap:break-word;min-width:0;box-shadow:0 8px 28px rgba(0,0,0,0.22);}
   .promo-bar.active{display:block;}
-  .menu-header{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:0.85rem 2.25rem;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(0,0,0,0.08)),var(--bg);z-index:9;box-shadow:0 12px 32px rgba(0,0,0,0.22);}
+  .menu-header{display:flex;justify-content:space-between;align-items:center;gap:1.25rem;padding:1rem clamp(2.5rem,3vw,3.75rem);border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(0,0,0,0.08)),var(--bg);z-index:9;box-shadow:0 12px 32px rgba(0,0,0,0.22);}
   .header-left{display:flex;align-items:center;gap:1rem;min-width:0;flex:1 1 auto;}
   .header-right{display:flex;align-items:center;gap:0.75rem;flex:0 0 auto;}
-  .header-logo{max-height:52px;max-width:200px;object-fit:contain;display:none;}
+  .header-logo{max-height:56px;max-width:220px;object-fit:contain;display:none;}
   .header-logo.show{display:block;}
-  .dispensary-name{font-size:clamp(2rem,3vw,3rem);font-weight:950;letter-spacing:-0.035em;line-height:1.05;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 32px var(--accent-glow);}
-  .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem 2rem 1rem;width:100%;}
-  .menu-content.content-refresh{animation:content-refresh 420ms ease-out;}
-  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.72rem 2rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:0.92rem;font-weight:800;color:var(--text);opacity:0.8;gap:1rem;text-transform:uppercase;letter-spacing:0.05em;}
+  .dispensary-name{font-size:var(--tv-brand-size);font-weight:950;letter-spacing:-0.035em;line-height:1.05;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 0 32px var(--accent-glow);}
+  .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem clamp(2.5rem,3vw,3.75rem);width:100%;}
+  .menu-content.page-exit{animation:menu-page-exit 220ms cubic-bezier(0.4,0,1,1) both;will-change:opacity,transform;pointer-events:none;}
+  .menu-content.page-enter{animation:menu-page-enter 420ms cubic-bezier(0.16,1,0.3,1) both;will-change:opacity,transform;}
+  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.85rem clamp(2.5rem,3vw,3.75rem) 1.15rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:var(--tv-footer-size);font-weight:850;color:var(--text);opacity:0.9;gap:1rem;text-transform:uppercase;letter-spacing:0.035em;}
   .footer-right{text-align:center;max-width:90%;}
 
   .age-gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:500;gap:1.5rem;padding:2rem;text-align:center;}
@@ -288,41 +360,41 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .age-gate .btn-secondary{font-size:1rem;background:var(--surface2);color:var(--text);text-decoration:none;}
 
   .category-header{margin-bottom:0.7rem;padding-bottom:0.55rem;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:0.75rem;}
-  .category-title{font-size:clamp(1.55rem,2.15vw,2.35rem);font-weight:900;letter-spacing:0.01em;line-height:1.1;color:var(--text);display:inline-flex;align-items:center;gap:0.6rem;text-transform:none;}
+  .category-title{font-size:var(--tv-category-size);font-weight:950;letter-spacing:0.005em;line-height:1.08;color:var(--text);display:inline-flex;align-items:center;gap:0.65rem;text-transform:none;}
   .cat-icon-wrap{width:1.15em;height:1.15em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent);filter:drop-shadow(0 0 14px var(--accent-glow));}
   .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;color:inherit;}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
-  .layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;align-items:stretch;height:100%;min-height:0;}
+  .layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.15rem;align-items:stretch;height:100%;min-height:0;}
   .layout-grid:has(.category-block:only-child),.layout-pricewall:has(.category-block:only-child){grid-template-columns:minmax(0,1fr);}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)),.layout-pricewall:has(.category-block:first-child:nth-last-child(2)){grid-template-columns:repeat(2,minmax(0,1fr));}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block,.layout-pricewall:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block{min-width:0;}
-  .layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:0.95rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
-  .layout-grid .category-header,.layout-pricewall .category-header{margin-bottom:0.75rem;padding-bottom:0.65rem;border-bottom:1px solid var(--border);}
-  .layout-grid .grid-products,.layout-pricewall .grid-products{display:flex;flex-direction:column;gap:0.48rem;flex:1;min-height:0;justify-content:flex-start;}
-  .layout-grid .product-table-head,.layout-pricewall .product-table-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;padding:0 0.25rem 0.1rem 0.55rem;color:var(--text-faint);font-size:clamp(0.62rem,0.72vw,0.82rem);font-weight:900;letter-spacing:0.11em;text-transform:uppercase;flex:0 0 auto;}
-  .layout-grid .product-card,.layout-pricewall .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);border:1px solid var(--border);border-left:0;border-radius:0.62rem;overflow:hidden;display:grid;grid-template-columns:0.38rem minmax(0,1fr) auto;align-items:center;gap:0.8rem;min-height:5.65rem;padding:0.65rem 0.78rem 0.65rem 0;box-shadow:0 12px 28px rgba(0,0,0,0.16);transition:border-color 0.3s,transform 0.2s;position:relative;isolation:isolate;flex:0 0 auto;}
-  .layout-grid .product-card.has-image,.layout-pricewall .product-card.has-image{grid-template-columns:0.38rem 4.4rem minmax(0,1fr) auto;}
-  .layout-grid .product-card:hover,.layout-pricewall .product-card:hover{border-color:var(--border-hover);transform:translateY(-2px);}
+  .layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
+  .layout-grid .category-header,.layout-pricewall .category-header{margin-bottom:0.8rem;padding-bottom:0.7rem;border-bottom:1px solid var(--border);}
+  .layout-grid .grid-products,.layout-pricewall .grid-products{display:flex;flex-direction:column;gap:0.55rem;flex:1;min-height:0;justify-content:flex-start;}
+  .layout-grid .product-table-head,.layout-pricewall .product-table-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;padding:0 0.25rem 0.15rem 0.6rem;color:var(--text);opacity:0.76;font-size:var(--tv-table-size);font-weight:950;letter-spacing:0.09em;text-transform:uppercase;flex:0 0 auto;}
+  .layout-grid .product-card,.layout-pricewall .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);border:1px solid var(--border);border-left:0;border-radius:0.62rem;overflow:hidden;display:grid;grid-template-columns:0.38rem minmax(0,1fr) auto;align-items:center;gap:0.9rem;min-height:6.1rem;padding:0.72rem 0.9rem 0.72rem 0;box-shadow:0 12px 28px rgba(0,0,0,0.16);position:relative;isolation:isolate;flex:0 0 auto;}
+  @media (min-width:769px){.layout-grid .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card,.layout-pricewall .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card{flex:1 1 0;min-height:0;}}
+  .layout-grid .product-card.has-image,.layout-pricewall .product-card.has-image{grid-template-columns:0.38rem 4.6rem minmax(0,1fr) auto;}
   .layout-grid .strain-bar,.layout-pricewall .strain-bar{align-self:stretch;width:0.38rem;background:linear-gradient(180deg,var(--accent),rgba(255,255,255,0.08));box-shadow:0 0 18px var(--accent-glow);}
   .layout-grid .product-card.strain-indica .strain-bar,.layout-pricewall .product-card.strain-indica .strain-bar{background:linear-gradient(180deg,#8b5cf6,#4c1d95);box-shadow:0 0 16px rgba(139,92,246,0.35);}
   .layout-grid .product-card.strain-sativa .strain-bar,.layout-pricewall .product-card.strain-sativa .strain-bar{background:linear-gradient(180deg,#f97316,#c2410c);box-shadow:0 0 16px rgba(249,115,22,0.35);}
   .layout-grid .product-card.strain-hybrid .strain-bar,.layout-pricewall .product-card.strain-hybrid .strain-bar{background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 0 16px rgba(34,197,94,0.35);}
-  .layout-grid .card-image,.layout-pricewall .card-image{display:block;width:4.4rem;height:4.4rem;object-fit:cover;border-radius:0.48rem;border:1px solid var(--border);background:var(--bg-elev);box-shadow:0 10px 22px rgba(0,0,0,0.22);}
-  .layout-pricewall{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(23rem,0.72fr);gap:1.1rem;}
-  .layout-pricewall .category-block{border-radius:1rem;padding:0.9rem;background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(0,0,0,0.2)),var(--bg-card);}
-  .layout-pricewall .category-title{font-size:clamp(1.32rem,1.7vw,1.95rem);letter-spacing:0.015em;text-transform:uppercase;}
-  .layout-pricewall .grid-products{gap:0.46rem;}
-  .layout-pricewall .product-card{min-height:5.35rem;padding:0.58rem 0.76rem 0.58rem 0;gap:0.72rem;border-radius:0.62rem;box-shadow:0 10px 24px rgba(0,0,0,0.18);}
-  .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 3.9rem minmax(0,1fr) auto;}
+  .layout-grid .card-image,.layout-pricewall .card-image{display:block;width:4.6rem;height:4.6rem;object-fit:cover;border-radius:0.48rem;border:1px solid var(--border);background:var(--bg-elev);box-shadow:0 10px 22px rgba(0,0,0,0.22);}
+  .layout-pricewall{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(23rem,0.72fr);gap:1.15rem;}
+  .layout-pricewall .category-block{border-radius:1rem;padding:1rem;background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(0,0,0,0.2)),var(--bg-card);}
+  .layout-pricewall .category-title{font-size:var(--tv-category-size);letter-spacing:0.005em;text-transform:uppercase;}
+  .layout-pricewall .grid-products{gap:0.55rem;}
+  .layout-pricewall .product-card{min-height:5.9rem;padding:0.66rem 0.88rem 0.66rem 0;gap:0.82rem;border-radius:0.62rem;box-shadow:0 10px 24px rgba(0,0,0,0.18);}
+  .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 4.4rem minmax(0,1fr) auto;}
   .layout-pricewall .strain-bar{width:0.34rem;}
-  .layout-pricewall .card-image{width:3.9rem;height:3.9rem;border-radius:0.48rem;}
-  .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;gap:0.24rem;}
-  .layout-pricewall .card-name{font-size:clamp(1.04rem,1.13vw,1.34rem);line-height:1.08;-webkit-line-clamp:2;text-transform:none;}
-  .layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:clamp(0.76rem,0.82vw,0.94rem);line-height:1.14;gap:0.2rem 0.46rem;color:var(--text-muted);}
+  .layout-pricewall .card-image{width:4.4rem;height:4.4rem;border-radius:0.48rem;}
+  .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.3rem;}
+  .layout-grid .card-name,.layout-pricewall .card-name{font-size:var(--tv-name-size);font-weight:900;line-height:1.08;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-transform:none;}
+  .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.82;}
   .layout-pricewall .card-meta span{white-space:nowrap;}
   .layout-pricewall .card-desc{display:none;}
-  .layout-pricewall .card-price{font-size:clamp(1.38rem,1.65vw,1.98rem);min-width:5rem;text-align:right;font-variant-numeric:tabular-nums;}
-  .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.2rem auto;padding:0.14rem 0.4rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--accent);font-size:clamp(0.58rem,0.62vw,0.74rem);line-height:1;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;}
+  .layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950;line-height:1;color:var(--text);min-width:5.5rem;text-align:right;font-variant-numeric:tabular-nums;}
+  .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.25rem auto;padding:0.18rem 0.46rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--text);font-size:var(--tv-tier-label-size);line-height:1;font-weight:950;letter-spacing:0.07em;text-transform:uppercase;}
   .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
   body.has-promo-banner .menu-content{padding-top:0.95rem;padding-bottom:0.7rem;}
@@ -333,7 +405,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   body.has-promo-banner .layout-grid .product-card.has-image,body.has-promo-banner .layout-pricewall .product-card.has-image{grid-template-columns:0.34rem 3.4rem minmax(0,1fr) auto;}
   body.has-promo-banner .layout-grid .card-image,body.has-promo-banner .layout-pricewall .card-image{width:3.4rem;height:3.4rem;}
   .pricewall-panel{background:linear-gradient(160deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow);overflow:hidden;}
-  .pricewall-panel-title{font-size:0.68rem;font-weight:950;color:var(--text-faint);letter-spacing:0.16em;text-transform:uppercase;margin-bottom:0.5rem;}
+  .pricewall-panel-title{font-size:var(--tv-meta-size);font-weight:950;color:var(--text);opacity:0.78;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.65rem;}
   .pricewall-promo{min-height:9.5rem;display:flex;align-items:flex-start;justify-content:center;background:radial-gradient(circle at 78% 18%,var(--accent-dim),transparent 45%),linear-gradient(160deg,rgba(255,255,255,0.09),rgba(0,0,0,0.16)),var(--bg-card);}
   .pricewall-promo-main{font-size:clamp(2rem,2.75vw,3.55rem);line-height:0.96;font-weight:1000;letter-spacing:-0.055em;color:var(--accent);text-shadow:0 0 26px var(--accent-glow);}
   .pricewall-promo-sub{display:none;}
@@ -342,13 +414,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .pricewall-specials{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:0.6rem;}
   .pricewall-special-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0.75rem;align-items:center;border-top:1px solid var(--border);padding-top:0.58rem;}
   .pricewall-special-row:first-child{border-top:0;padding-top:0;}
-  .pricewall-special-name{font-weight:900;font-size:clamp(0.98rem,1.08vw,1.2rem);line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-  .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:clamp(1.16rem,1.3vw,1.46rem);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .pricewall-special-name{font-weight:900;font-size:var(--tv-name-size);line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:var(--tv-price-size);white-space:nowrap;font-variant-numeric:tabular-nums;}
   .layout-list .product-row{display:flex;align-items:baseline;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
-  .layout-list .row-name{font-size:1.6rem;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .row-meta{font-size:1.1rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .row-name{font-size:var(--tv-name-size);font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .row-meta{font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
   .layout-list .leader{flex:1;border-bottom:1px dotted var(--text-faint);margin:0 0.4rem;min-width:1rem;align-self:flex-end;margin-bottom:0.3rem;}
-  .layout-list .row-price{font-size:2rem;font-weight:900;color:var(--accent);white-space:nowrap;}
+  .layout-list .row-price{font-size:var(--tv-price-size);font-weight:950;color:var(--text);white-space:nowrap;}
 
   .layout-grid .card-body{min-width:0;display:flex;flex-direction:column;gap:0.26rem;}
   .layout-grid .card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:0.18rem 0.45rem;min-width:0;max-width:none;line-height:1.12;}
@@ -360,15 +432,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-poster .product-row{display:flex;gap:1.5rem;align-items:center;padding:1rem;background:var(--bg-card);border-radius:0.6rem;border:1px solid var(--border);}
   .layout-poster .card-image{width:200px;height:200px;object-fit:cover;border-radius:0.4rem;flex-shrink:0;}
   .layout-poster .product-info{flex:1;display:flex;flex-direction:column;gap:0.5rem;}
-  .layout-poster .card-name{font-size:2.2rem;font-weight:900;color:var(--text);}
-  .layout-poster .card-meta{font-size:1.4rem;color:var(--text-muted);}
-  .layout-poster .card-price{font-size:2.8rem;font-weight:900;color:var(--accent);}
+  .layout-poster .card-name{font-size:var(--tv-feature-name-size);font-weight:900;color:var(--text);}
+  .layout-poster .card-meta{font-size:var(--tv-feature-meta-size);color:var(--text);}
+  .layout-poster .card-price{font-size:var(--tv-feature-price-size);font-weight:950;color:var(--text);}
   .layout-poster .product-row.no-image{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;min-height:6.4rem;padding:1rem 1.15rem;}
   .layout-poster .poster-products.no-images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(6.4rem,1fr);gap:0.75rem;}
   .layout-poster .product-row.no-image .product-info{min-width:0;gap:0.28rem;}
-  .layout-poster .product-row.no-image .card-name{font-size:clamp(1.55rem,2.1vw,2.45rem);line-height:1.05;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-poster .product-row.no-image .card-meta{font-size:clamp(0.95rem,1.15vw,1.35rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-poster .product-row.no-image .card-price{font-size:clamp(2rem,2.8vw,3.4rem);line-height:1;text-align:right;}
+  .layout-poster .product-row.no-image .card-name{font-size:var(--tv-name-size);line-height:1.05;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .layout-poster .product-row.no-image .card-meta{font-size:var(--tv-meta-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-poster .product-row.no-image .card-price{font-size:var(--tv-price-size);line-height:1;text-align:right;}
   .layout-poster .product-row.no-image .card-image{display:none;}
 
   .layout-cinematic .cinematic-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:0.78rem;flex:1 1 auto;min-height:0;}
@@ -376,34 +448,34 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-cinematic .product-card{position:relative;border-radius:0.8rem;overflow:hidden;height:100%;min-height:0;background:var(--bg-card);border:1px solid var(--border);box-shadow:var(--card-shadow);}
   .layout-cinematic .card-image{width:100%;height:100%;object-fit:cover;border:0;}
   .layout-cinematic .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.9rem 1rem;background:linear-gradient(to top,rgba(0,0,0,0.98) 0%,rgba(0,0,0,0.9) 70%,rgba(0,0,0,0.68) 100%);display:flex;flex-direction:column;gap:0.2rem;}
-  .layout-cinematic .card-name{font-size:clamp(1rem,1.15vw,1.25rem);font-weight:900;line-height:1.04;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.9);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-  .layout-cinematic .card-meta{font-size:clamp(0.82rem,0.95vw,1.08rem);line-height:1.16;color:rgba(255,255,255,0.88);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-cinematic .card-price{font-size:clamp(1.45rem,1.9vw,2.15rem);line-height:1;font-weight:900;color:var(--accent);}
+  .layout-cinematic .card-name{font-size:var(--tv-name-size);font-weight:900;line-height:1.04;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.9);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-cinematic .card-meta{font-size:var(--tv-meta-size);line-height:1.16;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-cinematic .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
   .layout-cinematic .product-card.no-image{height:100%;min-height:7.2rem;border-color:var(--border-hover);background:radial-gradient(circle at 84% 16%,var(--accent-dim),transparent 42%),linear-gradient(145deg,rgba(255,255,255,0.075),rgba(255,255,255,0.018)),var(--bg-card);}
   .layout-cinematic .product-card.no-image .card-body{position:static;height:100%;min-height:7.2rem;padding:1rem 1.15rem;background:transparent;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.4rem;box-shadow:inset 0.38rem 0 var(--accent);}
-  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:clamp(1.12rem,1.38vw,1.55rem);line-height:1.08;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
-  .layout-cinematic .product-card.no-image .card-meta{grid-area:meta;font-size:clamp(0.9rem,1.05vw,1.2rem);white-space:normal;overflow:visible;}
-  .layout-cinematic .product-card.no-image .card-price{grid-area:price;font-size:clamp(1.9rem,2.45vw,3rem);line-height:1;text-align:right;}
+  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-name-size);line-height:1.08;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-cinematic .product-card.no-image .card-meta{grid-area:meta;font-size:var(--tv-meta-size);white-space:normal;overflow:visible;}
+  .layout-cinematic .product-card.no-image .card-price{grid-area:price;font-size:var(--tv-price-size);line-height:1;text-align:right;}
 
   .layout-showcase .showcase-products{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;}
   .layout-showcase .product-card{display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center;}
   .layout-showcase .card-image{width:500px;height:400px;object-fit:cover;border-radius:1rem;}
-  .layout-showcase .card-name{font-size:3rem;font-weight:900;color:var(--text);}
-  .layout-showcase .card-meta{font-size:1.8rem;color:var(--text-muted);}
-  .layout-showcase .card-price{font-size:4rem;font-weight:900;color:var(--accent);}
+  .layout-showcase .card-name{font-size:var(--tv-hero-name-size);font-weight:900;color:var(--text);}
+  .layout-showcase .card-meta{font-size:var(--tv-hero-meta-size);color:var(--text);}
+  .layout-showcase .card-price{font-size:var(--tv-hero-price-size);font-weight:950;color:var(--text);}
 
   .layout-editorial .editorial-products{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(0,1fr);gap:1rem;flex:1 1 auto;min-height:0;}
   .layout-editorial .product-card{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;overflow:hidden;box-shadow:var(--card-shadow);min-height:0;}
   .layout-editorial .card-image{width:100%;height:100%;object-fit:cover;border:0;}
   .layout-editorial .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.85rem 0.95rem;background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.62) 72%,transparent 100%);display:flex;flex-direction:column;gap:0.18rem;}
-  .layout-editorial .card-name{font-size:clamp(1.05rem,1.28vw,1.45rem);line-height:1.06;font-weight:900;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-editorial .card-meta{font-size:clamp(0.78rem,0.88vw,0.98rem);line-height:1.12;color:rgba(255,255,255,0.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-editorial .card-price{font-size:clamp(1.35rem,1.7vw,1.95rem);line-height:1;font-weight:950;color:var(--accent);}
+  .layout-editorial .card-name{font-size:var(--tv-name-size);line-height:1.06;font-weight:900;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-editorial .card-meta{font-size:var(--tv-meta-size);line-height:1.12;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-editorial .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
   .layout-editorial .product-card.no-image{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1rem;padding:0.85rem 1rem;min-height:5.8rem;height:100%;}
   .layout-editorial .product-card.no-image .card-body{padding:0;min-width:0;gap:0.2rem;}
-  .layout-editorial .product-card.no-image .card-name{font-size:clamp(1.2rem,1.45vw,1.7rem);line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-editorial .product-card.no-image .card-meta{font-size:clamp(0.82rem,0.95vw,1.05rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-editorial .product-card.no-image .card-price{font-size:clamp(1.6rem,2vw,2.4rem);line-height:1;text-align:right;}
+  .layout-editorial .product-card.no-image .card-name{font-size:var(--tv-name-size);line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .layout-editorial .product-card.no-image .card-meta{font-size:var(--tv-meta-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-editorial .product-card.no-image .card-price{font-size:var(--tv-price-size);line-height:1;text-align:right;}
 
   .out-of-stock{opacity:0.5;}
   .out-of-stock .card-image{filter:grayscale(0.6);}
@@ -411,7 +483,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .sale-text{color:var(--accent);font-weight:950;white-space:nowrap;}
   .oos-text{color:var(--text-faint);font-style:italic;}
 
-  @keyframes content-refresh{0%{opacity:0.55;transform:translateY(6px);}100%{opacity:1;transform:translateY(0);}}
+  @keyframes menu-page-exit{from{opacity:1;transform:translateX(0);}to{opacity:0;transform:translateX(-12px);}}
+  @keyframes menu-page-enter{from{opacity:0;transform:translateX(12px);}to{opacity:1;transform:translateX(0);}}
+  @media (prefers-reduced-motion:reduce){
+    .phase,.menu-content.page-exit,.menu-content.page-enter{animation:none!important;transition:none!important;transform:none!important;}
+  }
   @keyframes blink{0%,100%{opacity:0.5;}50%{opacity:1;}}
   .cursor-hidden,.cursor-hidden *{cursor:none !important;}
   .empty-state{grid-column:1/-1;align-self:stretch;display:flex;align-items:center;justify-content:center;height:100%;min-height:0;padding:3rem;color:var(--text-faint);text-align:center;}
@@ -434,25 +510,25 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .demo-pill.visible{display:block;}
 
   .price-tiers{display:flex;flex-wrap:wrap;gap:0.45rem 0.55rem;margin-top:auto;align-items:stretch;}
-  .price-tiers .tier{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0.05rem;padding:0.28rem 0.45rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.5rem;}
-  .price-tiers .tier-label{font-size:0.68rem;font-weight:800;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);line-height:1;}
-  .price-tiers .tier-price{font-size:1.15rem;font-weight:950;line-height:1.05;color:var(--accent);}
-  .layout-grid .price-tiers{justify-content:flex-end;gap:0.3rem;margin-top:0;}
-  .layout-grid .price-tiers .tier{min-width:3.25rem;padding:0.22rem 0.38rem;border-radius:0.38rem;}
-  .layout-grid .price-tiers .tier-label{font-size:0.62rem;}
-  .layout-grid .price-tiers .tier-price{font-size:1.05rem;}
-  .layout-pricewall .price-tiers{display:grid;grid-template-columns:repeat(2,minmax(4.1rem,1fr));gap:0.34rem;min-width:9rem;}
-  .layout-pricewall .price-tiers .tier{min-width:0;align-items:flex-end;padding:0.26rem 0.4rem;}
-  .layout-pricewall .price-tiers .tier-label{font-size:0.68rem;}
-  .layout-pricewall .price-tiers .tier-price{font-size:1.08rem;font-variant-numeric:tabular-nums;}
+  .price-tiers .tier{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0.08rem;padding:0.34rem 0.5rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.75rem;}
+  .price-tiers .tier-label{font-size:var(--tv-tier-label-size);font-weight:850;text-transform:uppercase;letter-spacing:0.06em;color:var(--text);opacity:0.78;line-height:1;}
+  .price-tiers .tier-price{font-size:var(--tv-tier-price-size);font-weight:950;line-height:1.05;color:var(--text);}
+  .layout-grid .price-tiers{justify-content:flex-end;gap:0.35rem;margin-top:0;}
+  .layout-grid .price-tiers .tier{min-width:3.5rem;padding:0.28rem 0.42rem;border-radius:0.38rem;}
+  .layout-grid .price-tiers .tier-label{font-size:var(--tv-tier-label-size);}
+  .layout-grid .price-tiers .tier-price{font-size:var(--tv-tier-price-size);}
+  .layout-pricewall .price-tiers{display:grid;grid-template-columns:repeat(2,minmax(4.5rem,1fr));gap:0.38rem;min-width:10rem;}
+  .layout-pricewall .price-tiers .tier{min-width:0;align-items:flex-end;padding:0.3rem 0.44rem;}
+  .layout-pricewall .price-tiers .tier-label{font-size:var(--tv-tier-label-size);}
+  .layout-pricewall .price-tiers .tier-price{font-size:var(--tv-tier-price-size);font-variant-numeric:tabular-nums;}
   .layout-list .price-tiers{margin-top:0;gap:0.35rem;}
   .layout-list .price-tiers .tier{padding:0;background:transparent;border:0;min-width:auto;flex-direction:row;align-items:baseline;gap:0.25rem;}
-  .layout-list .price-tiers .tier-price{font-size:1rem;}
-  .layout-poster .price-tiers .tier-price{font-size:1.8rem;}
-  .layout-cinematic .price-tiers .tier-price{font-size:1.5rem;color:var(--accent);}
+  .layout-list .price-tiers .tier-price{font-size:var(--tv-tier-price-size);}
+  .layout-poster .price-tiers .tier-price{font-size:var(--tv-feature-meta-size);}
+  .layout-cinematic .price-tiers .tier-price{font-size:var(--tv-tier-price-size);color:var(--text);}
   .layout-showcase .price-tiers{justify-content:center;gap:1rem 1.5rem;}
-  .layout-showcase .price-tiers .tier-price{font-size:2.4rem;}
-  .layout-editorial .price-tiers .tier-price{font-size:1.3rem;}
+  .layout-showcase .price-tiers .tier-price{font-size:var(--tv-feature-price-size);}
+  .layout-editorial .price-tiers .tier-price{font-size:var(--tv-tier-price-size);}
 
   /* Sparse layout for 1-of-4 (or more) multi-display setups: hero + stacked cards fill the screen */
   .layout-sparse{display:flex;flex-direction:column;min-height:0;}
@@ -463,16 +539,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-sparse .hero-card .card-image{width:100%;height:100%;object-fit:cover;border-radius:0.6rem;min-height:0;}
   .layout-sparse .hero-card.no-image{grid-template-columns:1fr;}
   .layout-sparse .hero-info{display:flex;flex-direction:column;justify-content:center;gap:0.75rem;min-width:0;}
-  .layout-sparse .hero-name{font-size:clamp(2.4rem,3.5vw,3.8rem);font-weight:900;line-height:1.1;color:var(--text);overflow-wrap:break-word;}
-  .layout-sparse .hero-meta{font-size:1.2rem;color:var(--text-muted);}
-  .layout-sparse .hero-price{font-size:clamp(2.6rem,4.5vw,5rem);font-weight:900;color:var(--accent);margin-top:auto;}
+  .layout-sparse .hero-name{font-size:var(--tv-feature-name-size);font-weight:900;line-height:1.1;color:var(--text);overflow-wrap:break-word;}
+  .layout-sparse .hero-meta{font-size:var(--tv-feature-meta-size);color:var(--text);}
+  .layout-sparse .hero-price{font-size:var(--tv-feature-price-size);font-weight:950;color:var(--text);margin-top:auto;}
   .layout-sparse .stack{display:flex;flex-direction:column;gap:0.75rem;flex:1;min-height:0;}
   .layout-sparse .stack-card{display:grid;grid-template-columns:110px 1fr auto;gap:1rem;align-items:center;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;padding:0.75rem;flex:1;min-height:0;}
   .layout-sparse .stack-card .card-image{width:110px;height:85px;object-fit:cover;border-radius:0.4rem;}
   .layout-sparse .stack-card.no-image{grid-template-columns:1fr auto;}
-  .layout-sparse .stack-card .card-name{font-size:clamp(1.2rem,2vw,1.6rem);font-weight:800;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-sparse .stack-card .card-meta{font-size:1rem;color:var(--text-muted);}
-  .layout-sparse .stack-card .card-price{font-size:clamp(1.5rem,2.2vw,2.2rem);font-weight:900;color:var(--accent);}
+  .layout-sparse .stack-card .card-name{font-size:var(--tv-name-size);font-weight:850;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .layout-sparse .stack-card .card-meta{font-size:var(--tv-meta-size);color:var(--text);}
+  .layout-sparse .stack-card .card-price{font-size:var(--tv-price-size);font-weight:950;color:var(--text);}
   .layout-sparse .stack-info{min-width:0;}
 
   /* Single-product sparse category: vertical hero card fills remaining viewport */
@@ -483,9 +559,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-sparse.single-product .hero-card .card-image,.layout-sparse .single-product .hero-card .card-image{width:100%;height:55%;max-height:55%;object-fit:cover;border-radius:0.8rem;}
   .layout-sparse.single-product .hero-card.no-image,.layout-sparse .single-product .hero-card.no-image{gap:1rem;}
   .layout-sparse.single-product .hero-info,.layout-sparse .single-product .hero-info{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;min-width:0;width:100%;}
-  .layout-sparse.single-product .hero-name,.layout-sparse .single-product .hero-name{font-size:clamp(3rem,5vw,5.5rem);}
-  .layout-sparse.single-product .hero-meta,.layout-sparse .single-product .hero-meta{font-size:clamp(1.2rem,2vw,1.8rem);}
-  .layout-sparse.single-product .hero-price,.layout-sparse .single-product .hero-price{font-size:clamp(3rem,6vw,6.5rem);margin-top:1rem;}
+  .layout-sparse.single-product .hero-name,.layout-sparse .single-product .hero-name{font-size:var(--tv-hero-name-size);}
+  .layout-sparse.single-product .hero-meta,.layout-sparse .single-product .hero-meta{font-size:var(--tv-hero-meta-size);}
+  .layout-sparse.single-product .hero-price,.layout-sparse .single-product .hero-price{font-size:var(--tv-hero-price-size);margin-top:1rem;}
 
   /* Minimal TV strain labels: text-first, no pill/chip noise */
   .strain-badge-tv{display:inline;color:var(--text-muted);font-weight:850;text-transform:uppercase;letter-spacing:0.04em;}
@@ -598,7 +674,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 </style>
 </head>
-<body class="template-${initialTemplate} font-${initialFontSize}">
+<body class="template-${initialTemplate} font-${initialFontSize}" data-font-scale="${initialFontScale}">
 
 <div id="pairing" class="phase"${hasInitialMenu ? ' hidden' : ''}>
   <div class="pairing-glow"></div>
@@ -656,6 +732,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var shouldResetTvCycle = ${shouldResetTvCycle.toString()};
   var shouldRunTvCycle = ${shouldRunTvCycle.toString()};
   var nextTvCyclePage = ${nextTvCyclePage.toString()};
+  var TV_FONT_SCALE_MIN = ${TV_FONT_SCALE_MIN};
+  var TV_FONT_SCALE_MAX = ${TV_FONT_SCALE_MAX};
+  var TV_FONT_SCALE_DEFAULT = ${TV_FONT_SCALE_DEFAULT};
+  var normalizeTvFontScale = ${normalizeTvFontScale.toString()};
+  var tvFontSizeClass = ${tvFontSizeClass.toString()};
   var __name = function(target){return target;};
   var buildTvCatalogPagePlan = ${buildTvCatalogPagePlan.toString()};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
@@ -684,6 +765,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var v = new URLSearchParams(location.search).get('fontSize');
     return v === 'small' || v === 'medium' || v === 'large' ? v : null;
   })();
+  var URL_FONT_SCALE = (function(){
+    var v = new URLSearchParams(location.search).get('fontScale');
+    return v === null || v === '' ? null : normalizeTvFontScale(v);
+  })();
 
   var CATEGORY_ICON_SVGS = ${JSON.stringify(CATEGORY_ICON_SVGS)};
   var CATEGORY_LABELS = ${JSON.stringify(CATEGORY_LABELS)};
@@ -696,6 +781,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var reconnectTimer = null;
   var heartbeatTimer = null;
   var cursorTimer = null;
+  var displayWakeLock = null;
+  var wakeLockRetryTimer = null;
   var MAX_RECONNECT_DELAY = 30000;
 
   function escapeHtml(str){
@@ -744,6 +831,35 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function safeFontSize(v){
     return v === 'small' || v === 'large' || v === 'medium' ? v : 'medium';
+  }
+  function activeTvFontScale(cfg){
+    return normalizeTvFontScale(URL_FONT_SCALE === null ? cfg&&cfg.fontScale : URL_FONT_SCALE,URL_FONT_SIZE||(cfg&&cfg.fontSize));
+  }
+  function scaledClamp(min,fluid,max,factor){
+    return 'clamp('+(Math.round(min*factor*1000)/1000)+'rem,'+(Math.round(fluid*factor*1000)/1000)+'vw,'+(Math.round(max*factor*1000)/1000)+'rem)';
+  }
+  function applyTvFontScale(fontScale){
+    var factor=fontScale/100;
+    var tokens={
+      '--tv-category-size':scaledClamp(2,2.45,2.55,factor),
+      '--tv-name-size':scaledClamp(1.28,1.4,1.62,factor),
+      '--tv-meta-size':scaledClamp(0.9,1,1.08,factor),
+      '--tv-price-size':scaledClamp(1.9,2.25,2.5,factor),
+      '--tv-table-size':scaledClamp(0.72,0.82,0.9,factor),
+      '--tv-footer-size':scaledClamp(0.9,0.95,1.02,factor),
+      '--tv-tier-label-size':scaledClamp(0.72,0.78,0.84,factor),
+      '--tv-tier-price-size':scaledClamp(1.12,1.22,1.32,factor),
+      '--tv-feature-name-size':scaledClamp(2,2.6,3,factor),
+      '--tv-feature-meta-size':scaledClamp(1.1,1.35,1.55,factor),
+      '--tv-feature-price-size':scaledClamp(2.4,3.2,3.8,factor),
+      '--tv-hero-name-size':scaledClamp(3,5,5.5,factor),
+      '--tv-hero-meta-size':scaledClamp(1.2,2,1.8,factor),
+      '--tv-hero-price-size':scaledClamp(3,6,6.5,factor),
+      '--tv-brand-size':scaledClamp(2.35,3.35,3.5,factor),
+      '--tv-promo-size':scaledClamp(1.05,1.45,1.45,factor),
+    };
+    Object.keys(tokens).forEach(function(name){document.body.style.setProperty(name,tokens[name]);});
+    document.body.setAttribute('data-font-scale',String(fontScale));
   }
   function customFontClass(v){
     var lower = String(v || '').toLowerCase();
@@ -816,7 +932,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return '<span class="cat-icon-wrap" aria-hidden="true"><span class="cat-icon cat-icon-' + type + '">' + categoryIconSvg(type) + '</span></span>';
   }
 
-  var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:''};
+  var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:'',swapTimer:null,cleanupTimer:null};
 
 
   // Resolve the active layout for THIS TV:
@@ -950,13 +1066,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return buildTvCatalogPagePlan(cats,{
       layout:layout,
       bannerActive:bannerActive,
-      demoMode:isDemoOrDefaultDisplay(config)
+      demoMode:isDemoOrDefaultDisplay(config),
+      fontScale:activeTvFontScale(config),
     });
   }
 
   function getPageSignature(layout,cats,bannerActive){
     return JSON.stringify([
       layout,
+      activeTvFontScale(config),
       bannerActive ? 1 : 0,
       (cats || []).map(function(cat){
         return [cat.id,cat.name,(cat.products || []).map(function(product){
@@ -972,10 +1090,49 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return Math.max(4000, Math.min(20000, 5000 + raw * 100));
   }
 
+  function cancelPageTransition(){
+    clearTimeout(cycleState.swapTimer);
+    clearTimeout(cycleState.cleanupTimer);
+    cycleState.swapTimer=null;
+    cycleState.cleanupTimer=null;
+    cycleState.isTransitioning=false;
+    var content=document.getElementById('menu-content');
+    if(content){content.classList.remove('page-exit');content.classList.remove('page-enter');}
+  }
+
   function stopCycling(){
     clearInterval(cycleState.interval);
     cycleState.interval=null;
     cycleState.intervalMs=0;
+    cancelPageTransition();
+  }
+
+  function advanceCyclePage(){
+    if(cycleState.isTransitioning||cycleState.totalPages<=1) return;
+    var content=document.getElementById('menu-content');
+    var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    cycleState.isTransitioning=true;
+    if(!content||reduceMotion){
+      cycleState.currentPage=nextTvCyclePage(cycleState.currentPage,cycleState.totalPages);
+      renderCurrentPage();
+      cycleState.isTransitioning=false;
+      return;
+    }
+    content.classList.remove('page-enter');
+    content.classList.add('page-exit');
+    cycleState.swapTimer=setTimeout(function(){
+      cycleState.swapTimer=null;
+      cycleState.currentPage=nextTvCyclePage(cycleState.currentPage,cycleState.totalPages);
+      renderCurrentPage();
+      content.classList.remove('page-exit');
+      void content.offsetWidth;
+      content.classList.add('page-enter');
+      cycleState.cleanupTimer=setTimeout(function(){
+        cycleState.cleanupTimer=null;
+        content.classList.remove('page-enter');
+        cycleState.isTransitioning=false;
+      },440);
+    },220);
   }
 
   function startCycling(){
@@ -985,19 +1142,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(cycleState.interval && cycleState.intervalMs===intervalMs) return;
     stopCycling();
     cycleState.intervalMs=intervalMs;
-    cycleState.interval = setInterval(function(){
-      if(cycleState.isTransitioning) return;
-      cycleState.isTransitioning = true;
-      cycleState.currentPage = nextTvCyclePage(cycleState.currentPage,cycleState.totalPages);
-      renderCurrentPage();
-      var content = document.getElementById('menu-content');
-      if(content){
-        content.classList.remove('content-refresh');
-        void content.offsetWidth;
-        content.classList.add('content-refresh');
-      }
-      setTimeout(function(){cycleState.isTransitioning=false;},180);
-    },intervalMs);
+    cycleState.interval = setInterval(advanceCyclePage,intervalMs);
   }
 
   function resumeCycling(){
@@ -1038,6 +1183,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var content = document.getElementById('menu-content');
     content.innerHTML = '';
     content.className = 'menu-content layout-' + layout;
+    content.setAttribute('data-menu-page',String(cycleState.currentPage+1));
+    content.setAttribute('data-menu-pages',String(cycleState.totalPages));
     
     if(layout==='grid') renderGrid(pageCats, content);
     else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats);
@@ -1092,7 +1239,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderMenu(){
     if(!config) return;
-    document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + safeFontSize(URL_FONT_SIZE || config.fontSize) + ' ' + customFontClass(config.customFont)).trim();
+    var fontScale = activeTvFontScale(config);
+    document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + tvFontSizeClass(fontScale) + ' ' + customFontClass(config.customFont)).trim();
+    applyTvFontScale(fontScale);
     applyBrandStyle(config);
     var demoPill = document.getElementById('demo-pill');
     if(demoPill) demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo);
@@ -1136,6 +1285,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1));
     cycleState.pageSignature = nextPageSignature;
     
+    cancelPageTransition();
     renderCurrentPage();
     
     resumeCycling();
@@ -1227,7 +1377,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       catEl.className = 'category-block';
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
-      grid.className = 'grid-products';
+      grid.className = 'grid-products count-' + Math.min(9, cat.products.length);
       grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
@@ -1511,6 +1661,48 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     reconnectTimer=setTimeout(connect,delay);
   }
 
+
+  function setDisplayWakeLockState(state){
+    document.documentElement.setAttribute('data-display-wake-lock',state);
+  }
+
+  function scheduleDisplayWakeLock(){
+    if(EMBED_MODE||document.hidden||wakeLockRetryTimer||!('wakeLock' in navigator)) return;
+    setDisplayWakeLockState('retrying');
+    wakeLockRetryTimer=setTimeout(function(){
+      wakeLockRetryTimer=null;
+      requestDisplayWakeLock();
+    },60000);
+  }
+
+  function requestDisplayWakeLock(){
+    if(EMBED_MODE) return;
+    if(document.hidden){
+      setDisplayWakeLockState('paused');
+      return;
+    }
+    if(!navigator.wakeLock||!navigator.wakeLock.request){
+      setDisplayWakeLockState('unsupported');
+      return;
+    }
+    if(displayWakeLock) return;
+    setDisplayWakeLockState('requesting');
+    navigator.wakeLock.request('screen').then(function(lock){
+      displayWakeLock=lock;
+      setDisplayWakeLockState('active');
+      if(lock&&lock.addEventListener){
+        lock.addEventListener('release',function(){
+          displayWakeLock=null;
+          setDisplayWakeLockState(document.hidden?'paused':'released');
+          scheduleDisplayWakeLock();
+        });
+      }
+    }).catch(function(){
+      displayWakeLock=null;
+      scheduleDisplayWakeLock();
+    });
+  }
+
   var fsDone=false;
   var fsPending=false;
   function tryFullscreen(){
@@ -1538,6 +1730,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     try{localStorage.setItem('dubmenu_age_verified_${safeSessionId}','1');}catch(e){}
     var gate=document.getElementById('age-gate');
     if(gate)gate.classList.add('hidden');
+    requestDisplayWakeLock();
     tryFullscreen();
   }
   window.verifyAge = verifyAge;
@@ -1551,10 +1744,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }
   })();
 
-  document.addEventListener('click',tryFullscreen);
-  document.addEventListener('touchstart',tryFullscreen);
-  document.addEventListener('keydown',tryFullscreen);
-  setTimeout(tryFullscreen,1000);
+  document.addEventListener('click',function(){requestDisplayWakeLock();tryFullscreen();});
+  document.addEventListener('touchstart',function(){requestDisplayWakeLock();tryFullscreen();});
+  document.addEventListener('keydown',function(){requestDisplayWakeLock();tryFullscreen();});
+  setTimeout(function(){requestDisplayWakeLock();tryFullscreen();},1000);
 
   document.addEventListener('mousemove',function(){
     document.body.classList.remove('cursor-hidden');
@@ -1565,6 +1758,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   window.addEventListener('resize',function(){fitToScreen();});
   document.addEventListener('visibilitychange',function(){
     if(document.hidden){stopCycling();return;}
+    requestDisplayWakeLock();
     if(config&&hasProducts(config))renderMenu();
     else resumeCycling();
   });
@@ -1590,6 +1784,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     setPhase('menu');
     renderMenu();
   }
+
+  requestDisplayWakeLock();
 
   connect();
 

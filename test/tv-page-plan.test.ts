@@ -94,6 +94,50 @@ describe('buildTvCatalogPagePlan', () => {
     expect(plannedProductIds(pages)).toEqual(productIds([category]));
   });
 
+  it('preserves every product while reducing per-page density at larger font scales', () => {
+    const category: Category = {
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: products('Flower', 30),
+    };
+    const layouts = ['grid', 'list', 'columns', 'compact', 'cards', 'pricewall', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'];
+
+    for (const layout of layouts) {
+      const compact = buildTvCatalogPagePlan([category], { layout, fontScale: 80 });
+      const standard = buildTvCatalogPagePlan([category], { layout, fontScale: 100 });
+      const extraLarge = buildTvCatalogPagePlan([category], { layout, fontScale: 140 });
+      for (const plan of [compact, standard, extraLarge]) {
+        expect(plannedProductIds(plan)).toEqual(productIds([category]));
+      }
+      const compactPageMaximum = Math.max(...compact.map((page) => productIds(page).length));
+      const extraLargePageMaximum = Math.max(...extraLarge.map((page) => productIds(page).length));
+      expect(extraLargePageMaximum).toBeLessThanOrEqual(compactPageMaximum);
+    }
+  });
+
+  it('keeps dense and image-led pages within TV-height capacity', () => {
+    const categories: Category[] = Array.from({ length: 4 }, (_, index) => ({
+      id: `category-${index + 1}`,
+      name: `Category ${index + 1}`,
+      order: index,
+      products: products(`Category ${index + 1}`, 4),
+    }));
+    const list = buildTvCatalogPagePlan(categories, { layout: 'list', demoMode: true, fontScale: 100 });
+    const standardPoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 100 });
+    const extraLargePoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 140 });
+    const extraLargeCinematic = buildTvCatalogPagePlan(categories, { layout: 'cinematic', demoMode: true, fontScale: 140 });
+
+    expect(list.every((page) => page.length <= 3)).toBe(true);
+    expect(standardPoster.every((page) => page.length === 1 && productIds(page).length <= 3)).toBe(true);
+    expect(extraLargePoster.every((page) => page.length === 1 && productIds(page).length <= 3)).toBe(true);
+    expect(extraLargeCinematic.every((page) => page.length === 1 && productIds(page).length <= 4)).toBe(true);
+    expect(plannedProductIds(list)).toEqual(productIds(categories));
+    expect(plannedProductIds(standardPoster)).toEqual(productIds(categories));
+    expect(plannedProductIds(extraLargePoster)).toEqual(productIds(categories));
+    expect(plannedProductIds(extraLargeCinematic)).toEqual(productIds(categories));
+  });
+
   it('keeps every special product in pricewall pages instead of only the featured rail', () => {
     const categories: Category[] = [
       { id: 'specials', name: 'Specials', order: 0, products: products('Special', 10) },

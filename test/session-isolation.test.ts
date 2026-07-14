@@ -197,6 +197,7 @@ describe('Session Durable Object integrity', () => {
         layout: 'grid',
         layoutMode: 'columns',
         fontSize: 'large',
+        fontScale: 135,
         autoScroll: false,
       }),
     }));
@@ -218,6 +219,7 @@ describe('Session Durable Object integrity', () => {
         layout: 'grid',
         layoutMode: 'columns',
         fontSize: 'large',
+        fontScale: 135,
         autoScroll: true,
       },
     });
@@ -478,14 +480,15 @@ describe('session ownership isolation', () => {
 
     const waitForLargeGrid = (socket: WebSocket) => new Promise<void>((resolve) => {
       socket.addEventListener('message', (event) => {
-        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; layout?: string } };
-        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.layout === 'grid') resolve();
+        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; fontScale?: number; layout?: string } };
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid') resolve();
       });
     });
     const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
 
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontSize: 'large' } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { layout: 'grid' } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { fontScale: 135 } }));
     await bothTVsUpdated;
 
     tvOne.close(1000, 'test complete');

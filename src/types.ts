@@ -86,6 +86,10 @@ export interface ReferenceStyleProfile {
   appliedAt: string;
 }
 
+export const TV_FONT_SCALE_MIN = 90;
+export const TV_FONT_SCALE_MAX = 140;
+export const TV_FONT_SCALE_DEFAULT = 100;
+
 export interface MenuConfig {
   dispensaryName: string;
   logo?: string;
@@ -103,6 +107,7 @@ export interface MenuConfig {
   layout: 'auto' | 'grid' | 'list' | 'pricewall' | 'cards' | 'compact' | 'poster' | 'cinematic' | 'showcase' | 'editorial' | 'sparse';
   layoutMode: 'auto' | 'columns' | 'pricelist' | 'compact' | 'grid';
   fontSize: 'small' | 'medium' | 'large';
+  fontScale?: number;
   theme: 'dark' | 'light';
   autoScroll: boolean;
   autoScrollSpeed: number;
@@ -137,8 +142,9 @@ export const DEFAULT_CONFIG: MenuConfig = {
   layout: 'auto',
   layoutMode: 'auto',
   fontSize: 'medium',
+  fontScale: TV_FONT_SCALE_DEFAULT,
   theme: 'dark',
-  autoScroll: false,
+  autoScroll: true,
   autoScrollSpeed: 50,
   showCategory: null,
   promoBanner: {

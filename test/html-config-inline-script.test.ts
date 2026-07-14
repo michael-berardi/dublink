@@ -92,6 +92,16 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('pendingConfigPatch[k]=v');
   });
 
+  it('provides a phone-friendly continuous TV text-size control and previews it live', () => {
+    expect(html).toContain('id="fontScale"');
+    expect(html).toContain('min="90" max="140" step="5"');
+    expect(html).toContain('id="fontScaleValue"');
+    expect(html).toContain('function resolvedFontScale');
+    expect(html).toContain("debounceConfig('fontScale',this.valueAsNumber)");
+    expect(html).toContain("&fontScale='+encodeURIComponent(String(resolvedFontScale(config)))");
+    expect(html).toContain('Larger settings automatically show fewer products per page');
+  });
+
   it('accepts only DubMenu-owned logo URLs and names page rotation accurately', () => {
     expect(html).toContain('function normalizeOwnedLogoUrl');
     expect(html).toContain("parsed.pathname.indexOf('/api/uploads/')===0");

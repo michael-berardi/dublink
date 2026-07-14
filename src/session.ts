@@ -1,4 +1,4 @@
-import { MenuConfig, DEFAULT_CONFIG, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
+import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
 import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
 
 export type Env = AuthEnv;
@@ -289,6 +289,7 @@ export class SessionDurableObject implements DurableObject {
       this.sanitizeLayout(config.layout) !== undefined &&
       this.sanitizeLayoutMode(config.layoutMode) !== undefined &&
       this.sanitizeFontSize(config.fontSize) !== undefined &&
+      (config.fontScale === undefined || this.sanitizeFontScale(config.fontScale) !== undefined) &&
       this.sanitizeTheme(config.theme) !== undefined &&
       ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
       typeof config.displayCount === 'number'
@@ -402,6 +403,12 @@ export class SessionDurableObject implements DurableObject {
           layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
           layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? this.config.layoutMode,
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
+          fontScale: this.sanitizeFontScale(data.fontScale) ?? (
+            data.fontSize === 'small' ? TV_FONT_SCALE_MIN :
+            data.fontSize === 'large' ? 120 :
+            data.fontSize === 'medium' ? 100 :
+            this.config.fontScale
+          ),
           theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
           template: this.sanitizeTemplate(data.template) ?? this.config.template,
           primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
@@ -478,6 +485,7 @@ export class SessionDurableObject implements DurableObject {
         layout: this.config.layout,
         layoutMode: this.config.layoutMode,
         fontSize: this.config.fontSize,
+        fontScale: this.config.fontScale,
         theme: this.config.theme,
         template: this.config.template,
         primaryColor: this.config.primaryColor,
@@ -523,6 +531,7 @@ export class SessionDurableObject implements DurableObject {
         layout: this.config.layout,
         layoutMode: this.config.layoutMode,
         fontSize: this.config.fontSize,
+        fontScale: this.config.fontScale,
         theme: this.config.theme,
         template: this.config.template,
         primaryColor: this.config.primaryColor,
@@ -749,6 +758,9 @@ export class SessionDurableObject implements DurableObject {
         const payload = msg.payload;
         if (!this.isValidConfigUpdate(payload)) return;
         const sanitizedPayload = { ...payload };
+        if (sanitizedPayload.fontScale !== undefined) {
+          sanitizedPayload.fontScale = this.sanitizeFontScale(sanitizedPayload.fontScale);
+        }
         if (sanitizedPayload.complianceState !== undefined) {
           const cs = this.sanitizeComplianceState(sanitizedPayload.complianceState);
           if (cs) sanitizedPayload.complianceState = cs;
@@ -772,7 +784,13 @@ export class SessionDurableObject implements DurableObject {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!isRecord(payload) || !this.isValidImportedCategories(payload.categories)) return;
-        this.config = { ...this.config, ...payload, categories: this.sanitizeCategories(payload.categories), styleProfile: this.sanitizeStyleProfile(payload.styleProfile) };
+        this.config = {
+          ...this.config,
+          ...payload,
+          fontScale: this.sanitizeFontScale(payload.fontScale) ?? this.config.fontScale,
+          categories: this.sanitizeCategories(payload.categories),
+          styleProfile: this.sanitizeStyleProfile(payload.styleProfile),
+        };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -1019,7 +1037,7 @@ export class SessionDurableObject implements DurableObject {
     const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
-                         'layoutMode', 'fontSize', 'theme', 'autoScroll', 'autoScrollSpeed', 'showCategory',
+                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'autoScrollSpeed', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
                          'displayCount', 'styleProfile'];
     
@@ -1035,6 +1053,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.customFont !== undefined && typeof payload.customFont !== 'string') return false;
     if (payload.layout !== undefined && this.sanitizeLayout(payload.layout) === undefined) return false;
     if (payload.fontSize !== undefined && this.sanitizeFontSize(payload.fontSize) === undefined) return false;
+    if (payload.fontScale !== undefined && this.sanitizeFontScale(payload.fontScale) === undefined) return false;
     if (payload.theme !== undefined && this.sanitizeTheme(payload.theme) === undefined) return false;
     if (payload.template !== undefined && this.sanitizeTemplate(payload.template) === undefined) return false;
     if (payload.layoutMode !== undefined && this.sanitizeLayoutMode(payload.layoutMode) === undefined) return false;
@@ -1256,6 +1275,13 @@ export class SessionDurableObject implements DurableObject {
   private sanitizeFontSize(value: unknown): MenuConfig['fontSize'] | undefined {
     if (value === 'small' || value === 'medium' || value === 'large') return value;
     return undefined;
+  }
+
+  private sanitizeFontScale(value: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+    const rounded = Math.round(value / 5) * 5;
+    if (rounded < TV_FONT_SCALE_MIN || rounded > TV_FONT_SCALE_MAX) return undefined;
+    return rounded;
   }
 
   private sanitizeHexColor(value: unknown): string | undefined {

@@ -1,9 +1,10 @@
-import type { Category, Product } from './types';
+import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, type Category, type Product } from './types';
 
 export interface TvPagePlanOptions {
   layout: string;
   bannerActive?: boolean;
   demoMode?: boolean;
+  fontScale?: number;
 }
 
 /**
@@ -31,9 +32,9 @@ export function buildTvCatalogPagePlan(
     switch (options.layout) {
       case 'grid': productsPerPage = 12; categoriesPerPage = 3; break;
       case 'pricewall': productsPerPage = demoMode ? 18 : 16; categoriesPerPage = 2; break;
-      case 'list': productsPerPage = demoMode ? 18 : 12; categoriesPerPage = demoMode ? 4 : 3; break;
-      case 'poster': productsPerPage = demoMode ? 8 : 6; categoriesPerPage = 2; break;
-      case 'cinematic': productsPerPage = demoMode ? 8 : 6; categoriesPerPage = 2; break;
+      case 'list': productsPerPage = 12; categoriesPerPage = 3; break;
+      case 'poster': productsPerPage = 3; categoriesPerPage = 1; break;
+      case 'cinematic': productsPerPage = demoMode ? 8 : 6; categoriesPerPage = 1; break;
       case 'showcase': productsPerPage = 1; categoriesPerPage = 1; break;
       case 'editorial': productsPerPage = demoMode ? 12 : 9; categoriesPerPage = 3; break;
       case 'sparse': productsPerPage = 4; categoriesPerPage = 1; break;
@@ -42,6 +43,23 @@ export function buildTvCatalogPagePlan(
     if (options.bannerActive && options.layout !== 'pricewall') {
       productsPerPage = Math.max(1, productsPerPage - (options.layout === 'showcase' ? 0 : 2));
       categoriesPerPage = Math.max(1, categoriesPerPage - 1);
+    }
+    const rawFontScale = Number(options.fontScale);
+    const fontScale = Number.isFinite(rawFontScale)
+      ? Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, rawFontScale))
+      : TV_FONT_SCALE_DEFAULT;
+    if (fontScale >= 130) {
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 12);
+      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 4);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 9);
+    } else if (fontScale >= 115) {
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 14);
+      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 5);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 10);
     }
     return { productsPerPage, categoriesPerPage };
   };
