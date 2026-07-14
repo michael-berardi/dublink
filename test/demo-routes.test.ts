@@ -54,6 +54,22 @@ describe('demo route fallback', () => {
     expect(products.find((product) => product.name === 'CBD Balm')).toMatchObject({ cbd: '200mg', thc: undefined });
     expect(products.find((product) => product.name === 'CBD Cartridge')?.cbd).toBe('80%');
     expect(products.find((product) => product.name === 'CBD Tincture')?.cbd).toBe('500mg');
+    const imageSetsByCategory = Object.fromEntries(
+      config.categories.map((category) => [category.name, new Set(category.products.map((product) => product.image))]),
+    );
+    expect(Object.fromEntries(
+      Object.entries(imageSetsByCategory).map(([categoryName, images]) => [categoryName, images.size]),
+    )).toEqual({
+      Flower: 1,
+      'Pre-Rolls': 1,
+      Vapes: 2,
+      Concentrates: 1,
+      Edibles: 2,
+      Tinctures: 1,
+      Topicals: 1,
+    });
+    const assignedImages = Object.values(imageSetsByCategory).flatMap((images) => [...images]);
+    expect(new Set(assignedImages).size).toBe(assignedImages.length);
   });
 
   it('/menu/:unowned still returns empty categories (no fake data leak)', async () => {

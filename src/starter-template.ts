@@ -280,12 +280,26 @@ const SIMPLY_GREEN_DEMO_IMAGE_URLS = [
   'data:image/webp;base64,UklGRpoEAABXRUJQVlA4II4EAAAwJACdASrwAPAAPrFYpU6nJSOmIRSaEOAWCWlugbEi+hLI/vkYFU92S23ImQofrEGx25sMNWyvF3IOc7lG0YYnZKOrpZKb6e0hWGJGMQSUi4s7xbOK0FsPTNFsd4UQ41O3HcBEXU/yYkgjlazlYBT/JJTrhuEwygLtG96YZgIbD7r/7H6Y7Vo/LcnM0OzBPH/FODOxMZBu+SRRST8lQfC6x18LQtUByjKuRnE8MwkY5OAR/Bio77e6fyX1g7LiLCP5t7V1NGUdAHGvEPpoQhm73dCZ0twW/YYGwvx7wixv+lQ3MpsxFERfI/qBj5/xI2Ty1D7LLw+E3cQkEglo+8H/QLMuEfsSWgwzsbwEK4039qxZnHgH7OI7TtaHgkHBRiRXMldYO7m3sOUAAP77FPPKVM2ngIOrr85kFj+IOoMGh1+ylT9deZsSoF+0u3gawtLXc0XtkAXh47BIwoDLDe2LHH9LRdGuccoNBeYFr+AXc4d0ldNEWzJjGqjnOQDrzASa5f59EnMf1u3i9ihEe+34Ahhl71ZJiXzCyUTe8DfNkmF9BxdffXmowlqNlOUhNUTef+VLfl9rjjBIO+pf0kw1BHRrzR4W6V4lawtHsXruCWBOHFT8D/q+vK5K2dEe5XQU/UAbfStN4LK9ZL1A7NirjUw/k8wJ1tykI9ox2M7ud7+bRQK7kTso9MMJT49Qmt3OuRtODAXdwwIs/a9gsM3FOUwRD3jZpHGgFOikloJEYPBj81X/NAjOpiCzQ5Yvdm2lT6L0UBNOlQz43TC1hIpz8RhTCucQuui5MPdbURdLm0nbXtB274NcEMwo8xU6mxEDcob2yo8I9TlxtkQqy9vpxM7he+tB8UkJjLBFEOj6WeKTa/ZvA2eqaNbRLOdX7SKZa8Xeqt/q9grDi7vwZlPEta/mki9oTXfWR7+J7tdq7EnPimGcu8npe1BsJuvGtYNWT4BHPwcPfW9xbSh6lC015AJ1/tTNkG9AJ+PxDPsLPJyAXetIWkCZY+b3GDlJZdBZ9v/YNTUQgC/pxfVgEIostczaGfR8mnH9jEsP16XJtjLsOzOGMCgNsUl+0z+t7IztK+k7Pti77IC3kIjrP5EI7vNQ4JaSZtxT2cjurFGGyfOjcrapWy8Jo+dbaX+AEyZZ4D50vBxwJ9GJ75dxd+AAgck0IibUp/MWGS/Il4lQy7XONfhF2iQtWlVtmlptY/hfyvm4uEKm3xIlEv6qCbLS3hZWsKvlhucQHcLi1dbcCVcmlzcE1EBdFld++7zixOdBpk/eiCrv67W0tqYXYtxdOI3MO38cDgHrmLkNl6erlrZ0OSy69wKFKLfd5zS9BgYvxZ/7I7TCd+6By4/iL0Pegg187uXOceSYA2rrpACAVYj/edUBlNwvzid98fZ1zhtQJqL2cvqOOntr1vP7hTdb1nPAPWXfTizF9tSe/2h0uSf5vJBIV1o08HPVOEM0FIROuet/uyN0Wm6xr3Wl4RG3UzTlwvmM0PmqmfXimpP6MpjqlRiBvji7udYqL6ZUC2GFBpoTRkPb4RKn3PQAAA==',
 ] as const;
 
-function simplyGreenDemoImage(categoryIndex: number, productIndex: number): string {
-  return SIMPLY_GREEN_DEMO_IMAGE_URLS[(categoryIndex * 3 + productIndex) % SIMPLY_GREEN_DEMO_IMAGE_URLS.length];
+type DemoCategoryName = 'Flower' | 'Pre-Rolls' | 'Vapes' | 'Concentrates' | 'Edibles' | 'Tinctures' | 'Topicals';
+
+const SIMPLY_GREEN_DEMO_IMAGE_INDEXES_BY_CATEGORY: Record<DemoCategoryName, readonly number[]> = {
+  Flower: [0],
+  'Pre-Rolls': [1],
+  Vapes: [2, 8],
+  Concentrates: [3],
+  Edibles: [4, 7],
+  Tinctures: [5],
+  Topicals: [6],
+};
+
+function simplyGreenDemoImage(categoryName: DemoCategoryName, productIndex: number): string {
+  const imageIndexes = SIMPLY_GREEN_DEMO_IMAGE_INDEXES_BY_CATEGORY[categoryName];
+  const imageIndex = imageIndexes[productIndex % imageIndexes.length];
+  return SIMPLY_GREEN_DEMO_IMAGE_URLS[imageIndex];
 }
 
 type DemoCategorySeed = {
-  name: string;
+  name: DemoCategoryName;
   names: string[];
   weights: string[];
   thc: Array<string | undefined>;
@@ -371,7 +385,7 @@ export function createSimplyGreenDemoCategories(): Category[] {
       cbd: seed.cbd?.[productIndex],
       weight: seed.weights[productIndex],
       brand: 'Simply Green',
-      image: simplyGreenDemoImage(categoryIndex, productIndex),
+      image: simplyGreenDemoImage(seed.name, productIndex),
       strain: seed.strains[productIndex],
       inStock: true,
     })),
