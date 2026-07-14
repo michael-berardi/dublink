@@ -6,6 +6,18 @@ export function termsPage(origin: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
   const safeOrigin = escapeHtml(origin);
+  const schemaJSON = JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: "DubMenu Terms of Service",
+    description: "Terms governing accounts, subscriptions, acceptable use, content, and liability for the DubMenu service.",
+    url: `${origin}/terms`,
+    isPartOf: {
+      "@type": "WebSite",
+      name: "DubMenu",
+      url: origin
+    }
+  }).replace(/</g, '\\u003c');
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,6 +26,7 @@ export function termsPage(origin: string): string {
   <title>Terms of Service | DubMenu</title>
   <meta name="description" content="DubMenu terms of service.">
   <link rel="canonical" href="${safeOrigin}/terms">
+  <script type="application/ld+json">${schemaJSON}</script>
   <style>
     :root{--bg:#0a0f0d;--surface:rgba(255,255,255,0.04);--border:rgba(255,255,255,0.08);--text:#f0f2f5;--muted:#889495;--primary:#10b981;}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -44,6 +57,7 @@ export function termsPage(origin: string): string {
   </nav>
   <div class="hero">
     <h1>Terms of Service</h1>
+    <p>Effective date: July 14, 2026.</p>
   </div>
   <div class="content">
     <div class="section">

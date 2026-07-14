@@ -455,6 +455,10 @@ const PSEO_PAGES: PSEOPageData[] = [
       {
         heading: "Auto-scroll for large inventories",
         content: "If you carry 50+ products, fitting them all on one screen means tiny text. DubMenu can auto-scroll through categories, showing a manageable number of products at a time and cycling through the rest. You control the scroll speed from your phone."
+      },
+      {
+        heading: "A reliable update workflow",
+        content: "Assign one staff member to verify the display at opening and after every inventory import, price change, or promotion. Compare several products on the screen with the point-of-sale record, then confirm sold-out items, weights, potency, and sale labels. Keep the screen paired to a stable network and place the display where glare does not hide prices. This short operational check prevents an attractive menu from showing stale information during the busiest part of the day."
       }
     ],
     faqs: [

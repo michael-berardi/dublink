@@ -290,6 +290,13 @@ export function landingPage(origin: string): string {
       letter-spacing: -0.02em;
       margin-bottom: 3.5rem;
     }
+    .section-intro {
+      max-width: 760px;
+      margin: -2.25rem auto 3.5rem;
+      text-align: center;
+      color: var(--text-muted);
+      line-height: 1.75;
+    }
     .steps-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -631,6 +638,7 @@ export function landingPage(origin: string): string {
 
   <section class="steps" id="how-it-works">
     <h2 class="section-title">How It Works</h2>
+    <p class="section-intro">DubMenu gives dispensary teams one practical workflow for the screen customers see every day. Pair a display, build the product list from a phone, and verify prices, weights, potency, and availability before opening. Staff can update an item as soon as inventory changes instead of waiting for a designer or printing another menu. High-contrast themes and adjustable text sizes keep the board readable across different store layouts, while optional images and automatic scrolling support larger catalogs. The result is a menu board that stays useful during routine service, promotions, and busy periods without dedicated hardware or a complicated content-management system.</p>
     <div class="steps-grid">
       <div class="step-card">
         <div class="step-num">1</div>
