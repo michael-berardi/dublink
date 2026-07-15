@@ -199,6 +199,8 @@ describe('Session Durable Object integrity', () => {
         fontSize: 'large',
         fontScale: 135,
         autoScroll: false,
+        pageDurationSeconds: 15,
+        pageTransition: 'none',
       }),
     }));
     expect(first.status).toBe(200);
@@ -221,6 +223,8 @@ describe('Session Durable Object integrity', () => {
         fontSize: 'large',
         fontScale: 135,
         autoScroll: true,
+        pageDurationSeconds: 15,
+        pageTransition: 'none',
       },
     });
   });
@@ -480,8 +484,8 @@ describe('session ownership isolation', () => {
 
     const waitForLargeGrid = (socket: WebSocket) => new Promise<void>((resolve) => {
       socket.addEventListener('message', (event) => {
-        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; fontScale?: number; layout?: string } };
-        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid') resolve();
+        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; fontScale?: number; layout?: string; pageDurationSeconds?: number; pageTransition?: string } };
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none') resolve();
       });
     });
     const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
@@ -489,6 +493,8 @@ describe('session ownership isolation', () => {
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontSize: 'large' } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { layout: 'grid' } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontScale: 135 } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { pageDurationSeconds: 15 } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { pageTransition: 'none' } }));
     await bothTVsUpdated;
 
     tvOne.close(1000, 'test complete');

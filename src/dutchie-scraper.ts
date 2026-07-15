@@ -368,7 +368,6 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     `https://dutchie.com/stores/${dispensarySlug}`,
     `https://dutchie.com/embedded-menu/${dispensarySlug}`,
   ];
-  let structuredError: string | undefined;
   const structuredAttempts = await Promise.all(structuredUrls.map(async (dutchieUrl) => {
     try {
       return { result: await scrapeDutchieStructured(dutchieUrl, token) };
@@ -412,7 +411,7 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
       productCount: seenProducts.size,
     };
   }
-  structuredError = structuredAttempts.map((attempt) => attempt.error).filter(Boolean).join('; ')
+  const structuredError = structuredAttempts.map((attempt) => attempt.error).filter(Boolean).join('; ')
     || 'Structured Dutchie scrape returned no products';
 
   let data: { products: Array<{ href: string; text: string; img: string }>; count: number } | undefined;

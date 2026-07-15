@@ -83,13 +83,16 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain("delivery==='sent'?'Logo uploaded & sent to TV':'Logo uploaded. It will sync when reconnected.'");
   });
 
-  it('queues config controls across reconnects without losing font or layout choices', () => {
+  it('queues rapid config edits together across debounce and reconnect boundaries', () => {
     expect(html).toContain('let pendingConfigPatch={}');
+    expect(html).toContain('function queueConfig(k,v)');
     expect(html).toContain('function flushPendingConfig()');
     expect(html).toContain("ws.send(JSON.stringify({type:'join',payload:{role:'phone'}}));");
     expect(html).toContain('flushPendingConfig();');
     expect(html).toContain('config=Object.assign({},incoming,pendingConfigPatch)');
-    expect(html).toContain('pendingConfigPatch[k]=v');
+    const debounce = between(html, 'function debounceConfig(k,v){', '}');
+    expect(debounce.indexOf('queueConfig(k,v)')).toBeGreaterThan(-1);
+    expect(debounce.indexOf('queueConfig(k,v)')).toBeLessThan(debounce.indexOf('setTimeout'));
   });
 
   it('provides a phone-friendly continuous TV text-size control and previews it live', () => {
@@ -102,12 +105,16 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('Larger settings automatically show fewer products per page');
   });
 
-  it('accepts only DubMenu-owned logo URLs and names page rotation accurately', () => {
-    expect(html).toContain('function normalizeOwnedLogoUrl');
-    expect(html).toContain("parsed.pathname.indexOf('/api/uploads/')===0");
-    expect(html).toContain('Upload the logo through DubMenu before using it on TV');
-    expect(html).toContain('Auto-Rotate Menu Pages');
-    expect(html).toContain('Page Duration');
+  it('places explicit industry-aligned animation controls beside layout settings', () => {
+    const layoutCard = between(html, '<h2 class="card-title">Layout</h2>', '<h2 class="card-title">Template Intelligence</h2>');
+    expect(layoutCard).toContain('Auto-Rotate Menu Pages');
+    expect(layoutCard).toContain('id="animationSettings"');
+    expect(layoutCard).toContain('id="pageDurationSeconds"');
+    expect(layoutCard).toContain('<option value="10" selected>10 seconds · Recommended</option>');
+    expect(layoutCard).toContain('id="pageTransition"');
+    expect(layoutCard).toContain('<option value="fade">Fade · Recommended</option>');
+    expect(layoutCard).toContain('<option value="none">Instant</option>');
+    expect(layoutCard).not.toContain('autoScrollSpeed');
   });
 
   it('makes the specials card actionable instead of a dead-looking heading', () => {

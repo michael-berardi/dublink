@@ -8,6 +8,7 @@ import {
   shouldRunTvCycle,
   tvPage,
 } from '../src/html-tv';
+import { normalizeTvPageDurationSeconds, normalizeTvPageTransition } from '../src/types';
 
 describe('tvPage', () => {
   const sampleConfig = {
@@ -163,8 +164,8 @@ describe('tvPage', () => {
     expect(page).toContain('cat-icon-wrap');
     expect(page).toContain('cat-icon cat-icon-');
     // Ensure inline category SVGs remain custom SVGs, not emoji text.
-    expect(page).toContain('<svg');
-    expect(page).toContain('</svg>');
+    expect(page).toContain('\\u003csvg');
+    expect(page).toContain('\\u003c/svg\\u003e');
   });
 
   it('emits a parseable inline script with no broken string literals', () => {
@@ -356,11 +357,23 @@ describe('tvPage', () => {
     expect(nextTvCyclePage(2, 0)).toBe(0);
   });
 
-  it('computes the cycle interval from autoScrollSpeed', () => {
-    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true, autoScrollSpeed: 75 } });
-    expect(page).toContain('function getCycleInterval');
-    expect(page).toContain('config.autoScrollSpeed');
-    expect(page).toContain('Math.max(4000, Math.min(20000, 5000 + raw * 100))');
+  it('normalizes explicit page duration seconds and legacy speed values', () => {
+    expect(normalizeTvPageDurationSeconds(5)).toBe(5);
+    expect(normalizeTvPageDurationSeconds(10)).toBe(10);
+    expect(normalizeTvPageDurationSeconds(15)).toBe(15);
+    expect(normalizeTvPageDurationSeconds(20)).toBe(20);
+    expect(normalizeTvPageDurationSeconds(12)).toBe(10);
+    expect(normalizeTvPageDurationSeconds(undefined, 50)).toBe(10);
+    expect(normalizeTvPageDurationSeconds(undefined, 100)).toBe(15);
+    expect(normalizeTvPageDurationSeconds(undefined, 150)).toBe(20);
+    expect(normalizeTvPageDurationSeconds('invalid')).toBe(10);
+  });
+
+  it('normalizes page transition choices to the calm fade default', () => {
+    expect(normalizeTvPageTransition('fade')).toBe('fade');
+    expect(normalizeTvPageTransition('none')).toBe('none');
+    expect(normalizeTvPageTransition('flip')).toBe('fade');
+    expect(normalizeTvPageTransition(undefined)).toBe('fade');
   });
 
   it('auto-rotates overflow category pages only when enabled', () => {
@@ -369,21 +382,57 @@ describe('tvPage', () => {
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
   });
 
-  it('uses calm two-stage page transitions and honors reduced-motion preferences', () => {
-    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
-    expect(page).toContain('.menu-content.page-exit{animation:menu-page-exit 220ms');
-    expect(page).toContain('.menu-content.page-enter{animation:menu-page-enter 420ms');
+  it('uses a 400ms fade, recursive dwell scheduling, and instant reduced-motion replacement', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: { ...sampleConfig, autoScroll: true, pageDurationSeconds: 10, pageTransition: 'fade' },
+    });
+    expect(page).toContain('.menu-content.page-exit{animation:menu-page-exit 180ms');
+    expect(page).toContain('.menu-content.page-enter{animation:menu-page-enter 220ms');
     expect(page).toContain('@media (prefers-reduced-motion:reduce)');
+    expect(page).toContain('.pairing-glow,.conn-dot{animation:none!important;}');
     expect(page).toContain("window.matchMedia('(prefers-reduced-motion: reduce)').matches");
-    expect(page).toContain('function advanceCyclePage()');
-    expect(page).toContain('cycleState.interval = setInterval(advanceCyclePage,intervalMs)');
+    expect(page).toContain('function scheduleNextCycle()');
+    expect(page).toContain('cycleState.interval=setTimeout(advanceCyclePage,intervalMs)');
+    expect(page).not.toContain('setInterval(advanceCyclePage');
+    expect(page).toContain("normalizeTvPageTransition(config && config.pageTransition)==='none'");
     expect(page).toContain("content.setAttribute('data-menu-page',String(cycleState.currentPage+1))");
-    expect(page).not.toContain('content-refresh');
+  });
+
+  it('resets for every page-planner input and stops immediately when the menu becomes empty', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
+    expect(page).toContain('var demoMode = isDemoOrDefaultDisplay(config)');
+    expect(page).toContain('getPageSignature(layout,cats,bannerActive,demoMode)');
+    expect(page).toContain('demoMode ? 1 : 0');
+    expect(page).toContain("cycleState.pageSignature=''");
+    expect(page).toContain('renderEmptyMenu(layout)');
+  });
+
+  it('uses the same demo capacity for cycle counts and rendered pages', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: { ...sampleConfig, autoScroll: true, tvDemo: true },
+    });
+    expect(page).toContain('getCatalogPagePlan(displayCats, layout, bannerActive, isDemoOrDefaultDisplay(config))');
+  });
+
+  it('replans pagination when a scheduled banner starts or ends', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
+    expect(page).toContain('var lastBannerActive=false');
+    expect(page).toContain('lastBannerActive=!!banner');
+    expect(page).toContain('var nextBannerActive=!!getActiveBanner()');
+    expect(page).toContain('if(nextBannerActive!==lastBannerActive)renderMenu()');
+  });
+
+  it('escapes imported menu text before embedding initial config in the inline script', () => {
+    const injected = '</script><script>window.tvInjection=true</script>';
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: { ...sampleConfig, dispensaryName: injected },
+    });
+    expect(page.match(/<\/script>/g)).toHaveLength(1);
+    expect(page).toContain('\\u003c/script\\u003e\\u003cscript\\u003ewindow.tvInjection=true\\u003c/script\\u003e');
   });
 
   it('keeps playback stable across duplicate or cosmetic config broadcasts', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
-    expect(page).toContain('var nextPageSignature = getPageSignature(layout,cats,bannerActive)');
     expect(page).toContain('var pageModelChanged = shouldResetTvCycle(cycleState.pageSignature,nextPageSignature)');
     expect(page).toContain('cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1))');
     expect(page).toContain('if(cycleState.interval && cycleState.intervalMs===intervalMs) return');
@@ -415,7 +464,7 @@ describe('tvPage', () => {
   it('compacts the TV board and centers scaled previews when a promo banner is active', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
     expect(page).toContain('body.has-promo-banner .menu-content');
-    expect(page).toContain("document.body.classList.toggle('has-promo-banner',!!banner)");
+    expect(page).toContain("document.body.classList.toggle('has-promo-banner',lastBannerActive)");
     expect(page).toContain('Math.max(0, (vw - scaledW) / 2)');
   });
 

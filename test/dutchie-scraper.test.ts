@@ -307,8 +307,8 @@ describe('Dutchie scraper image extraction', () => {
       },
     });
 
-    const expectedUrl = 'https://images.dutchie.com/tv-og.jpg?h=400&w=400';
-    expect(page).toContain(expectedUrl);
+    const expectedSerializedUrl = 'https://images.dutchie.com/tv-og.jpg?h=400\\u0026w=400';
+    expect(page).toContain(expectedSerializedUrl);
     expect(page).toContain('var initialConfig = ');
     expect(page).toContain('imgMarkup(p, true)');
     expect(page).toContain('class="card-image card-image-loading"');

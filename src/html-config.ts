@@ -1,7 +1,8 @@
 import { createStarterConfig } from './starter-template';
-import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN } from './types';
+import { serializeInlineScriptJson } from './inline-script-json';
+import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_TRANSITION_DEFAULT } from './types';
 export function configPage(sessionId: string, origin: string): string {
-  const STARTER_CONFIG = JSON.stringify(createStarterConfig());
+  const STARTER_CONFIG = serializeInlineScriptJson(createStarterConfig());
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -521,8 +522,27 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="toggle-row"><span id="lbl-showBrandWeight">Show Brand & Weight</span><button type="button" class="switch" id="showBrandWeight" role="switch" aria-checked="false" aria-labelledby="lbl-showBrandWeight" onclick="toggleSwitch(this);updateBrandWeight()"></button></div>
   <div class="toggle-row"><span id="lbl-showImages">Show Product Images</span><button type="button" class="switch" id="showImages" role="switch" aria-checked="false" aria-labelledby="lbl-showImages" onclick="toggleSwitch(this,'showImages')"></button></div>
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
-  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('scrollSpeedField').style.display=this.classList.contains('on')?'block':'none';showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
-  <div class="field" id="scrollSpeedField" style="display:none;"><label for="autoScrollSpeed">Page Duration</label><input type="range" id="autoScrollSpeed" min="10" max="150" value="50" oninput="debounceConfig('autoScrollSpeed',parseInt(this.value))" style="width:100%;"></div>
+  <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('animationSettings').hidden=!this.classList.contains('on');showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
+  <div id="animationSettings" hidden>
+    <div class="field">
+      <label for="pageDurationSeconds">Page Duration</label>
+      <select id="pageDurationSeconds" onchange="sendConfig('pageDurationSeconds',Number(this.value))">
+        <option value="5">5 seconds</option>
+        <option value="10" selected>10 seconds · Recommended</option>
+        <option value="15">15 seconds</option>
+        <option value="20">20 seconds</option>
+      </select>
+      <div class="helper">How long each page stays fully visible. The 10-second default matches common digital-signage timing.</div>
+    </div>
+    <div class="field">
+      <label for="pageTransition">Page Transition</label>
+      <select id="pageTransition" onchange="sendConfig('pageTransition',this.value)">
+        <option value="fade">Fade · Recommended</option>
+        <option value="none">Instant</option>
+      </select>
+      <div class="helper">Fade changes pages in 0.4 seconds. Instant removes motion; reduced-motion displays always switch instantly.</div>
+    </div>
+  </div>
   <div class="field"><label for="customFont">Custom Font Style</label><input type="text" id="customFont" placeholder="e.g. bold serif, condensed, mono" oninput="debounceConfig('customFont',this.value)"><div class="helper">Supports style cues like bold serif, mono, slab serif, or condensed.</div></div>
 </div>
 <div class="card">
@@ -741,12 +761,21 @@ function setStatus(s){
   document.getElementById('statusText').textContent=s==='connected'?'Connected':s==='disconnected'?'Disconnected':'Connecting...';
 }
 function send(t,p){if(!canSend())return false;ws.send(JSON.stringify({type:t,payload:p}));return true;}
-function sendConfig(k,v){
+function queueConfig(k,v){
   pendingConfigPatch[k]=v;
   if(config){config=Object.assign({},config);config[k]=v;}
+}
+function sendConfig(k,v){
+  clearTimeout(debounceTimer);
+  debounceTimer=null;
+  queueConfig(k,v);
   return flushPendingConfig()?'sent':'queued';
 }
-function debounceConfig(k,v){clearTimeout(debounceTimer);debounceTimer=setTimeout(function(){sendConfig(k,v);},400);}
+function debounceConfig(k,v){
+  queueConfig(k,v);
+  clearTimeout(debounceTimer);
+  debounceTimer=setTimeout(flushPendingConfig,400);
+}
 function resolvedFontScale(cfg){
   var raw=cfg&&cfg.fontScale;
   var numeric=typeof raw==='number'?raw:Number(raw);
@@ -1307,8 +1336,9 @@ function render(){
   setSwitch('showImages',config.showImages!==false);
   setSwitch('showPromos',config.showPromos!==false);
   setSwitch('autoScroll',config.autoScroll===true);
-  document.getElementById('autoScrollSpeed').value=config.autoScrollSpeed||50;
-  document.getElementById('scrollSpeedField').style.display=config.autoScroll===true?'block':'none';
+  document.getElementById('pageDurationSeconds').value=String(config.pageDurationSeconds||${TV_PAGE_DURATION_DEFAULT});
+  document.getElementById('pageTransition').value=config.pageTransition==='none'?'none':'${TV_PAGE_TRANSITION_DEFAULT}';
+  document.getElementById('animationSettings').hidden=config.autoScroll!==true;
   document.getElementById('customFont').value=(config.customFont&&config.customFont!=='system')?config.customFont:'';
   setSwitch('promoBannerActive',config.promoBanner?config.promoBanner.active===true:false);
   renderScheduledBanners();

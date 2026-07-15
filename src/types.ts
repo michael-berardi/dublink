@@ -89,6 +89,37 @@ export interface ReferenceStyleProfile {
 export const TV_FONT_SCALE_MIN = 90;
 export const TV_FONT_SCALE_MAX = 140;
 export const TV_FONT_SCALE_DEFAULT = 100;
+export const TV_PAGE_DURATION_OPTIONS = [5, 10, 15, 20] as const;
+export type TvPageDurationSeconds = (typeof TV_PAGE_DURATION_OPTIONS)[number];
+export const TV_PAGE_DURATION_DEFAULT: TvPageDurationSeconds = 10;
+export const TV_PAGE_TRANSITIONS = ['fade', 'none'] as const;
+export type TvPageTransition = (typeof TV_PAGE_TRANSITIONS)[number];
+export const TV_PAGE_TRANSITION_DEFAULT: TvPageTransition = 'fade';
+
+export function normalizeTvPageDurationSeconds(value: unknown, legacySpeed?: unknown): TvPageDurationSeconds {
+  const explicit = typeof value === 'number'
+    ? value
+    : typeof value === 'string' && value.trim() !== ''
+      ? Number(value)
+      : Number.NaN;
+  const legacy = typeof legacySpeed === 'number'
+    ? legacySpeed
+    : typeof legacySpeed === 'string' && legacySpeed.trim() !== ''
+      ? Number(legacySpeed)
+      : Number.NaN;
+  const requested = Number.isFinite(explicit)
+    ? explicit
+    : Number.isFinite(legacy)
+      ? 5 + legacy / 10
+      : TV_PAGE_DURATION_DEFAULT;
+  return TV_PAGE_DURATION_OPTIONS.reduce((closest, option) =>
+    Math.abs(option - requested) < Math.abs(closest - requested) ? option : closest
+  , TV_PAGE_DURATION_DEFAULT);
+}
+
+export function normalizeTvPageTransition(value: unknown): TvPageTransition {
+  return value === 'none' ? 'none' : TV_PAGE_TRANSITION_DEFAULT;
+}
 
 export interface MenuConfig {
   dispensaryName: string;
@@ -110,7 +141,8 @@ export interface MenuConfig {
   fontScale?: number;
   theme: 'dark' | 'light';
   autoScroll: boolean;
-  autoScrollSpeed: number;
+  pageDurationSeconds: TvPageDurationSeconds;
+  pageTransition: TvPageTransition;
   showCategory: string | null;
   promoBanner: PromoBanner;
   scheduledBanners?: ScheduledBanner[];
@@ -145,7 +177,8 @@ export const DEFAULT_CONFIG: MenuConfig = {
   fontScale: TV_FONT_SCALE_DEFAULT,
   theme: 'dark',
   autoScroll: true,
-  autoScrollSpeed: 50,
+  pageDurationSeconds: TV_PAGE_DURATION_DEFAULT,
+  pageTransition: TV_PAGE_TRANSITION_DEFAULT,
   showCategory: null,
   promoBanner: {
     text: '',

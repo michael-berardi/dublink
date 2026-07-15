@@ -1,4 +1,4 @@
-import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
+import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITIONS, normalizeTvPageDurationSeconds, normalizeTvPageTransition, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
 import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
 
 export type Env = AuthEnv;
@@ -106,6 +106,19 @@ export class SessionDurableObject implements DurableObject {
     this.persistedConfigSnapshot = structuredClone(cloned);
   }
 
+  private normalizeStoredConfig(config: MenuConfig): MenuConfig {
+    const legacyConfig = config as MenuConfig & { autoScrollSpeed?: unknown };
+    const normalized = {
+      ...structuredClone(DEFAULT_CONFIG),
+      ...config,
+      categories: config.categories,
+      pageDurationSeconds: normalizeTvPageDurationSeconds(config.pageDurationSeconds, legacyConfig.autoScrollSpeed),
+      pageTransition: normalizeTvPageTransition(config.pageTransition),
+    };
+    delete (normalized as MenuConfig & { autoScrollSpeed?: unknown }).autoScrollSpeed;
+    return normalized;
+  }
+
   private async initialize(): Promise<void> {
     if (this.initialized) return;
     // Serialize concurrent first-fetch races: blockConcurrencyWhile
@@ -131,9 +144,9 @@ export class SessionDurableObject implements DurableObject {
               };
             }
             if (this.isValidConfig(storedConfig)) {
-              this.config = storedConfig;
+              this.config = this.normalizeStoredConfig(storedConfig);
               this.persistedCategoryChunkKeys = chunkKeys;
-              this.persistedCategoriesJson = JSON.stringify(storedConfig.categories);
+              this.persistedCategoriesJson = JSON.stringify(this.config.categories);
             }
           }
         } catch (err) {
@@ -291,6 +304,8 @@ export class SessionDurableObject implements DurableObject {
       this.sanitizeFontSize(config.fontSize) !== undefined &&
       (config.fontScale === undefined || this.sanitizeFontScale(config.fontScale) !== undefined) &&
       this.sanitizeTheme(config.theme) !== undefined &&
+      (config.pageDurationSeconds === undefined || this.sanitizePageDurationSeconds(config.pageDurationSeconds) !== undefined) &&
+      (config.pageTransition === undefined || this.sanitizePageTransition(config.pageTransition) !== undefined) &&
       ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
       typeof config.displayCount === 'number'
     );
@@ -415,6 +430,12 @@ export class SessionDurableObject implements DurableObject {
           secondaryColor: this.sanitizeHexColor(data.secondaryColor) ?? this.config.secondaryColor,
           displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
           autoScroll: typeof data.autoScroll === 'boolean' ? data.autoScroll : this.config.autoScroll,
+          pageDurationSeconds: this.sanitizePageDurationSeconds(data.pageDurationSeconds) ?? (
+            data.autoScrollSpeed === undefined
+              ? this.config.pageDurationSeconds
+              : normalizeTvPageDurationSeconds(undefined, data.autoScrollSpeed)
+          ),
+          pageTransition: this.sanitizePageTransition(data.pageTransition) ?? this.config.pageTransition,
           showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
           showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
           showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
@@ -498,7 +519,8 @@ export class SessionDurableObject implements DurableObject {
         complianceState: this.config.complianceState,
         currency: this.config.currency,
         autoScroll: this.config.autoScroll,
-        autoScrollSpeed: this.config.autoScrollSpeed,
+        pageDurationSeconds: this.config.pageDurationSeconds,
+        pageTransition: this.config.pageTransition,
         displayCount: this.config.displayCount,
         updatedAt: this.config.updatedAt,
       });
@@ -544,7 +566,8 @@ export class SessionDurableObject implements DurableObject {
         complianceState: this.config.complianceState,
         currency: this.config.currency,
         autoScroll: this.config.autoScroll,
-        autoScrollSpeed: this.config.autoScrollSpeed,
+        pageDurationSeconds: this.config.pageDurationSeconds,
+        pageTransition: this.config.pageTransition,
         displayCount: this.config.displayCount,
         updatedAt: this.config.updatedAt,
       });
@@ -788,9 +811,17 @@ export class SessionDurableObject implements DurableObject {
           ...this.config,
           ...payload,
           fontScale: this.sanitizeFontScale(payload.fontScale) ?? this.config.fontScale,
+          autoScroll: typeof payload.autoScroll === 'boolean' ? payload.autoScroll : this.config.autoScroll,
+          pageDurationSeconds: this.sanitizePageDurationSeconds(payload.pageDurationSeconds) ?? (
+            payload.autoScrollSpeed === undefined
+              ? this.config.pageDurationSeconds
+              : normalizeTvPageDurationSeconds(undefined, payload.autoScrollSpeed)
+          ),
+          pageTransition: this.sanitizePageTransition(payload.pageTransition) ?? this.config.pageTransition,
           categories: this.sanitizeCategories(payload.categories),
           styleProfile: this.sanitizeStyleProfile(payload.styleProfile),
         };
+        delete (this.config as MenuConfig & { autoScrollSpeed?: unknown }).autoScrollSpeed;
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -1037,7 +1068,7 @@ export class SessionDurableObject implements DurableObject {
     const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
-                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'autoScrollSpeed', 'showCategory',
+                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'pageDurationSeconds', 'pageTransition', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
                          'displayCount', 'styleProfile'];
     
@@ -1058,7 +1089,11 @@ export class SessionDurableObject implements DurableObject {
     if (payload.template !== undefined && this.sanitizeTemplate(payload.template) === undefined) return false;
     if (payload.layoutMode !== undefined && this.sanitizeLayoutMode(payload.layoutMode) === undefined) return false;
     if (payload.displayCount !== undefined && this.sanitizeDisplayCount(payload.displayCount) === undefined) return false;
-    if (payload.autoScrollSpeed !== undefined && (typeof payload.autoScrollSpeed !== 'number' || payload.autoScrollSpeed < 1 || payload.autoScrollSpeed > 200)) return false;
+    if (payload.pageDurationSeconds !== undefined && this.sanitizePageDurationSeconds(payload.pageDurationSeconds) === undefined) return false;
+    if (payload.pageTransition !== undefined && this.sanitizePageTransition(payload.pageTransition) === undefined) return false;
+    for (const key of ['showStrain', 'showLogo', 'showDescription', 'showImages', 'showBrand', 'showPromos', 'autoScroll', 'ageVerified', 'analyticsEnabled'] as const) {
+      if (payload[key] !== undefined && typeof payload[key] !== 'boolean') return false;
+    }
     if (payload.showCategory !== undefined && payload.showCategory !== null && typeof payload.showCategory !== 'string') return false;
     if (payload.promoBanner !== undefined && !isRecord(payload.promoBanner)) return false;
     if (payload.specials !== undefined && !Array.isArray(payload.specials)) return false;
@@ -1260,6 +1295,18 @@ export class SessionDurableObject implements DurableObject {
 
   private sanitizeStrain(value: unknown): Product['strain'] {
     return value === 'indica' || value === 'sativa' || value === 'hybrid' ? value : undefined;
+  }
+
+  private sanitizePageDurationSeconds(value: unknown): MenuConfig['pageDurationSeconds'] | undefined {
+    return TV_PAGE_DURATION_OPTIONS.includes(value as MenuConfig['pageDurationSeconds'])
+      ? value as MenuConfig['pageDurationSeconds']
+      : undefined;
+  }
+
+  private sanitizePageTransition(value: unknown): MenuConfig['pageTransition'] | undefined {
+    return TV_PAGE_TRANSITIONS.includes(value as MenuConfig['pageTransition'])
+      ? value as MenuConfig['pageTransition']
+      : undefined;
   }
 
   private sanitizeLayout(value: unknown): MenuConfig['layout'] | undefined {

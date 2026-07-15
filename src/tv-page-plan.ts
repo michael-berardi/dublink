@@ -32,7 +32,7 @@ export function buildTvCatalogPagePlan(
     switch (options.layout) {
       case 'grid': productsPerPage = 12; categoriesPerPage = 3; break;
       case 'pricewall': productsPerPage = demoMode ? 18 : 16; categoriesPerPage = 2; break;
-      case 'list': productsPerPage = 12; categoriesPerPage = 3; break;
+      case 'list': productsPerPage = 10; categoriesPerPage = 3; break;
       case 'poster': productsPerPage = 3; categoriesPerPage = 1; break;
       case 'cinematic': productsPerPage = demoMode ? 8 : 6; categoriesPerPage = 1; break;
       case 'showcase': productsPerPage = 1; categoriesPerPage = 1; break;
