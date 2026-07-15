@@ -152,11 +152,10 @@ describe('tvPage', () => {
     expect(livePage).toContain("if(!displayCats.length){renderEmptyMenu(layout);return;}");
   });
 
-  it('keeps unpaired TVs on the QR screen when config data arrives', () => {
+  it('shows cached products without a phone and keeps empty unpaired TVs on the QR screen', () => {
     const page = tvPage('test-session', 'https://dubmenu.com');
-    expect(page).toContain("if(paired){setPhase('menu');renderMenu();}");
+    expect(page).toContain("if(paired||hasProducts(config)){setPhase('menu');renderMenu();}");
     expect(page).toContain("else {setPhase('pairing');}");
-    expect(page).not.toContain("paired || hasProducts(config) || hasCategoryArray(config)");
   });
 
   it('wraps category icons in a premium badge for large-screen TV', () => {
@@ -194,6 +193,8 @@ describe('tvPage', () => {
     expect(page).toContain('.layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))');
     expect(page).toContain('.layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column');
     expect(page).toContain('function makeDesc');
+    expect(page).toContain("grid.className = 'editorial-products' +");
+    expect(page).toContain('.layout-editorial .editorial-products.no-images');
   });
 
   it('uses price-board rows for the default TV grid', () => {
@@ -292,34 +293,34 @@ describe('tvPage', () => {
     const small = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'small' } });
     const medium = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'medium' } });
     const large = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'large' } });
-    expect(small).toContain('<body class="template-default font-small" data-font-scale="90">');
-    expect(medium).toContain('<body class="template-default font-medium" data-font-scale="100">');
-    expect(large).toContain('<body class="template-default font-large" data-font-scale="120">');
+    expect(small).toContain('<body class="template-default font-small" data-font-scale="100">');
+    expect(medium).toContain('<body class="template-default font-medium" data-font-scale="140">');
+    expect(large).toContain('<body class="template-default font-large" data-font-scale="180">');
   });
 
-  it('normalizes continuous TV scale safely while preserving legacy size settings', () => {
-    expect(normalizeTvFontScale(undefined, 'small')).toBe(90);
-    expect(normalizeTvFontScale(undefined, 'medium')).toBe(100);
-    expect(normalizeTvFontScale(undefined, 'large')).toBe(120);
-    expect(normalizeTvFontScale(79, 'large')).toBe(90);
+  it('normalizes the wider continuous TV scale safely while preserving legacy size settings', () => {
+    expect(normalizeTvFontScale(undefined, 'small')).toBe(100);
+    expect(normalizeTvFontScale(undefined, 'medium')).toBe(140);
+    expect(normalizeTvFontScale(undefined, 'large')).toBe(180);
+    expect(normalizeTvFontScale(79, 'large')).toBe(100);
     expect(normalizeTvFontScale(137, 'small')).toBe(135);
-    expect(normalizeTvFontScale(500, 'small')).toBe(140);
+    expect(normalizeTvFontScale(500, 'small')).toBe(250);
 
     const page = tvPage('test-session', 'https://dubmenu.com', {
       initialConfig: { ...sampleConfig, fontSize: 'small', fontScale: 135 },
     });
-    expect(page).toContain('<body class="template-default font-large" data-font-scale="135">');
+    expect(page).toContain('<body class="template-default font-medium" data-font-scale="135">');
     expect(page).toContain("document.body.setAttribute('data-font-scale',String(fontScale))");
     expect(page).toContain('fontScale:activeTvFontScale(config)');
   });
 
   it('gives every TV font setting explicit menu-board typography tokens', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'large', layout: 'pricewall' } });
-    expect(page).toContain('--tv-name-size:clamp(1.28rem,1.4vw,1.62rem)');
+    expect(page).toContain('--tv-name-size:clamp(1.45rem,1.62vw,1.85rem)');
     expect(page).toContain('body.font-large{');
-    expect(page).toContain('--tv-name-size:clamp(1.55rem,1.7vw,1.95rem)');
+    expect(page).toContain('--tv-name-size:clamp(1.8rem,2vw,2.3rem)');
     expect(page).toContain('--tv-meta-size:clamp(0.98rem,1.15vw,1.25rem)');
-    expect(page).toContain('--tv-price-size:clamp(2.15rem,2.65vw,2.95rem)');
+    expect(page).toContain('--tv-price-size:clamp(1.95rem,2.3vw,2.55rem)');
     expect(page).toContain('.layout-grid .card-name,.layout-pricewall .card-name{font-size:var(--tv-name-size);font-weight:900');
     expect(page).toContain('.layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950');
   });
@@ -380,6 +381,13 @@ describe('tvPage', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
     expect(page).toContain('if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) startCycling();');
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
+  });
+
+  it('keeps a populated TV menu rotating when the controlling phone disconnects', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
+    expect(page).toContain("if(msg.type==='unpaired'){paired=false;if(hasProducts(config)){setPhase('menu');resumeCycling();}else{stopCycling();setPhase('pairing');}}");
+    expect(page).toContain("if(paired||hasProducts(config)){setPhase('menu');renderMenu();}");
+    expect(page).toContain('if(!hasProducts(config))return;');
   });
 
   it('uses a 400ms fade, recursive dwell scheduling, and instant reduced-motion replacement', () => {

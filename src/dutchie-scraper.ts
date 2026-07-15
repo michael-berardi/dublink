@@ -1,5 +1,6 @@
 // Dutchie menu scraper - uses Railway Browserless service to render JS-heavy Dutchie pages.
 import { DEMO_DISPENSARY_NAME, createSimplyGreenDemoCategories } from './starter-template';
+import { extractProductDescription } from './product-description';
 const BROWSERLESS_URL = 'https://overseer-browser-production.up.railway.app/scrape-specials';
 const DUTCHIE_MENU_URL = 'https://overseer-browser-production.up.railway.app/scrape-dutchie-menu';
 
@@ -565,7 +566,7 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
         category,
         thc,
         cbd,
-        description: typeof p.description === 'string' ? p.description.trim().slice(0, 240) : undefined,
+        description: extractProductDescription(p),
         image,
         weight,
         brand,

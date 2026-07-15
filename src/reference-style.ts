@@ -80,7 +80,7 @@ export function analyzeReferenceStyle(input: ReferenceStyleInput): ReferenceStyl
   else if (hit(['royal', 'liberty', 'empire', 'heritage'], 'royal-color')) template = 'royal';
   const display = detectDisplayCount(source, input.currentDisplayCount || 1);
   const showImages = !noPhotos && (input.currentShowImages === true || images || layout === 'poster' || layout === 'cinematic' || layout === 'editorial' || layout === 'showcase');
-  const showDescription = layout === 'editorial' || (editorial && showImages);
+  const showDescription = layout !== 'list' && layout !== 'pricewall';
   const fontSize: MenuConfig['fontSize'] = dense || productCount >= 36 ? 'small' : explicitSingle ? 'large' : 'medium';
   const confidence = clamp(0.45 + keywords.length * 0.06 + (productCount >= 36 ? 0.1 : 0) + (display.explicit ? 0.05 : 0), 0.45, 0.95);
   const summary = `Applied ${layout} / ${template} from ${keywords.length ? keywords.slice(0, 5).join(', ') : 'general menu-board cues'}.`;

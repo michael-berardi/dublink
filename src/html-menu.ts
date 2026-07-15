@@ -252,9 +252,11 @@ export function menuPage(sessionId: string, config: Partial<MenuConfig>, _origin
   body.light .strain-badge-indica{color:#7c3aed;}
   body.light .strain-badge-sativa{color:#c2410c;}
   body.light .strain-badge-hybrid{color:#16a34a;}
-  .product-name{font-size:0.9rem;font-weight:700;line-height:1.25;color:var(--text);overflow-wrap:break-word;word-break:break-word;overflow-wrap:anywhere;flex:1;min-width:0;}
+  .product-name{font-size:1.02rem;font-weight:800;line-height:1.22;color:var(--text);overflow-wrap:break-word;word-break:break-word;overflow-wrap:anywhere;flex:1;min-width:0;}
 
   .product-meta{font-size:0.72rem;color:var(--text-muted);line-height:1.3;overflow-wrap:break-word;word-break:break-word;}
+  .product-maker{font-size:0.76rem;color:var(--text);font-weight:800;line-height:1.3;}
+  .product-maker::before{content:'By ';color:var(--text-muted);font-weight:600;}
   .product-sku{font-size:0.62rem;color:var(--text-faint);font-weight:700;letter-spacing:0.04em;text-transform:uppercase;line-height:1.3;}
   .canna-pills{display:flex;flex-wrap:wrap;gap:0.25rem;}
   .canna-pill{
@@ -280,7 +282,7 @@ export function menuPage(sessionId: string, config: Partial<MenuConfig>, _origin
   .price-flat{font-size:1.1rem;font-weight:900;color:var(--accent);}
   .price-orig{font-size:0.7rem;color:var(--text-faint);text-decoration:line-through;margin-right:0.25rem;}
 
-  .product-desc{font-size:0.72rem;color:var(--text-muted);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .product-desc{font-size:0.76rem;color:var(--text-muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
 
   /* ===== Empty state ===== */
   .empty-state{
@@ -497,11 +499,13 @@ export function menuPage(sessionId: string, config: Partial<MenuConfig>, _origin
     return '<div class="product-sku">SKU '+escapeHtml(p.sku)+'</div>';
   }
   function makeMeta(p){
+    var html = '';
+    if(p.brand) html += '<div class="product-maker">'+escapeHtml(p.brand)+'</div>';
     var parts = [];
     if(p.weight) parts.push(escapeHtml(p.weight));
     if(p.strain) parts.push('<span style="text-transform:capitalize;">'+escapeHtml(p.strain)+'</span>');
-    if(p.brand) parts.push(escapeHtml(p.brand));
-    return parts.length ? '<div class="product-meta">'+parts.join(' \\u00B7 ')+'</div>' : '';
+    if(parts.length) html += '<div class="product-meta">'+parts.join(' \u00B7 ')+'</div>';
+    return html;
   }
   ${GET_CATEGORY_TYPE_JS}
   function categoryIconSvg(type){

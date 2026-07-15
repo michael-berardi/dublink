@@ -1,4 +1,5 @@
 import type { ScrapedCategory, ScrapedProduct } from './dutchie-scraper';
+import { extractProductDescription } from './product-description';
 
 const DUTCHIE_GRAPHQL_URL = 'https://dutchie.com/graphql';
 const DUTCHIE_GRAPHQL_FALLBACK_URL = 'https://api.dutchie.com/graphql';
@@ -173,10 +174,6 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
-function cleanDescription(value: string | undefined): string | undefined {
-  const description = value?.replace(/\s+/g, ' ').trim().slice(0, 500);
-  return description || undefined;
-}
 
 type ImportedPriceTier = { label: string; price: string };
 
@@ -343,7 +340,7 @@ function toProduct(p: DutchieApiProduct): ScrapedProduct | null {
     image,
     weight,
     brand,
-    description: cleanDescription(p.description),
+    description: extractProductDescription(p),
     inStock: true,
     strain,
     special: Boolean(p.special || specialLabel || originalPrice),

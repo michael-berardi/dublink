@@ -1,4 +1,5 @@
 import type { ScrapedCategory, ScrapedProduct } from './dutchie-scraper';
+import { extractProductDescription } from './product-description';
 
 const DUTCHIE_GRAPHQL_URL = 'https://dutchie.com/graphql';
 const DUTCHIE_PRODUCTS_GRAPHQL_URL = 'https://dutchie.com/api-4/graphql';
@@ -225,42 +226,6 @@ function cleanWeight(value: unknown): string | undefined {
   return weight;
 }
 
-function decodeHtmlEntities(value: string): string {
-  const named: Record<string, string> = {
-    amp: '&',
-    apos: "'",
-    gt: '>',
-    lt: '<',
-    nbsp: ' ',
-    quot: '"',
-  };
-  return value
-    .replace(/&#x([0-9a-f]+);/gi, (match, hex: string) => {
-      const codePoint = Number.parseInt(hex, 16);
-      return Number.isFinite(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
-    })
-    .replace(/&#(\d+);/g, (match, decimal: string) => {
-      const codePoint = Number.parseInt(decimal, 10);
-      return Number.isFinite(codePoint) && codePoint <= 0x10ffff ? String.fromCodePoint(codePoint) : match;
-    })
-    .replace(/&([a-z]+);/gi, (match, name: string) => named[name.toLowerCase()] ?? match);
-}
-
-function cleanDescription(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  const description = decodeHtmlEntities(
-    value
-      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<br\s*\/?>/gi, ' ')
-      .replace(/<\/(?:p|li|div|h[1-6])>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-  )
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 500);
-  return description || undefined;
-}
 
 type ImportedPriceTier = { label: string; price: string };
 
@@ -422,7 +387,7 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     image,
     weight,
     brand,
-    description: cleanDescription(p.description),
+    description: extractProductDescription(p),
     inStock: !p.Status || p.Status.toLowerCase() === 'active',
     strain,
     special: Boolean(p.special || specialLabel || originalPrice || p.featured?.current),

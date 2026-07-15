@@ -17,15 +17,15 @@ export function normalizeTvFontScale(value: unknown, legacyFontSize: unknown = '
     : typeof value === 'string' && value.trim() !== ''
       ? Number(value)
       : Number.NaN;
-  const legacyScale = legacyFontSize === 'small' ? 85 : legacyFontSize === 'large' ? 120 : TV_FONT_SCALE_DEFAULT;
+  const legacyScale = legacyFontSize === 'small' ? TV_FONT_SCALE_MIN : legacyFontSize === 'large' ? 180 : TV_FONT_SCALE_DEFAULT;
   const requested = Number.isFinite(numeric) ? numeric : legacyScale;
   const clamped = Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, requested));
   return Math.round(clamped / 5) * 5;
 }
 
 export function tvFontSizeClass(fontScale: number): 'small' | 'medium' | 'large' {
-  if (fontScale < 95) return 'small';
-  if (fontScale >= 115) return 'large';
+  if (fontScale < 120) return 'small';
+  if (fontScale >= 180) return 'large';
   return 'medium';
 }
 
@@ -251,38 +251,39 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   html,body{width:100%;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
   body{
     --tv-category-size:clamp(2rem,2.45vw,2.55rem);
-    --tv-name-size:clamp(1.28rem,1.4vw,1.62rem);
+    --tv-name-size:clamp(1.45rem,1.62vw,1.85rem);
+    --tv-editorial-name-size:clamp(1.25rem,1.42vw,1.62rem);
     --tv-meta-size:clamp(0.9rem,1vw,1.08rem);
-    --tv-price-size:clamp(1.9rem,2.25vw,2.5rem);
+    --tv-price-size:clamp(1.7rem,1.95vw,2.15rem);
     --tv-table-size:clamp(0.72rem,0.82vw,0.9rem);
     --tv-footer-size:clamp(0.9rem,0.95vw,1.02rem);
     --tv-tier-label-size:clamp(0.72rem,0.78vw,0.84rem);
     --tv-tier-price-size:clamp(1.12rem,1.22vw,1.32rem);
-    --tv-feature-name-size:clamp(2rem,2.6vw,3rem);
+    --tv-feature-name-size:clamp(2.4rem,3vw,3.4rem);
     --tv-feature-meta-size:clamp(1.1rem,1.35vw,1.55rem);
-    --tv-feature-price-size:clamp(2.4rem,3.2vw,3.8rem);
-    --tv-hero-name-size:clamp(3rem,5vw,5.5rem);
+    --tv-feature-price-size:clamp(2.55rem,3.15vw,3.65rem);
+    --tv-hero-name-size:clamp(3.6rem,5.8vw,6.2rem);
     --tv-hero-meta-size:clamp(1.2rem,2vw,1.8rem);
-    --tv-hero-price-size:clamp(3rem,6vw,6.5rem);
+    --tv-hero-price-size:clamp(3.8rem,6vw,6.5rem);
     --tv-brand-size:clamp(2.35rem,3.35vw,3.5rem);
     --tv-promo-size:clamp(1.05rem,1.45vw,1.45rem);
     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;
   }
   body.font-small{
     --tv-category-size:clamp(1.72rem,2vw,2.1rem);
-    --tv-name-size:clamp(1.08rem,1.18vw,1.32rem);
+    --tv-name-size:clamp(1.28rem,1.4vw,1.62rem);
     --tv-meta-size:clamp(0.78rem,0.86vw,0.94rem);
-    --tv-price-size:clamp(1.55rem,1.82vw,2rem);
+    --tv-price-size:clamp(1.5rem,1.7vw,1.85rem);
     --tv-table-size:clamp(0.66rem,0.72vw,0.78rem);
     --tv-footer-size:0.84rem;
     --tv-tier-label-size:0.68rem;
     --tv-tier-price-size:1.02rem;
-    --tv-feature-name-size:clamp(1.7rem,2.2vw,2.5rem);
+    --tv-feature-name-size:clamp(2rem,2.5vw,2.8rem);
     --tv-feature-meta-size:clamp(0.95rem,1.15vw,1.3rem);
-    --tv-feature-price-size:clamp(2rem,2.7vw,3.1rem);
-    --tv-hero-name-size:clamp(2.5rem,4.2vw,4.6rem);
+    --tv-feature-price-size:clamp(2.15rem,2.65vw,3rem);
+    --tv-hero-name-size:clamp(3rem,4.8vw,5.2rem);
     --tv-hero-meta-size:clamp(1rem,1.65vw,1.5rem);
-    --tv-hero-price-size:clamp(2.5rem,5vw,5.5rem);
+    --tv-hero-price-size:clamp(3.15rem,5vw,5.5rem);
     --tv-brand-size:clamp(2rem,2.85vw,3rem);
     --tv-promo-size:clamp(0.9rem,1.2vw,1.25rem);
     font-size:14px;
@@ -290,19 +291,19 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   body.font-medium{font-size:18px;}
   body.font-large{
     --tv-category-size:clamp(2.3rem,2.75vw,2.9rem);
-    --tv-name-size:clamp(1.55rem,1.7vw,1.95rem);
+    --tv-name-size:clamp(1.8rem,2vw,2.3rem);
     --tv-meta-size:clamp(0.98rem,1.15vw,1.25rem);
-    --tv-price-size:clamp(2.15rem,2.65vw,2.95rem);
+    --tv-price-size:clamp(1.95rem,2.3vw,2.55rem);
     --tv-table-size:clamp(0.78rem,0.9vw,1rem);
     --tv-footer-size:clamp(1rem,1.08vw,1.16rem);
     --tv-tier-label-size:clamp(0.78rem,0.86vw,0.94rem);
     --tv-tier-price-size:clamp(1.28rem,1.42vw,1.55rem);
-    --tv-feature-name-size:clamp(2.4rem,3.05vw,3.5rem);
+    --tv-feature-name-size:clamp(2.8rem,3.5vw,4rem);
     --tv-feature-meta-size:clamp(1.28rem,1.55vw,1.8rem);
-    --tv-feature-price-size:clamp(2.8rem,3.75vw,4.4rem);
-    --tv-hero-name-size:clamp(3.5rem,5.8vw,6.3rem);
+    --tv-feature-price-size:clamp(3rem,3.7vw,4.25rem);
+    --tv-hero-name-size:clamp(4.2rem,6.8vw,7.3rem);
     --tv-hero-meta-size:clamp(1.4rem,2.3vw,2.1rem);
-    --tv-hero-price-size:clamp(3.5rem,6.8vw,7.3rem);
+    --tv-hero-price-size:clamp(4.4rem,6.9vw,7.5rem);
     --tv-brand-size:clamp(2.75rem,3.9vw,4.1rem);
     --tv-promo-size:clamp(1.2rem,1.65vw,1.7rem);
     font-size:24px;
@@ -375,6 +376,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-grid .product-table-head,.layout-pricewall .product-table-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;padding:0 0.25rem 0.15rem 0.6rem;color:var(--text);opacity:0.76;font-size:var(--tv-table-size);font-weight:950;letter-spacing:0.09em;text-transform:uppercase;flex:0 0 auto;}
   .layout-grid .product-card,.layout-pricewall .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);border:1px solid var(--border);border-left:0;border-radius:0.62rem;overflow:hidden;display:grid;grid-template-columns:0.38rem minmax(0,1fr) auto;align-items:center;gap:0.9rem;min-height:6.1rem;padding:0.72rem 0.9rem 0.72rem 0;box-shadow:0 12px 28px rgba(0,0,0,0.16);position:relative;isolation:isolate;flex:0 0 auto;}
   @media (min-width:769px){.layout-grid .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card,.layout-pricewall .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card{flex:1 1 0;min-height:0;}}
+  @media (min-width:769px){.font-scale-large .layout-grid .grid-products .product-card{flex:1 1 0;min-height:0;}}
   .layout-grid .product-card.has-image,.layout-pricewall .product-card.has-image{grid-template-columns:0.38rem 4.6rem minmax(0,1fr) auto;}
   .layout-grid .strain-bar,.layout-pricewall .strain-bar{align-self:stretch;width:0.38rem;background:linear-gradient(180deg,var(--accent),rgba(255,255,255,0.08));box-shadow:0 0 18px var(--accent-glow);}
   .layout-grid .product-card.strain-indica .strain-bar,.layout-pricewall .product-card.strain-indica .strain-bar{background:linear-gradient(180deg,#8b5cf6,#4c1d95);box-shadow:0 0 16px rgba(139,92,246,0.35);}
@@ -391,6 +393,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall .card-image{width:4.4rem;height:4.4rem;border-radius:0.48rem;}
   .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.3rem;}
   .layout-grid .card-name,.layout-pricewall .card-name{font-size:var(--tv-name-size);font-weight:900;line-height:1.08;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-transform:none;}
+  .font-scale-large .category-accessories .card-name{-webkit-line-clamp:4;}
   .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.82;}
   .layout-pricewall .card-meta span{white-space:nowrap;}
   .layout-pricewall .card-desc{display:none;}
@@ -426,6 +429,19 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-grid .card-body{min-width:0;display:flex;flex-direction:column;gap:0.26rem;}
   .layout-grid .card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:0.18rem 0.45rem;min-width:0;max-width:none;line-height:1.12;}
   .layout-grid .card-meta span{white-space:nowrap;}
+  .product-maker{color:var(--text);font-weight:900;}
+  .product-maker::before{content:'By ';color:var(--text-muted);font-weight:700;}
+  .layout-grid .card-meta .product-maker,.layout-pricewall .card-meta .product-maker{flex-basis:100%;}
+  .card-desc{font-size:var(--tv-meta-size);line-height:1.28;color:var(--text-muted);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
+  .layout-showcase .card-desc{max-width:62ch;font-size:var(--tv-hero-meta-size);-webkit-line-clamp:3;}
+  .layout-sparse .hero-card .card-desc{font-size:var(--tv-feature-meta-size);-webkit-line-clamp:3;}
+  .layout-cinematic .product-card.no-image .card-body{grid-template-areas:"name price" "meta price" "desc price";}
+  .layout-cinematic .product-card.no-image .card-desc{grid-area:desc;}
+  .layout-list .category-accessories .product-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta meta";align-items:start;column-gap:1rem;row-gap:0.2rem;}
+  .layout-list .category-accessories .row-name{grid-area:name;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .layout-list .category-accessories .row-meta{grid-area:meta;white-space:normal;overflow:visible;}
+  .layout-list .category-accessories .leader{display:none;}
+  .layout-list .category-accessories .row-price{grid-area:price;}
   .layout-poster,.layout-cinematic,.layout-editorial{display:flex;flex-direction:column;gap:0.85rem;height:100%;min-height:0;}
   .layout-poster .category-block,.layout-cinematic .category-block,.layout-editorial .category-block{display:flex;flex-direction:column;flex:1 1 0;min-height:0;}
   .layout-poster .category-header,.layout-cinematic .category-header,.layout-editorial .category-header{flex:0 0 auto;}
@@ -437,10 +453,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-poster .card-meta{font-size:var(--tv-feature-meta-size);color:var(--text);}
   .layout-poster .card-price{font-size:var(--tv-feature-price-size);font-weight:950;color:var(--text);}
   .layout-poster .product-row.no-image{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;min-height:6.4rem;padding:1rem 1.15rem;}
-  .layout-poster .poster-products.no-images{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(6.4rem,1fr);gap:0.75rem;}
+  .layout-poster .poster-products.no-images{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(44rem,100%),1fr));grid-auto-rows:minmax(8rem,auto);align-content:start;gap:0.75rem;}
   .layout-poster .product-row.no-image .product-info{min-width:0;gap:0.28rem;}
-  .layout-poster .product-row.no-image .card-name{font-size:var(--tv-name-size);line-height:1.05;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-poster .product-row.no-image .card-meta{font-size:var(--tv-meta-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .layout-poster .product-row.no-image .card-name{font-size:var(--tv-name-size);line-height:1.08;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-poster .product-row.no-image .card-meta{font-size:var(--tv-meta-size);white-space:normal;overflow-wrap:anywhere;}
   .layout-poster .product-row.no-image .card-price{font-size:var(--tv-price-size);line-height:1;text-align:right;}
   .layout-poster .product-row.no-image .card-image{display:none;}
 
@@ -467,16 +483,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .layout-editorial .editorial-products{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(0,1fr);gap:1rem;flex:1 1 auto;min-height:0;}
   .layout-editorial .product-card{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;overflow:hidden;box-shadow:var(--card-shadow);min-height:0;}
+  .layout-editorial .editorial-products.no-images{grid-template-columns:repeat(auto-fit,minmax(min(44rem,100%),1fr));}
   .layout-editorial .card-image{width:100%;height:100%;object-fit:cover;border:0;}
   .layout-editorial .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.85rem 0.95rem;background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.62) 72%,transparent 100%);display:flex;flex-direction:column;gap:0.18rem;}
   .layout-editorial .card-name{font-size:var(--tv-name-size);line-height:1.06;font-weight:900;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-editorial .card-meta{font-size:var(--tv-meta-size);line-height:1.12;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-editorial .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
   .layout-editorial .product-card.no-image{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1rem;padding:0.85rem 1rem;min-height:5.8rem;height:100%;}
-  .layout-editorial .product-card.no-image .card-body{padding:0;min-width:0;gap:0.2rem;}
-  .layout-editorial .product-card.no-image .card-name{font-size:var(--tv-name-size);line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .layout-editorial .product-card.no-image .card-meta{font-size:var(--tv-meta-size);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .layout-editorial .product-card.no-image .card-price{font-size:var(--tv-price-size);line-height:1;text-align:right;}
+  .layout-editorial .product-card.no-image .card-body{position:static;padding:0;min-width:0;background:none;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price" "desc price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.2rem;}
+  .layout-editorial .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-editorial-name-size);line-height:1.08;white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-editorial .product-card.no-image .card-meta{grid-area:meta;font-size:var(--tv-meta-size);white-space:normal;overflow-wrap:anywhere;}
+  .layout-editorial .product-card.no-image .card-desc{grid-area:desc;}
+  .layout-editorial .product-card.no-image .card-price{grid-area:price;font-size:var(--tv-price-size);line-height:1;text-align:right;}
 
   .out-of-stock{opacity:0.5;}
   .out-of-stock .card-image{filter:grayscale(0.6);}
@@ -849,24 +867,26 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var factor=fontScale/100;
     var tokens={
       '--tv-category-size':scaledClamp(2,2.45,2.55,factor),
-      '--tv-name-size':scaledClamp(1.28,1.4,1.62,factor),
+      '--tv-editorial-name-size':scaledClamp(1.25,1.42,1.62,factor),
+      '--tv-name-size':scaledClamp(1.45,1.62,1.85,factor),
       '--tv-meta-size':scaledClamp(0.9,1,1.08,factor),
-      '--tv-price-size':scaledClamp(1.9,2.25,2.5,factor),
+      '--tv-price-size':scaledClamp(1.7,1.95,2.15,factor),
       '--tv-table-size':scaledClamp(0.72,0.82,0.9,factor),
       '--tv-footer-size':scaledClamp(0.9,0.95,1.02,factor),
       '--tv-tier-label-size':scaledClamp(0.72,0.78,0.84,factor),
       '--tv-tier-price-size':scaledClamp(1.12,1.22,1.32,factor),
-      '--tv-feature-name-size':scaledClamp(2,2.6,3,factor),
+      '--tv-feature-name-size':scaledClamp(2.4,3,3.4,factor),
       '--tv-feature-meta-size':scaledClamp(1.1,1.35,1.55,factor),
-      '--tv-feature-price-size':scaledClamp(2.4,3.2,3.8,factor),
-      '--tv-hero-name-size':scaledClamp(3,5,5.5,factor),
+      '--tv-feature-price-size':scaledClamp(2.55,3.15,3.65,factor),
+      '--tv-hero-name-size':scaledClamp(3.6,5.8,6.2,factor),
       '--tv-hero-meta-size':scaledClamp(1.2,2,1.8,factor),
-      '--tv-hero-price-size':scaledClamp(3,6,6.5,factor),
+      '--tv-hero-price-size':scaledClamp(3.8,6,6.5,factor),
       '--tv-brand-size':scaledClamp(2.35,3.35,3.5,factor),
       '--tv-promo-size':scaledClamp(1.05,1.45,1.45,factor),
     };
     Object.keys(tokens).forEach(function(name){document.body.style.setProperty(name,tokens[name]);});
     document.body.setAttribute('data-font-scale',String(fontScale));
+    document.body.classList.toggle('font-scale-large',fontScale>=130);
   }
   function customFontClass(v){
     var lower = String(v || '').toLowerCase();
@@ -1256,7 +1276,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }
   }
   setInterval(function(){
-    if(!config||!paired)return;
+    if(!hasProducts(config))return;
     var nextBannerActive=!!getActiveBanner();
     if(nextBannerActive!==lastBannerActive)renderMenu();
   },60000);
@@ -1336,10 +1356,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function makeSub(p){
     var parts = [];
     if(p.inStock === false) parts.push('<span class="oos-text">Sold Out</span>');
+    if(config.showBrand !== false && p.brand) parts.push('<span class="product-maker">' + escapeHtml(p.brand) + '</span>');
     if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.weight) parts.push(escapeHtml(p.weight));
     if(p.thc) parts.push('THC ' + escapeHtml(p.thc));
-    if(config.showBrand !== false && p.brand) parts.push(escapeHtml(p.brand));
+    if(p.cbd) parts.push('CBD ' + escapeHtml(p.cbd));
     return parts.join(' \u00B7 ');
   }
 
@@ -1394,17 +1415,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function makeGridMeta(p){
     var parts = [];
+    if(config.showBrand !== false && p.brand) parts.push('<span class="product-maker">' + escapeHtml(p.brand) + '</span>');
     if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
     if(p.weight) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
     if(p.thc) parts.push('<span>THC ' + escapeHtml(p.thc) + '</span>');
-    if(config.showBrand !== false && p.brand) parts.push('<span>' + escapeHtml(p.brand) + '</span>');
+    if(p.cbd) parts.push('<span>CBD ' + escapeHtml(p.cbd) + '</span>');
     return parts.join('');
   }
 
   function renderGrid(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
-      catEl.className = 'category-block';
+      catEl.className = 'category-block category-' + getCategoryType(cat.name);
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'grid-products count-' + Math.min(9, cat.products.length);
@@ -1463,7 +1485,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderList(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
-      catEl.className = 'category-block';
+      catEl.className = 'category-block category-' + getCategoryType(cat.name);
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var list = document.createElement('div');
       list.className = 'list-products';
@@ -1481,7 +1503,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderPoster(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
-      catEl.className = 'category-block';
+      catEl.className = 'category-block category-' + getCategoryType(cat.name);
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var poster = document.createElement('div');
       poster.className = 'poster-products' + (cat.products.some(function(p){ return !!(safeImgUrl(p.image) && config.showImages !== false); }) ? ' has-images' : ' no-images');
@@ -1490,7 +1512,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         var rowHasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         row.className = 'product-row ' + (rowHasImage ? 'has-image' : 'no-image') + (p.inStock === false ? ' out-of-stock' : '');
         var img = rowHasImage ? imgMarkup(p, false) : '';
-        row.innerHTML = img + '<div class="product-info"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div><div class="card-price">' + makePrice(p) + '</div></div>';
+        row.innerHTML = img + '<div class="product-info"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div></div>';
         poster.appendChild(row);
       });
       catEl.appendChild(poster);
@@ -1501,7 +1523,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderCinematic(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
-      catEl.className = 'category-block';
+      catEl.className = 'category-block category-' + getCategoryType(cat.name);
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
       grid.className = 'cinematic-products count-' + Math.min(4, cat.products.length);
@@ -1510,7 +1532,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         card.className = 'product-card ' + (hasImage ? 'has-image' : 'no-image') + (p.inStock === false ? ' out-of-stock' : '');
         var img = hasImage ? imgMarkup(p, true) : '';
-        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div><div class="card-price">' + makePrice(p) + '</div></div>';
+        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div></div>';
         grid.appendChild(card);
       });
       catEl.appendChild(grid);
@@ -1534,7 +1556,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var card = document.createElement('div');
     card.className = 'product-card' + (p.inStock === false ? ' out-of-stock' : '');
     var img = imgMarkup(p, false);
-    card.innerHTML = img + '<div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + escapeHtml(current.catName) + ' \u00B7 ' + makeSub(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
+    card.innerHTML = img + '<div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + escapeHtml(current.catName) + (makeSub(p) ? ' \u00B7 ' + makeSub(p) : '') + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div>';
     showcase.appendChild(card);
     container.appendChild(showcase);
   }
@@ -1542,16 +1564,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderEditorial(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
-      catEl.className = 'category-block';
+      catEl.className = 'category-block category-' + getCategoryType(cat.name);
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var grid = document.createElement('div');
-      grid.className = 'editorial-products';
+      grid.className = 'editorial-products' + (cat.products.some(function(p){ return !!(safeImgUrl(p.image) && config.showImages !== false); }) ? ' has-images' : ' no-images');
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         card.className = 'product-card ' + (hasImage ? 'has-image' : 'no-image') + (p.inStock === false ? ' out-of-stock' : '');
         var img = hasImage ? imgMarkup(p, true) : '';
-        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div><div class="card-price">' + makePrice(p) + '</div></div>';
+        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div></div>';
         grid.appendChild(card);
       });
       catEl.appendChild(grid);
@@ -1564,7 +1586,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       var products = (cat.products || []).slice(0, 4);
       if(!products.length) return;
       var catEl = document.createElement('div');
-      catEl.className = 'category-block' + (products.length === 1 ? ' single-product' : '');
+      catEl.className = 'category-block category-' + getCategoryType(cat.name) + (products.length === 1 ? ' single-product' : '');
       catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
       var wrap = document.createElement('div');
       wrap.className = 'sparse-products' + (products.length === 1 ? ' single-product' : '');
@@ -1573,7 +1595,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       var heroCard = document.createElement('div');
       var heroHasImage = !!(hero && safeImgUrl(hero.image) && config.showImages !== false);
       heroCard.className = 'hero-card ' + (heroHasImage ? 'has-image' : 'no-image') + (hero.inStock === false ? ' out-of-stock' : '');
-      heroCard.innerHTML = imgMarkup(hero, false) + '<div class="hero-info"><div class="hero-name">' + escapeHtml(hero.name) + '</div><div class="hero-meta">' + makeSub(hero) + '</div><div class="hero-price">' + makePrice(hero) + '</div></div>';
+      heroCard.innerHTML = imgMarkup(hero, false) + '<div class="hero-info"><div class="hero-name">' + escapeHtml(hero.name) + '</div><div class="hero-meta">' + makeSub(hero) + '</div>' + makeDesc(hero) + '<div class="hero-price">' + makePrice(hero) + '</div></div>';
       wrap.appendChild(heroCard);
       if(rest.length){
         var stack = document.createElement('div');
@@ -1582,7 +1604,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
           var row = document.createElement('div');
           var rowHasImage = !!(p && safeImgUrl(p.image) && config.showImages !== false);
           row.className = 'stack-card ' + (rowHasImage ? 'has-image' : 'no-image') + (p.inStock === false ? ' out-of-stock' : '');
-          row.innerHTML = imgMarkup(p, true) + '<div class="stack-info"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div></div><div class="card-price">' + makePrice(p) + '</div>';
+          row.innerHTML = imgMarkup(p, true) + '<div class="stack-info"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
           stack.appendChild(row);
         });
         wrap.appendChild(stack);
@@ -1666,12 +1688,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
           if(hasProducts(incoming) || !hasProducts(config) || (hasCategoryArray(incoming) && !PRESERVE_INITIAL_DEMO_CONFIG)){
             config=incoming;
           }
-          if(paired){setPhase('menu');renderMenu();}
+          if(paired||hasProducts(config)){setPhase('menu');renderMenu();}
           else {setPhase('pairing');}
           return;
         }
         if(msg.type==='paired'){paired=true;setConn('paired');setPhase('menu');if(config) renderMenu();}
-        if(msg.type==='unpaired'){paired=false;stopCycling();if(!hasProducts(config)){setPhase('pairing');}}
+        if(msg.type==='unpaired'){paired=false;if(hasProducts(config)){setPhase('menu');resumeCycling();}else{stopCycling();setPhase('pairing');}}
         if(msg.type==='ping'){if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'pong'}));}
       }catch(e){}
     };

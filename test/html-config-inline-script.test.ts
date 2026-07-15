@@ -95,22 +95,25 @@ describe('configPage remote-control UI', () => {
     expect(debounce.indexOf('queueConfig(k,v)')).toBeLessThan(debounce.indexOf('setTimeout'));
   });
 
-  it('provides a phone-friendly continuous TV text-size control and previews it live', () => {
+  it('provides a wider phone-friendly TV text-size control and previews it live', () => {
     expect(html).toContain('id="fontScale"');
-    expect(html).toContain('min="90" max="140" step="5"');
+    expect(html).toContain('min="100" max="250" step="5"');
     expect(html).toContain('id="fontScaleValue"');
     expect(html).toContain('function resolvedFontScale');
     expect(html).toContain("debounceConfig('fontScale',this.valueAsNumber)");
     expect(html).toContain("&fontScale='+encodeURIComponent(String(resolvedFontScale(config)))");
     expect(html).toContain('Larger settings automatically show fewer products per page');
+    expect(html).toContain('Show Product Descriptions');
+    expect(html).toContain("toggleSwitch(this,'showDescription')");
   });
 
-  it('places explicit industry-aligned animation controls beside layout settings', () => {
+  it('keeps an independent slide-duration slider beside layout settings', () => {
     const layoutCard = between(html, '<h2 class="card-title">Layout</h2>', '<h2 class="card-title">Template Intelligence</h2>');
     expect(layoutCard).toContain('Auto-Rotate Menu Pages');
     expect(layoutCard).toContain('id="animationSettings"');
-    expect(layoutCard).toContain('id="pageDurationSeconds"');
-    expect(layoutCard).toContain('<option value="10" selected>10 seconds · Recommended</option>');
+    expect(layoutCard).toContain('type="range" id="pageDurationSeconds" min="5" max="20" step="5"');
+    expect(layoutCard).toContain('id="pageDurationSecondsValue"');
+    expect(layoutCard).toContain("debounceConfig('pageDurationSeconds',this.valueAsNumber)");
     expect(layoutCard).toContain('id="pageTransition"');
     expect(layoutCard).toContain('<option value="fade">Fade · Recommended</option>');
     expect(layoutCard).toContain('<option value="none">Instant</option>');
@@ -201,6 +204,20 @@ describe('configPage setup wizard', () => {
     expect(html).toContain('id="importInput"');
   });
 
+  it('starts immediately with responsive staged build progress and no confirmation step', () => {
+    expect(html).toContain('id="setupWizardModal"');
+    expect(html).not.toContain('Confirm &amp; Build');
+    expect(html).toContain('id="setupWizardBuildProgress"');
+    expect(html).toContain('Importing products');
+    expect(html).toContain('Choosing the layout');
+    expect(html).toContain('Preparing the TV');
+    expect(script).toContain('async function runSetupWizard()');
+    expect(script).toContain('var ok=await importDutchie()');
+    expect(script).toContain('function completeSetupWizardBuild(ok,message)');
+    expect(html).not.toContain('class="wizard-step"');
+    expect(html).toContain('.wizard-modal-actions[hidden]{display:none;}');
+  });
+
   it('starts an import job with style notes and display count, then polls progress', () => {
     expect(script).toContain("'/api/import/jobs'");
     expect(script).toContain('pollImportJob(startData.statusUrl');
@@ -217,7 +234,7 @@ describe('configPage setup wizard', () => {
 
   it('normalizes QR wizard store domains before importing through the same endpoint', () => {
     expect(script).toContain("var target=document.getElementById('dutchieUrl')");
-    expect(script).toContain("if(target)target.value=url");
+    expect(script).toContain('if(target)target.value=url');
     expect(script).toContain("url='https://'+url");
   });
 
@@ -226,6 +243,11 @@ describe('configPage setup wizard', () => {
     expect(script).toContain('progress will update here');
     expect(script).toContain('Import debug log');
     expect(script).toContain('Trying the direct importer');
+  });
+
+  it('keeps failed wizard builds below complete progress', () => {
+    expect(script).toContain('setDutchieImportStage(2,90)');
+    expect(script).not.toContain('setDutchieImportStage(2,100)');
   });
 
   it('gates normal controls behind the wizard until products have been imported', () => {

@@ -86,9 +86,9 @@ export interface ReferenceStyleProfile {
   appliedAt: string;
 }
 
-export const TV_FONT_SCALE_MIN = 90;
-export const TV_FONT_SCALE_MAX = 140;
-export const TV_FONT_SCALE_DEFAULT = 100;
+export const TV_FONT_SCALE_MIN = 100;
+export const TV_FONT_SCALE_MAX = 250;
+export const TV_FONT_SCALE_DEFAULT = 140;
 export const TV_PAGE_DURATION_OPTIONS = [5, 10, 15, 20] as const;
 export type TvPageDurationSeconds = (typeof TV_PAGE_DURATION_OPTIONS)[number];
 export const TV_PAGE_DURATION_DEFAULT: TvPageDurationSeconds = 10;
@@ -165,7 +165,7 @@ export const DEFAULT_CONFIG: MenuConfig = {
   secondaryColor: '#065f46',
   showStrain: true,
   showLogo: true,
-  showDescription: false,
+  showDescription: true,
   showImages: true,
   showBrand: true,
   showPromos: true,

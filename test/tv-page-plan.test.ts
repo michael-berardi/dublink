@@ -104,9 +104,9 @@ describe('buildTvCatalogPagePlan', () => {
     const layouts = ['grid', 'list', 'columns', 'compact', 'cards', 'pricewall', 'poster', 'cinematic', 'showcase', 'editorial', 'sparse'];
 
     for (const layout of layouts) {
-      const compact = buildTvCatalogPagePlan([category], { layout, fontScale: 80 });
-      const standard = buildTvCatalogPagePlan([category], { layout, fontScale: 100 });
-      const extraLarge = buildTvCatalogPagePlan([category], { layout, fontScale: 140 });
+      const compact = buildTvCatalogPagePlan([category], { layout, fontScale: 100 });
+      const standard = buildTvCatalogPagePlan([category], { layout, fontScale: 140 });
+      const extraLarge = buildTvCatalogPagePlan([category], { layout, fontScale: 250 });
       for (const plan of [compact, standard, extraLarge]) {
         expect(plannedProductIds(plan)).toEqual(productIds([category]));
       }
@@ -114,6 +114,25 @@ describe('buildTvCatalogPagePlan', () => {
       const extraLargePageMaximum = Math.max(...extraLarge.map((page) => productIds(page).length));
       expect(extraLargePageMaximum).toBeLessThanOrEqual(compactPageMaximum);
     }
+  });
+
+  it('keeps three category boxes on banner pages while preserving every product', () => {
+    const categories: Category[] = Array.from({ length: 3 }, (_, index) => ({
+      id: `category-${index + 1}`,
+      name: `Category ${index + 1}`,
+      order: index,
+      products: products(`Category ${index + 1}`, 4),
+    }));
+
+    const pages = buildTvCatalogPagePlan(categories, {
+      layout: 'grid',
+      bannerActive: true,
+      fontScale: 140,
+    });
+
+    expect(pages[0]).toHaveLength(3);
+    expect(pages.every((page) => page.length <= 3)).toBe(true);
+    expect(plannedProductIds(pages).sort()).toEqual(productIds(categories).sort());
   });
 
   it('keeps dense and image-led pages within TV-height capacity', () => {
@@ -137,6 +156,21 @@ describe('buildTvCatalogPagePlan', () => {
     expect(plannedProductIds(standardPoster)).toEqual(productIds(categories));
     expect(plannedProductIds(extraLargePoster)).toEqual(productIds(categories));
     expect(plannedProductIds(extraLargeCinematic)).toEqual(productIds(categories));
+  });
+
+  it('paginates long accessories rows before they can collide with the TV footer', () => {
+    const accessories: Category = {
+      id: 'accessories',
+      name: 'Accessories',
+      order: 0,
+      products: products('Long Accessory Product Name', 8),
+    };
+
+    const pages = buildTvCatalogPagePlan([accessories], { layout: 'list', fontScale: 140 });
+
+    expect(pages).toHaveLength(2);
+    expect(pages.every((page) => productIds(page).length <= 6)).toBe(true);
+    expect(plannedProductIds(pages)).toEqual(productIds([accessories]));
   });
 
   it('keeps every special product in pricewall pages instead of only the featured rail', () => {

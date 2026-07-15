@@ -1,6 +1,6 @@
 import { createStarterConfig } from './starter-template';
 import { serializeInlineScriptJson } from './inline-script-json';
-import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_TRANSITION_DEFAULT } from './types';
+import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITION_DEFAULT } from './types';
 export function configPage(sessionId: string, origin: string): string {
   const STARTER_CONFIG = serializeInlineScriptJson(createStarterConfig());
   return `<!DOCTYPE html>
@@ -294,6 +294,30 @@ export function configPage(sessionId: string, origin: string): string {
 .wizard-status.err{color:var(--danger);}
 .wizard-quality{display:none;margin-top:0.8rem;}
 .wizard-quality.active{display:block;}
+.wizard-modal-overlay{position:fixed;inset:0;z-index:1400;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,0.76);backdrop-filter:blur(12px);}
+.wizard-modal-overlay.active{display:flex;}
+.wizard-modal{width:min(34rem,100%);max-height:min(90vh,44rem);overflow:auto;border:1px solid rgba(16,185,129,0.42);border-radius:1.15rem;background:linear-gradient(155deg,rgba(16,185,129,0.12),transparent 42%),var(--surface);box-shadow:0 32px 100px rgba(0,0,0,0.62);padding:1.25rem;}
+.wizard-modal-head{display:flex;align-items:center;gap:0.85rem;margin-bottom:0.9rem;}
+.wizard-modal-icon{width:3rem;height:3rem;display:grid;place-items:center;flex:0 0 auto;border-radius:999px;background:rgba(16,185,129,0.14);color:var(--accent);font-size:1.4rem;font-weight:950;}
+.wizard-modal-icon .import-spinner{width:1.45rem;height:1.45rem;border-width:3px;}
+.wizard-modal h2{margin:0;font-size:clamp(1.45rem,4vw,2rem);letter-spacing:-0.035em;line-height:1.05;}
+.wizard-modal-copy{color:var(--muted);line-height:1.5;margin:0.45rem 0 0;}
+.wizard-source-summary{margin:1rem 0;padding:0.8rem;border:1px solid var(--border);border-radius:0.7rem;background:rgba(0,0,0,0.22);}
+.wizard-source-summary strong{display:block;margin-bottom:0.3rem;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+.wizard-source-summary span{display:block;overflow-wrap:anywhere;color:var(--text);font-weight:750;}
+.wizard-modal-actions{display:flex;justify-content:flex-end;gap:0.6rem;flex-wrap:wrap;margin-top:1rem;}
+.wizard-modal-actions[hidden]{display:none;}
+.wizard-build-progress{height:0.7rem;margin:1.1rem 0 0.8rem;overflow:hidden;border-radius:999px;background:rgba(16,185,129,0.16);}
+.wizard-build-progress-fill{position:relative;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--primary),#5eead4);transition:width 0.45s ease;}
+.wizard-build-progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.62),transparent);animation:libshimmer 1.25s linear infinite;}
+.wizard-build-progress[aria-valuenow="100"] .wizard-build-progress-fill::after{display:none;}
+.wizard-build-stages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0.45rem;margin-top:0.85rem;}
+.wizard-build-stage{padding:0.5rem;border:1px solid var(--border);border-radius:0.55rem;color:var(--muted);font-size:0.74rem;font-weight:750;text-align:center;}
+.wizard-build-stage.active{border-color:rgba(16,185,129,0.55);background:rgba(16,185,129,0.1);color:var(--text);}
+.wizard-build-stage.done{color:var(--accent);}
+.wizard-modal-overlay[data-state="success"] .wizard-modal-icon{background:rgba(16,185,129,0.2);}
+.wizard-modal-overlay[data-state="error"] .wizard-modal-icon{background:rgba(239,68,68,0.14);color:var(--danger);}
+@media(max-width:600px){.wizard-modal-overlay{align-items:flex-end;padding:0}.wizard-modal{width:100%;max-height:92vh;border-radius:1.15rem 1.15rem 0 0;padding:1rem}.wizard-modal-actions{display:grid;grid-template-columns:1fr 1fr}.wizard-modal-actions .btn{width:100%}.wizard-build-stages{grid-template-columns:1fr}.wizard-build-stage{text-align:left}}
 .wizard-body-lock .mobile-control-hub,.wizard-body-lock .control-section{display:none;}
 .wizard-body-lock .screenset-info{display:none;}
 .wizard-body-lock #simulatorPanel .sim-controls,.wizard-body-lock #simulatorPanel .sim-footer{display:none;}
@@ -322,12 +346,7 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="wizard-grid">
     <div>
       <h2 class="wizard-title" id="setupWizardTitle">Build your TV menu from one source.</h2>
-      <p class="wizard-copy">Paste a Dutchie link, store slug, or dispensary website. DubMenu imports products, prices, THC, strain, brand, weights, images, store title, logo, and a safe visual theme, then maps it to the best TV layout.</p>
-      <div class="wizard-steps" aria-label="Wizard steps">
-        <div class="wizard-step"><span class="wizard-dot">1</span><span><b>Scan menu data</b>Products, categories, prices, photos, title, and logo.</span></div>
-        <div class="wizard-step"><span class="wizard-dot">2</span><span><b>Choose the premium layout</b>Dense price wall, image-led, sparse hero, or multi-display wall.</span></div>
-        <div class="wizard-step"><span class="wizard-dot">3</span><span><b>Open the normal controls</b>After the TV has products, the full remote appears for fine-tuning.</span></div>
-      </div>
+      <p class="wizard-copy">Paste a Dutchie link, store slug, or dispensary website. DubMenu will gather the menu, choose a TV-safe layout, and then open the full controls for fine-tuning.</p>
     </div>
     <div class="wizard-panel">
       <form id="setupWizardForm" onsubmit="event.preventDefault();runSetupWizard();">
@@ -354,6 +373,27 @@ export function configPage(sessionId: string, origin: string): string {
     </div>
   </div>
 </section>
+<div class="wizard-modal-overlay" id="setupWizardModal" role="dialog" aria-modal="true" aria-labelledby="setupWizardProgressTitle" aria-hidden="true" data-state="idle">
+  <div class="wizard-modal">
+    <div id="setupWizardProgressView">
+      <div class="wizard-modal-head">
+        <div class="wizard-modal-icon" id="setupWizardProgressIcon" aria-hidden="true"><span class="import-spinner"></span></div>
+        <div><div class="wizard-eyebrow" id="setupWizardProgressEyebrow">Building TV menu</div><h2 id="setupWizardProgressTitle">Importing your menu...</h2></div>
+      </div>
+      <p class="wizard-modal-copy" id="setupWizardProgressMessage" aria-live="polite">Connecting to the menu source.</p>
+      <div class="wizard-build-progress" id="setupWizardBuildProgress" role="progressbar" aria-label="TV menu build progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="wizard-build-progress-fill" id="setupWizardBuildProgressFill"></div></div>
+      <div class="wizard-build-stages" aria-hidden="true">
+        <div class="wizard-build-stage active" data-wizard-stage="1">Importing products</div>
+        <div class="wizard-build-stage" data-wizard-stage="2">Choosing the layout</div>
+        <div class="wizard-build-stage" data-wizard-stage="3">Preparing the TV</div>
+      </div>
+      <div class="wizard-modal-actions" id="setupWizardResultActions" hidden>
+        <button class="btn btn-secondary" id="setupWizardRetryBtn" type="button" onclick="retrySetupWizard()" hidden>Try Again</button>
+        <button class="btn btn-primary" id="setupWizardDoneBtn" type="button" onclick="finishSetupWizardModal()">Open Controls</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="screenset-info" id="screensetInfo">
   <h3>Screen Set (<span id="screensetCount">1</span> TV<span id="screensetPlural">s</span>)</h3>
@@ -515,24 +555,21 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="field">
     <div class="font-scale-heading"><label for="fontScale">TV Text Size</label><output class="font-scale-value" id="fontScaleValue" for="fontScale">${TV_FONT_SCALE_DEFAULT}%</output></div>
     <input class="font-scale-range" type="range" id="fontScale" min="${TV_FONT_SCALE_MIN}" max="${TV_FONT_SCALE_MAX}" step="5" value="${TV_FONT_SCALE_DEFAULT}" aria-describedby="fontScaleHelp" oninput="syncFontScaleLabel(this.valueAsNumber);debounceConfig('fontScale',this.valueAsNumber)">
-    <div class="font-scale-limits" aria-hidden="true"><span>Compact</span><span>Extra large</span></div>
+    <div class="font-scale-limits" aria-hidden="true"><span>Small</span><span>Maximum</span></div>
     <div class="helper" id="fontScaleHelp">Adjust from ${TV_FONT_SCALE_MIN}% to ${TV_FONT_SCALE_MAX}%. Larger settings automatically show fewer products per page so the menu stays readable.</div>
   </div>
   <div class="toggle-row"><span id="lbl-showStrain">Show Strain Type</span><button type="button" class="switch" id="showStrain" role="switch" aria-checked="false" aria-labelledby="lbl-showStrain" onclick="toggleSwitch(this,'showStrain')"></button></div>
   <div class="toggle-row"><span id="lbl-showBrandWeight">Show Brand & Weight</span><button type="button" class="switch" id="showBrandWeight" role="switch" aria-checked="false" aria-labelledby="lbl-showBrandWeight" onclick="toggleSwitch(this);updateBrandWeight()"></button></div>
+  <div class="toggle-row"><span id="lbl-showDescription">Show Product Descriptions</span><button type="button" class="switch" id="showDescription" role="switch" aria-checked="false" aria-labelledby="lbl-showDescription" onclick="toggleSwitch(this,'showDescription')"></button></div>
   <div class="toggle-row"><span id="lbl-showImages">Show Product Images</span><button type="button" class="switch" id="showImages" role="switch" aria-checked="false" aria-labelledby="lbl-showImages" onclick="toggleSwitch(this,'showImages')"></button></div>
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
   <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('animationSettings').hidden=!this.classList.contains('on');showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
   <div id="animationSettings" hidden>
     <div class="field">
-      <label for="pageDurationSeconds">Page Duration</label>
-      <select id="pageDurationSeconds" onchange="sendConfig('pageDurationSeconds',Number(this.value))">
-        <option value="5">5 seconds</option>
-        <option value="10" selected>10 seconds · Recommended</option>
-        <option value="15">15 seconds</option>
-        <option value="20">20 seconds</option>
-      </select>
-      <div class="helper">How long each page stays fully visible. The 10-second default matches common digital-signage timing.</div>
+      <div class="font-scale-heading"><label for="pageDurationSeconds">Slide Duration</label><output class="font-scale-value" id="pageDurationSecondsValue" for="pageDurationSeconds">${TV_PAGE_DURATION_DEFAULT} seconds</output></div>
+      <input class="font-scale-range" type="range" id="pageDurationSeconds" min="${TV_PAGE_DURATION_OPTIONS[0]}" max="${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]}" step="5" value="${TV_PAGE_DURATION_DEFAULT}" aria-describedby="pageDurationSecondsHelp" oninput="syncPageDurationLabel(this.valueAsNumber);debounceConfig('pageDurationSeconds',this.valueAsNumber)">
+      <div class="font-scale-limits" aria-hidden="true"><span>Fast</span><span>Slow</span></div>
+      <div class="helper" id="pageDurationSecondsHelp">Choose how long each product page stays visible, from ${TV_PAGE_DURATION_OPTIONS[0]} to ${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]} seconds.</div>
     </div>
     <div class="field">
       <label for="pageTransition">Page Transition</label>
@@ -780,7 +817,7 @@ function resolvedFontScale(cfg){
   var raw=cfg&&cfg.fontScale;
   var numeric=typeof raw==='number'?raw:Number(raw);
   if(!isFinite(numeric)){
-    numeric=cfg&&cfg.fontSize==='small'?85:cfg&&cfg.fontSize==='large'?120:${TV_FONT_SCALE_DEFAULT};
+    numeric=cfg&&cfg.fontSize==='small'?${TV_FONT_SCALE_MIN}:cfg&&cfg.fontSize==='large'?180:${TV_FONT_SCALE_DEFAULT};
   }
   return Math.round(Math.max(${TV_FONT_SCALE_MIN},Math.min(${TV_FONT_SCALE_MAX},numeric))/5)*5;
 }
@@ -788,6 +825,11 @@ function syncFontScaleLabel(value){
   var scale=Math.round(Math.max(${TV_FONT_SCALE_MIN},Math.min(${TV_FONT_SCALE_MAX},Number(value)||${TV_FONT_SCALE_DEFAULT}))/5)*5;
   var output=document.getElementById('fontScaleValue');
   if(output){output.value=scale+'%';output.textContent=scale+'%';}
+}
+function syncPageDurationLabel(value){
+  var seconds=Math.round(Math.max(${TV_PAGE_DURATION_OPTIONS[0]},Math.min(${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]},Number(value)||${TV_PAGE_DURATION_DEFAULT}))/5)*5;
+  var output=document.getElementById('pageDurationSecondsValue');
+  if(output){output.value=seconds+' seconds';output.textContent=seconds+' seconds';}
 }
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
 function setSwitch(id,on){var el=document.getElementById(id);if(el){el.classList.toggle('on',on);el.setAttribute('aria-checked',on?'true':'false');}}
@@ -990,25 +1032,92 @@ async function runSetupWizard(){
   var src=document.getElementById('wizardMenuUrl');
   var notes=document.getElementById('wizardStyleNotes');
   var displays=document.getElementById('wizardDisplayCount');
-  var btn=document.getElementById('setupWizardBtn');
   var status=document.getElementById('setupWizardStatus');
   var url=(src&&src.value||'').trim();
   if(!url){if(status){status.textContent='Paste a Dutchie link, store slug, or store website first.';status.className='wizard-status err';}if(src)src.focus();return;}
+  var modal=document.getElementById('setupWizardModal');
+  var actions=document.getElementById('setupWizardResultActions');
+  var btn=document.getElementById('setupWizardBtn');
   var target=document.getElementById('dutchieUrl');
   var targetNotes=document.getElementById('dutchieStyleNotes');
   var targetDisplays=document.getElementById('dutchieDisplayCount');
+  var icon=document.getElementById('setupWizardProgressIcon');
+  var eyebrow=document.getElementById('setupWizardProgressEyebrow');
+  var title=document.getElementById('setupWizardProgressTitle');
   if(target)target.value=url;
   if(targetNotes)targetNotes.value=(notes&&notes.value||'').trim();
-  if(targetDisplays&&displays)targetDisplays.value=displays.value;
+  if(targetDisplays)targetDisplays.value=(displays&&displays.value)||'1';
+  if(icon)icon.innerHTML='<span class="import-spinner"></span>';
+  if(eyebrow)eyebrow.textContent='Building TV menu';
+  if(title)title.textContent='Importing your menu...';
+  if(actions)actions.hidden=true;
+  if(modal){modal.dataset.state='building';delete modal.dataset.lastError;modal.classList.add('active');modal.setAttribute('aria-hidden','false');}
+  document.body.style.overflow='hidden';
   if(btn){btn.disabled=true;btn.textContent='Building TV Menu...';}
-  if(status){status.textContent='Importing menu data and choosing a TV-safe layout...';status.className='wizard-status';}
+  setSetupWizardProgress(1,6,'Connecting to the menu source.');
   var ok=await importDutchie();
-  if(status){
-    var normal=document.getElementById('dutchieStatus');
-    status.textContent=ok?'TV menu built. The full controls are now unlocked.':(normal&&normal.textContent||'Import failed.');
-    status.className='wizard-status '+(ok?'ok':'err');
-  }
+  var normal=document.getElementById('dutchieStatus');
+  var message=ok?'Products imported and the TV-safe layout is ready.':(modal&&modal.dataset.lastError)||(normal&&normal.textContent)||'Import failed.';
+  if(status){status.textContent=ok?'TV menu built. The full controls are now unlocked.':message;status.className='wizard-status '+(ok?'ok':'err');}
   if(btn){btn.disabled=false;btn.textContent='Build My TV Menu';}
+  completeSetupWizardBuild(ok,message);
+}
+function closeSetupWizardModal(){
+  var modal=document.getElementById('setupWizardModal');
+  if(!modal||modal.dataset.state==='building')return;
+  modal.classList.remove('active');
+  modal.setAttribute('aria-hidden','true');
+  document.body.style.overflow='';
+  var src=document.getElementById('wizardMenuUrl');
+  if(src)src.focus();
+}
+function setSetupWizardProgress(stage,pct,message){
+  var progress=document.getElementById('setupWizardBuildProgress');
+  var fill=document.getElementById('setupWizardBuildProgressFill');
+  var status=document.getElementById('setupWizardProgressMessage');
+  var uiStage=stage>=5?3:stage>=3?2:1;
+  var bounded=Math.max(0,Math.min(100,Number(pct)||0));
+  if(progress)progress.setAttribute('aria-valuenow',String(bounded));
+  if(fill)fill.style.width=String(bounded)+'%';
+  if(status&&message)status.textContent=message;
+  document.querySelectorAll('[data-wizard-stage]').forEach(function(step){
+    var n=parseInt(step.getAttribute('data-wizard-stage')||'0',10);
+    step.classList.toggle('done',n<uiStage||bounded===100);
+    step.classList.toggle('active',n===uiStage&&bounded<100);
+  });
+}
+function syncSetupWizardImportStatus(message,state){
+  var modal=document.getElementById('setupWizardModal');
+  var status=document.getElementById('setupWizardProgressMessage');
+  if(modal&&modal.dataset.state==='building'&&message&&status)status.textContent=message;
+  if(state==='err'&&modal&&modal.dataset.state==='building')modal.dataset.lastError=message||'Import failed.';
+}
+function completeSetupWizardBuild(ok,message){
+  var modal=document.getElementById('setupWizardModal');
+  var icon=document.getElementById('setupWizardProgressIcon');
+  var eyebrow=document.getElementById('setupWizardProgressEyebrow');
+  var title=document.getElementById('setupWizardProgressTitle');
+  var actions=document.getElementById('setupWizardResultActions');
+  var retry=document.getElementById('setupWizardRetryBtn');
+  var done=document.getElementById('setupWizardDoneBtn');
+  var progress=document.getElementById('setupWizardBuildProgress');
+  if(modal)modal.dataset.state=ok?'success':'error';
+  if(icon)icon.textContent=ok?'✓':'!';
+  if(eyebrow)eyebrow.textContent=ok?'Build complete':'Build interrupted';
+  if(title)title.textContent=ok?'Your TV menu is ready.':'We could not finish the menu.';
+  if(actions)actions.hidden=false;
+  if(retry)retry.hidden=ok;
+  if(done)done.textContent=ok?'Open Controls':'Close';
+  setSetupWizardProgress(ok?5:2,ok?100:Math.max(12,Number(progress&&progress.getAttribute('aria-valuenow'))||12),message);
+  if(done)done.focus();
+}
+function retrySetupWizard(){
+  runSetupWizard();
+}
+function finishSetupWizardModal(){
+  var modal=document.getElementById('setupWizardModal');
+  if(modal&&modal.dataset.state==='success')updateSetupWizard();
+  closeSetupWizardModal();
 }
 
 function resetDutchieImportUi(){
@@ -1026,6 +1135,7 @@ function setImportStatus(el,message,state,loading){
   if(!el)return;
   el.className='import-status '+(state||'');
   el.innerHTML=(loading?'<span class="import-spinner" aria-hidden="true"></span>':'')+'<span>'+escapeHtml(message||'')+'</span>';
+  syncSetupWizardImportStatus(message,state);
 }
 function setDutchieImportStage(stage, pct){
   var progress=document.getElementById('dutchieProgress');
@@ -1037,6 +1147,7 @@ function setDutchieImportStage(stage, pct){
     step.classList.toggle('done',n<stage);
     step.classList.toggle('active',n===stage);
   });
+  setSetupWizardProgress(stage,pct);
 }
 function imageCountFromImport(data){
   return (data.categories||[]).reduce(function(total,cat){
@@ -1197,7 +1308,7 @@ async function importDutchie(){
       var primaryMessage=err&&err.message?err.message:'Import failed';
       var fallbackMessage=fallbackErr&&fallbackErr.message?fallbackErr.message:'Direct import failed';
       setImportStatus(status,primaryMessage+' '+fallbackMessage,'err',false);
-      setDutchieImportStage(2,100);
+      setDutchieImportStage(2,90);
       showToast('Menu import failed');
       return false;
     }
@@ -1241,7 +1352,7 @@ function analyzeReferenceStyle(url,notes){
   else if(hit(['white','clean','light','minimal white'],'light-color')) template='bone';
   else if(hit(['neon','glow','cyber'],'neon-color')) template='neon';
   var showImages=!noPhotos&&(images||layout==='poster'||layout==='cinematic'||layout==='editorial'||layout==='showcase');
-  var showDescription=layout==='editorial'||(editorial&&showImages);
+  var showDescription=layout!=='list'&&layout!=='pricewall';
   var fontSize=dense?'medium':(single?'large':'medium');
   var displayCount=config&&typeof config.displayCount==='number'?config.displayCount:1;
   if(/\\b(4|four)\\b[^.]{0,24}\\b(display|screen|tv|monitor)s?\\b/.test(source)||/\\b(display|screen|tv|monitor)s?\\b[^.]{0,24}\\b(4|four)\\b/.test(source))displayCount=4;
@@ -1254,7 +1365,7 @@ function analyzeReferenceStyle(url,notes){
     template:template,
     layoutMode:'auto',
     fontSize:fontSize,
-    fontScale:fontSize==='large'?120:100,
+    fontScale:fontSize==='large'?180:${TV_FONT_SCALE_DEFAULT},
     showImages:showImages,
     showDescription:showDescription,
     showPromos:promos||layout==='pricewall',
@@ -1333,10 +1444,13 @@ function render(){
   document.getElementById('disclaimer').value=config.disclaimer||'';
   setSwitch('showStrain',config.showStrain!==false);
   setSwitch('showBrandWeight',config.showBrand!==false);
+  setSwitch('showDescription',config.showDescription!==false);
   setSwitch('showImages',config.showImages!==false);
   setSwitch('showPromos',config.showPromos!==false);
   setSwitch('autoScroll',config.autoScroll===true);
-  document.getElementById('pageDurationSeconds').value=String(config.pageDurationSeconds||${TV_PAGE_DURATION_DEFAULT});
+  var pageDuration=Number(config.pageDurationSeconds)||${TV_PAGE_DURATION_DEFAULT};
+  document.getElementById('pageDurationSeconds').value=String(pageDuration);
+  syncPageDurationLabel(pageDuration);
   document.getElementById('pageTransition').value=config.pageTransition==='none'?'none':'${TV_PAGE_TRANSITION_DEFAULT}';
   document.getElementById('animationSettings').hidden=config.autoScroll!==true;
   document.getElementById('customFont').value=(config.customFont&&config.customFont!=='system')?config.customFont:'';
