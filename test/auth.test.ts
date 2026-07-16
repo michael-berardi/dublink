@@ -84,6 +84,15 @@ describe('public pages', () => {
     expect(login).toContain('<h1 class="card-title">Log In</h1>');
   });
 
+  it('allows browser and pinch zoom on authentication forms', async () => {
+    for (const path of ['/login', '/signup', '/demo-login']) {
+      const html = await (await SELF.fetch(`https://dubmenu.com${path}`)).text();
+      expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0">');
+      expect(html).not.toContain('maximum-scale');
+      expect(html).not.toContain('user-scalable=no');
+    }
+  });
+
   it('links the legal pages from the homepage footer', async () => {
     const html = await (await SELF.fetch('https://dubmenu.com/')).text();
     expect(html).toMatch(/href="[^"]+\/privacy"/);

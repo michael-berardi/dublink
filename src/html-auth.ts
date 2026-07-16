@@ -64,7 +64,7 @@ export function authPage(origin: string, mode: 'login' | 'signup' | 'account', a
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${isLogin ? 'Log In' : isSignup ? 'Start Free Trial' : 'Account'} | DubMenu</title>
   <meta name="description" content="${isSignup ? 'Start your 14-day free trial of DubMenu.' : 'Manage your DubMenu account.'}">
   <link rel="canonical" href="${safeOrigin}/${isLogin ? 'login' : isSignup ? 'signup' : 'account'}">

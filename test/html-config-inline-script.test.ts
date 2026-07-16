@@ -29,6 +29,12 @@ describe('configPage inline script', () => {
 describe('configPage remote-control UI', () => {
   const html = configPage('test-session-id', 'https://dubmenu.com');
 
+  it('allows browser and pinch zoom on the remote controls', () => {
+    expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1.0">');
+    expect(html).not.toContain('maximum-scale');
+    expect(html).not.toContain('user-scalable=no');
+  });
+
   it('labels the page as a compact remote control, not an operator copy block', () => {
     expect(html).toContain('DubMenu — Remote Control');
     expect(html).toContain('DubMenu Remote Control');

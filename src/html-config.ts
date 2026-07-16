@@ -7,7 +7,7 @@ export function configPage(sessionId: string, origin: string): string {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>DubMenu — Remote Control</title>
   <style>
@@ -26,7 +26,7 @@ export function configPage(sessionId: string, origin: string): string {
     .card{background:var(--surface);border:1px solid rgba(255,255,255,0.06);border-radius:1rem;padding:1.1rem;margin-bottom:0.75rem;box-shadow:0 1px 0 rgba(255,255,255,0.04) inset;}
     .primary-card{background:linear-gradient(180deg,rgba(16,185,129,0.14),rgba(28,28,30,0.96));border-color:rgba(16,185,129,0.24);}
     .card-title{font-size:0.75rem;font-weight:760;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem;}
-    .card-title-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1rem;}
+    .card-title-row{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;}
     .card-title-row .card-title{margin-bottom:0;}
     .text-action{appearance:none;background:var(--surface2);border:1px solid var(--border);border-radius:999px;color:var(--primary);cursor:pointer;font-family:inherit;font-size:0.75rem;font-weight:760;padding:0.4rem 0.65rem;white-space:nowrap;}
     .text-action:focus-visible{outline:2px solid var(--primary);outline-offset:2px;}
@@ -81,9 +81,10 @@ export function configPage(sessionId: string, origin: string): string {
     .btn-sm{padding:0.5rem 0.75rem;font-size:0.8125rem;}
     .search-bar{padding:0.75rem;background:var(--surface2);border-radius:0.5rem;margin-bottom:0.75rem;}
     .search-bar input{background:transparent;border:none;color:var(--text);font-size:1rem;outline:none;width:100%;}
+    .new-category-row{display:flex;gap:0.5rem;}
     .cat-item{background:var(--surface2);border-radius:0.75rem;padding:1rem;margin-bottom:0.75rem;}
     .cat-header{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;flex-wrap:wrap;}
-    .cat-header input{flex:1;background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);font-size:1rem;font-weight:600;outline:none;}
+    .cat-header input{flex:1;min-width:0;background:var(--surface);border:none;border-radius:0.5rem;padding:0.625rem;color:var(--text);font-size:1rem;font-weight:600;outline:none;}
     .prod-item{background:var(--surface);border-radius:0.5rem;padding:0.75rem;margin-bottom:0.5rem;}
     .prod-top{display:flex;justify-content:space-between;align-items:center;}
     .prod-name{font-weight:600;font-size:0.9375rem;}
@@ -197,8 +198,13 @@ export function configPage(sessionId: string, origin: string): string {
     @media(max-width:480px){.lib-grid{grid-template-columns:repeat(2,1fr);}}
     @media(max-width:400px){.grid-2{grid-template-columns:1fr;}.theme-grid{grid-template-columns:1fr;}}
     @media(max-width:480px){
-      .cat-header input{flex:1 1 calc(100% - 7.5rem);}
-      .cat-header .btn{flex:0 0 auto;}
+      .cat-header{display:grid;grid-template-columns:auto minmax(0,1fr);}
+      .cat-header input{grid-column:1 / -1;grid-row:1;width:100%;min-width:0;}
+      .cat-header .drag-handle{grid-column:1;grid-row:2;}
+      .cat-header .dnd-controls{grid-column:2;grid-row:2;margin-left:auto;}
+      .cat-header .btn{grid-column:1 / -1;grid-row:3;width:100%;}
+      .new-category-row{flex-direction:column;}
+      .new-category-row .btn{width:100%;}
       .prod-edit .grid-2{grid-template-columns:1fr;}
       .prod-edit input,.prod-edit select{min-width:0;}
       .import-result-grid{grid-template-columns:1fr;}
@@ -641,8 +647,8 @@ export function configPage(sessionId: string, origin: string): string {
     <button class="btn btn-sm btn-danger" type="button" onclick="clearMenu()">Clear menu</button>
     <button class="btn btn-sm btn-secondary" type="button" onclick="resetToStarter()">Reset to starter template</button>
   </div>
-  <div class="search-bar"><label for="searchInput" class="sr-only">Search products</label><input type="text" id="searchInput" placeholder="Search products..." oninput="filterProducts()"></div>
-  <div class="field"><div style="display:flex;gap:0.5rem;"><label for="newCategoryName" class="sr-only">New category name</label><input type="text" id="newCategoryName" placeholder="New category name" style="flex:1;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;" onkeydown="if(event.key==='Enter')addCategory()"><button class="btn btn-primary btn-sm" type="button" onclick="addCategory()">+ Add</button></div></div>
+  <div class="search-bar"><label for="searchInput" class="sr-only">Search products</label><input type="text" id="searchInput" placeholder="Search menu" oninput="filterProducts()"></div>
+  <div class="field"><div class="new-category-row"><label for="newCategoryName" class="sr-only">New category name</label><input type="text" id="newCategoryName" placeholder="Category name" style="flex:1;min-width:0;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.75rem;color:var(--text);font-size:1rem;outline:none;" onkeydown="if(event.key==='Enter')addCategory()"><button class="btn btn-primary btn-sm" type="button" onclick="addCategory()">+ Add</button></div></div>
   <div id="categoryList"></div>
 </div>
 </section>

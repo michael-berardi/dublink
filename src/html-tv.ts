@@ -521,7 +521,19 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .font-scale-maximum .compact-desc{display:block;white-space:normal;overflow:visible;-webkit-line-clamp:unset;}
   .font-scale-maximum .layout-list .row-desc{white-space:normal;overflow:visible;text-overflow:clip;}
   .font-scale-maximum .layout-list .row-price{overflow:visible;line-height:1.08;}
-  .font-scale-maximum .layout-showcase .card-price{font-size:clamp(8rem,12vw,14rem);overflow:visible;line-height:1;}
+  .font-scale-high .layout-editorial .editorial-products{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .font-scale-maximum .layout-editorial .editorial-products{grid-template-columns:minmax(0,1fr);}
+  .font-scale-maximum .layout-editorial .card-name,.font-scale-maximum .layout-editorial .card-meta{white-space:normal;overflow:visible;text-overflow:clip;}
+  .font-scale-high .layout-showcase .showcase-products{align-items:stretch;}
+  .font-scale-high .layout-showcase .product-card{display:grid;grid-template-columns:minmax(15rem,0.8fr) minmax(0,1.2fr);grid-template-areas:"image name" "image meta" "image desc" "image price";grid-template-rows:auto auto auto auto;align-content:center;align-items:center;column-gap:2rem;row-gap:0.35rem;height:100%;min-height:0;text-align:left;}
+  .font-scale-high .layout-showcase .product-card:not(:has(.card-image)){grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "meta" "desc" "price";text-align:center;}
+  .font-scale-high .layout-showcase .card-image{grid-area:image;width:100%;height:min(55vh,30rem);object-fit:contain;}
+  .font-scale-high .layout-showcase .card-name{grid-area:name;font-size:clamp(5rem,7vw,8rem);line-height:1;}
+  .font-scale-high .layout-showcase .card-meta{grid-area:meta;font-size:clamp(2.2rem,3vw,3rem);line-height:1.08;}
+  .font-scale-high .layout-showcase .card-desc{grid-area:desc;max-width:none;}
+  .font-scale-high .layout-showcase .card-price{grid-area:price;font-size:clamp(5rem,7.5vw,8rem);line-height:1.04;overflow:visible;}
+  .font-scale-high .layout-showcase .price-tiers{justify-content:flex-start;}
+  .font-scale-high .layout-showcase .product-card:not(:has(.card-image)) .price-tiers{justify-content:center;}
   .out-of-stock{opacity:0.5;}
   .out-of-stock .card-image{filter:grayscale(0.6);}
   .card-price-orig{color:var(--text-muted);font-size:0.72em;font-weight:750;text-decoration:line-through;text-decoration-thickness:0.1em;}
@@ -612,6 +624,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-sparse.single-product .hero-name,.layout-sparse .single-product .hero-name{font-size:var(--tv-hero-name-size);}
   .layout-sparse.single-product .hero-meta,.layout-sparse .single-product .hero-meta{font-size:var(--tv-hero-meta-size);}
   .layout-sparse.single-product .hero-price,.layout-sparse .single-product .hero-price{font-size:var(--tv-hero-price-size);margin-top:1rem;}
+  .font-scale-high .layout-sparse.single-product .hero-card,.font-scale-high .layout-sparse .single-product .hero-card{display:grid;grid-template-columns:minmax(15rem,0.8fr) minmax(0,1.2fr);grid-template-rows:minmax(0,1fr);align-items:stretch;justify-content:stretch;padding:1.5rem;gap:1.5rem;}
+  .font-scale-high .layout-sparse.single-product .hero-card .card-image,.font-scale-high .layout-sparse .single-product .hero-card .card-image{width:100%;height:100%;max-height:none;object-fit:contain;}
+  .font-scale-high .layout-sparse.single-product .hero-info,.font-scale-high .layout-sparse .single-product .hero-info{height:100%;min-height:0;align-items:flex-start;justify-content:center;gap:0.55rem;text-align:left;}
+  .font-scale-high .layout-sparse.single-product .hero-card.no-image,.font-scale-high .layout-sparse .single-product .hero-card.no-image{grid-template-columns:minmax(0,1fr);}
+  .font-scale-high .layout-sparse.single-product .hero-card.no-image .hero-info,.font-scale-high .layout-sparse .single-product .hero-card.no-image .hero-info{align-items:center;text-align:center;}
+  .font-scale-high .layout-sparse.single-product .hero-name,.font-scale-high .layout-sparse .single-product .hero-name{font-size:clamp(5rem,7vw,8rem);line-height:1;}
+  .font-scale-high .layout-sparse.single-product .hero-meta,.font-scale-high .layout-sparse .single-product .hero-meta{font-size:clamp(2.2rem,3vw,3rem);line-height:1.08;}
+  .font-scale-high .layout-sparse.single-product .hero-price,.font-scale-high .layout-sparse .single-product .hero-price{font-size:clamp(5rem,7.5vw,8rem);line-height:1.04;margin-top:0.5rem;}
 
   /* Minimal TV strain labels: text-first, no pill/chip noise */
   .strain-badge-tv{display:inline;color:var(--text-muted);font-weight:850;text-transform:uppercase;letter-spacing:0.04em;}
@@ -918,6 +938,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     Object.keys(tokens).forEach(function(name){document.body.style.setProperty(name,tokens[name]);});
     document.body.setAttribute('data-font-scale',String(fontScale));
     document.body.classList.toggle('font-scale-large',fontScale>=130);
+    document.body.classList.toggle('font-scale-high',fontScale>=190);
     document.body.classList.toggle('font-scale-maximum',fontScale>=220);
   }
   function customFontClass(v){
@@ -1713,11 +1734,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     if(!(scale > 0) || !isFinite(scale)) scale = 1;
     fitScale = scale;
     menu.style.transformOrigin = 'top left';
+    var canvasHeight = vh > vw ? vh / scale : SCALE_BASELINE_H;
     menu.style.width = SCALE_BASELINE_W + 'px';
-    menu.style.height = SCALE_BASELINE_H + 'px';
+    menu.style.height = canvasHeight + 'px';
     menu.style.transform = 'scale(' + scale + ')';
     var scaledW = SCALE_BASELINE_W * scale;
-    var scaledH = SCALE_BASELINE_H * scale;
+    var scaledH = canvasHeight * scale;
     var overshootX = scaledW - vw;
     var overshootY = scaledH - vh;
     menu.style.marginLeft = (overshootX > 0 ? -overshootX / 2 : Math.max(0, (vw - scaledW) / 2)) + 'px';

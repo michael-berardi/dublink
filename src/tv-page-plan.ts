@@ -58,6 +58,7 @@ export function buildTvCatalogPagePlan(
       categoriesPerPage = 1;
     } else if (fontScale >= 190) {
       if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 2);
+      else if (options.layout === 'poster') productsPerPage = 1;
       else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 2);
       if (categoriesPerPage > 1) categoriesPerPage = 2;
     } else if (fontScale >= 160) {
@@ -76,7 +77,7 @@ export function buildTvCatalogPagePlan(
       else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 7);
     } else if (fontScale >= 130) {
       if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 6);
-      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 2);
       else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 4);
       else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 4);
       else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 7);

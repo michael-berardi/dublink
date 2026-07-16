@@ -158,16 +158,19 @@ describe('buildTvCatalogPagePlan', () => {
     const list = buildTvCatalogPagePlan(categories, { layout: 'list', demoMode: true, fontScale: 100 });
     const standardPoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 100 });
     const extraLargePoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 140 });
+    const highScalePoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 200 });
     const extraLargeCinematic = buildTvCatalogPagePlan(categories, { layout: 'cinematic', demoMode: true, fontScale: 140 });
 
     expect(list.every((page) => page.length <= 3)).toBe(true);
     expect(list.every((page) => productIds(page).length <= 10)).toBe(true);
     expect(standardPoster.every((page) => page.length === 1 && productIds(page).length <= 3)).toBe(true);
-    expect(extraLargePoster.every((page) => page.length === 1 && productIds(page).length <= 3)).toBe(true);
+    expect(extraLargePoster.every((page) => page.length === 1 && productIds(page).length <= 2)).toBe(true);
+    expect(highScalePoster.every((page) => page.length === 1 && productIds(page).length === 1)).toBe(true);
     expect(extraLargeCinematic.every((page) => page.length === 1 && productIds(page).length <= 4)).toBe(true);
     expect(plannedProductIds(list).sort()).toEqual(productIds(categories).sort());
     expect(plannedProductIds(standardPoster)).toEqual(productIds(categories));
     expect(plannedProductIds(extraLargePoster)).toEqual(productIds(categories));
+    expect(plannedProductIds(highScalePoster)).toEqual(productIds(categories));
     expect(plannedProductIds(extraLargeCinematic)).toEqual(productIds(categories));
   });
 
