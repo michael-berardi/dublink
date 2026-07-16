@@ -113,7 +113,7 @@ describe('Dutchie scraper image extraction', () => {
       if (url.startsWith(DUTCHIE_MENU_URL)) {
         return structuredResponse([
           baseProduct('tiered-flower', {
-            recPrices: [12, 35, 60],
+            recPrices: [0, 35, 60],
             Options: ['1g', '3.5g', '7g'],
           }),
         ]);
@@ -123,8 +123,8 @@ describe('Dutchie scraper image extraction', () => {
 
     const result = await scrapeDutchie('tier-test', 'test-token');
     const products = result.categories.flatMap((c) => c.products);
+    expect(products[0]).toMatchObject({ price: 35, weight: '3.5g' });
     expect(products[0].priceTiers).toEqual([
-      { label: '1g', price: '$12' },
       { label: '3.5g', price: '$35' },
       { label: '7g', price: '$60' },
     ]);
@@ -196,7 +196,7 @@ describe('Dutchie scraper image extraction', () => {
       },
     });
     expect(page).toContain('Bright citrus flower with a smooth pine finish.');
-    expect(page).toContain('class="card-desc"');
+    expect(page).toContain('var compactDescription = function compactTvDescription');
   });
 
   it('prefers the first active image in the images array', async () => {

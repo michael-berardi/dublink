@@ -80,6 +80,19 @@ describe('buildTvCatalogPagePlan', () => {
     expect(plannedProductIds(pages).sort()).toEqual(productIds([category]).sort());
   });
 
+  it('does not repeat a strain already present in the source category label', () => {
+    const category: Category = {
+      id: 'flower-indica',
+      name: 'Flower · Indica',
+      order: 0,
+      products: products('Indica', 12, 'indica'),
+    };
+
+    const pages = buildTvCatalogPagePlan([category], { layout: 'list' });
+
+    expect(pages.flatMap((page) => page.map((plannedCategory) => plannedCategory.name)).every((name) => name === 'Flower · Indica')).toBe(true);
+  });
+
   it('aligns sparse pagination with its four-product renderer', () => {
     const category: Category = {
       id: 'flower',

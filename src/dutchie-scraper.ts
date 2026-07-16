@@ -1,6 +1,7 @@
 // Dutchie menu scraper - uses Railway Browserless service to render JS-heavy Dutchie pages.
 import { DEMO_DISPENSARY_NAME, createSimplyGreenDemoCategories } from './starter-template';
-import { extractProductDescription } from './product-description';
+import { cleanProductDescription, extractProductDescription } from './product-description';
+import { firstPositiveIndexedPrice } from './product-option';
 const BROWSERLESS_URL = 'https://overseer-browser-production.up.railway.app/scrape-specials';
 const DUTCHIE_MENU_URL = 'https://overseer-browser-production.up.railway.app/scrape-dutchie-menu';
 
@@ -467,6 +468,15 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     seen.add(slug);
     const weight = cleanWeight(parseWeight(`${rawName} ${text}`));
     const specialLabel = saleLabel(text, originalPrice);
+    const description = cleanProductDescription(lines
+      .filter((line) =>
+        line !== firstLine &&
+        line !== name &&
+        line !== cleanName &&
+        line.length >= 28 &&
+        !/^(indica|sativa|hybrid)$/i.test(line) &&
+        !/THC|CBD|\$|Add to cart|In stock|Out of stock|^\d+(?:\.\d+)?\s*(?:g|mg|oz|ml|pk|ct)$/i.test(line))
+      .join(' '));
 
     const product: ScrapedProduct = {
       id: slug,
@@ -479,6 +489,7 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
       cbd,
       image: cleanImageUrl(p.img),
       weight,
+      description,
       brand: brand || lines.find((line) => line && line !== name && line !== cleanName && !/^(indica|sativa|hybrid)$/i.test(line) && !/THC|CBD|\$|Add to cart|In stock|Out of stock/i.test(line) && !/^\d/.test(line)),
       inStock: true,
       strain,
@@ -547,7 +558,10 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const category = normalizeCategory(p.type) || normalizeCategory(p.POSMetaData?.canonicalCategory) || normalizeCategory(p.posMetadata?.canonicalCategory) || normalizeCategory(parts[1]) || 'Other';
       const brand = p.brandName || p.brand?.name || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName || (parts.length >= 2 ? parts[0] : undefined);
       const name = parts.length >= 4 ? parts.slice(3).join(' | ') : rawName;
-      const price = firstNumber(p.recPrices) || firstNumber(p.prices) || firstNumber(p.Prices) || firstNumber(p.medicalPrices) || firstNumber(p.POSMetaData?.children?.[0]?.recPrice) || firstNumber(p.POSMetaData?.children?.[0]?.price) || firstNumber(p.posMetadata?.children?.[0]?.recPrice) || firstNumber(p.posMetadata?.children?.[0]?.price);
+      const indexedPrice = firstPositiveIndexedPrice(p.recPrices, p.prices, p.Prices, p.medicalPrices);
+      const posChildren = p.POSMetaData?.children || p.posMetadata?.children;
+      const childPrice = firstPositiveIndexedPrice(posChildren?.map((child) => child.recPrice || child.price));
+      const price = indexedPrice?.price || childPrice?.price || 0;
       if (!price) continue;
       seen.add(productKey);
 
@@ -555,7 +569,13 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
       const strain = parseStrain(String(p.strainType || parts[2] || rawName));
       const thc = potencyValue(p.THCContent, category) || parseTHC(rawName);
       const cbd = potencyValue(p.CBDContent, category);
-      const rawWeight = Array.isArray(p.options) ? p.options[0] : Array.isArray(p.Options) ? p.Options[0] : p.POSMetaData?.children?.[0]?.option || p.posMetadata?.children?.[0]?.option;
+      const rawWeight =
+        (indexedPrice
+          ? p.options?.[indexedPrice.index] ||
+            p.Options?.[indexedPrice.index] ||
+            posChildren?.[indexedPrice.index]?.option
+          : undefined) ||
+        (childPrice ? posChildren?.[childPrice.index]?.option : undefined);
       const weight = cleanWeight(rawWeight);
 
       const product: ScrapedProduct = {
@@ -639,6 +659,7 @@ async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: Sc
             brand: item.brand?.name,
             image: cleanImageUrl(item.image),
             weight: parseWeight(item.name + ' ' + (item.description || '')),
+            description: extractProductDescription(item),
           });
         }
       }

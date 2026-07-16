@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  compactTvDescription,
   isVisuallyBlankImageSample,
   nextTvCyclePage,
   normalizeTvUploadImageUrl,
@@ -204,6 +205,32 @@ describe('tvPage', () => {
     expect(page).toContain('gridStrainClass');
     expect(page).not.toContain('category-spotlight');
     expect(page).toContain('product-table-head');
+  });
+
+  it('pairs a normalized purchase amount with every single displayed price', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('function weightBelongsInMeta');
+    expect(page).toContain("var weight = p.weight ? '<span class=\"price-weight\">'");
+    expect(page).toContain("'<span class=\"price-pair\">' + weight + current + '</span>'");
+    expect(page).toContain('.price-pair{display:inline-flex;');
+    expect(page).toContain('.price-weight{');
+    expect(page).toContain('grid-template-areas:"name meta leader price" "desc desc desc price"');
+  });
+
+  it('adapts descriptions to layout density instead of repeating full paragraphs everywhere', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
+    expect(page).toContain('var compactDescription = function compactTvDescription');
+    expect(page).toContain('function makeListDesc');
+    expect(page).toContain('makeDesc(p,true)');
+    expect(page).toContain('.layout-list .row-desc{');
+    expect(page).toContain("compact ? ' compact-desc' : ''");
+  });
+
+  it('compacts TV descriptions by whole words without deleting letters', () => {
+    expect(compactTvDescription('Creamy vanilla and berry aromas open into a smooth, dessert-like finish.'))
+      .toBe('Creamy vanilla and berry aromas open into a smooth, dessert-like finish.');
+    expect(compactTvDescription('Bright citrus and pine notes with a clean, energizing finish.'))
+      .toBe('Bright citrus and pine notes with a clean, energizing finish.');
   });
 
   it('injects the exhaustive page planner for imported grid boards', () => {

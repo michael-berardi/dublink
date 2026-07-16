@@ -29,6 +29,18 @@ export function tvFontSizeClass(fontScale: number): 'small' | 'medium' | 'large'
   return 'medium';
 }
 
+export function compactTvDescription(value: unknown): string {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  const sentence = (text.match(/^[^.!?]+[.!?]?/) || [text])[0].trim();
+  const words = sentence.split(' ');
+  if (sentence.length <= 120 || words.length <= 16) return sentence;
+  const clause = sentence.slice(0, 120);
+  const clauseEnd = Math.max(clause.lastIndexOf(','), clause.lastIndexOf(';'), clause.lastIndexOf('—'), clause.lastIndexOf(' - '));
+  if (clauseEnd >= 60) return `${clause.slice(0, clauseEnd).replace(/[,:;\s]+$/, '')}.`;
+  return `${words.slice(0, 16).join(' ').replace(/[,:;\s]+$/, '')}.`;
+}
+
 const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;
 
 function isTvTemplate(value: unknown): value is (typeof TV_TEMPLATES)[number] {
@@ -396,8 +408,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .font-scale-large .category-accessories .card-name{-webkit-line-clamp:4;}
   .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.82;}
   .layout-pricewall .card-meta span{white-space:nowrap;}
-  .layout-pricewall .card-desc{display:none;}
-  .layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950;line-height:1;color:var(--text);min-width:5.5rem;text-align:right;font-variant-numeric:tabular-nums;}
+  .layout-pricewall .card-desc{display:-webkit-box;-webkit-line-clamp:1;}
+  .layout-grid .compact-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow:hidden;font-size:var(--tv-table-size);line-height:1.18;}
+  .layout-grid .compact-desc,.layout-pricewall .compact-desc,.layout-cinematic .compact-desc,.layout-editorial .compact-desc,.layout-sparse .stack-card .compact-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow:hidden;}
+  .font-scale-large .layout-grid .product-card{grid-template-columns:0.38rem minmax(0,1fr);grid-template-areas:"bar body" "bar price";align-content:center;}
+  .font-scale-large .layout-grid .product-card.has-image{grid-template-columns:0.38rem 4.6rem minmax(0,1fr);grid-template-areas:"bar image body" "bar image price";}
+  .font-scale-large .layout-grid .strain-bar{grid-area:bar;}
+  .font-scale-large .layout-grid .card-image{grid-area:image;}
+  .font-scale-large .layout-grid .card-body{grid-area:body;}
+  .font-scale-large .layout-grid .card-price{grid-area:price;min-width:0;text-align:left;}
+  .font-scale-large .layout-grid .price-tiers{width:auto;grid-template-columns:repeat(3,minmax(3.5rem,max-content));justify-content:start;}
+  .layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950;line-height:1;color:var(--text);min-width:7.5rem;text-align:right;font-variant-numeric:tabular-nums;}
   .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.25rem auto;padding:0.18rem 0.46rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--text);font-size:var(--tv-tier-label-size);line-height:1;font-weight:950;letter-spacing:0.07em;text-transform:uppercase;}
   .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -420,11 +441,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .pricewall-special-row:first-child{border-top:0;padding-top:0;}
   .pricewall-special-name{font-weight:900;font-size:var(--tv-name-size);line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:var(--tv-price-size);white-space:nowrap;font-variant-numeric:tabular-nums;}
-  .layout-list .product-row{display:flex;align-items:baseline;gap:0.5rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
-  .layout-list .row-name{font-size:var(--tv-name-size);font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .row-meta{font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .leader{flex:1;border-bottom:1px dotted var(--text-faint);margin:0 0.4rem;min-width:1rem;align-self:flex-end;margin-bottom:0.3rem;}
-  .layout-list .row-price{font-size:var(--tv-price-size);font-weight:950;color:var(--text);white-space:nowrap;}
+  .layout-list .product-row{display:grid;grid-template-columns:minmax(0,auto) minmax(0,auto) minmax(1rem,1fr) auto;grid-template-areas:"name meta leader price" "desc desc desc price";align-items:baseline;column-gap:0.5rem;row-gap:0.12rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
+  .layout-list .row-name{grid-area:name;font-size:var(--tv-name-size);font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .row-meta{grid-area:meta;font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .row-desc{grid-area:desc;font-size:var(--tv-meta-size);font-weight:650;line-height:1.16;color:var(--text);opacity:0.86;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .leader{grid-area:leader;border-bottom:1px dotted var(--text-faint);min-width:1rem;align-self:end;margin-bottom:0.3rem;}
+  .layout-list .row-price{grid-area:price;align-self:center;font-size:var(--tv-price-size);font-weight:950;color:var(--text);white-space:nowrap;}
 
   .layout-grid .card-body{min-width:0;display:flex;flex-direction:column;gap:0.26rem;}
   .layout-grid .card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:0.18rem 0.45rem;min-width:0;max-width:none;line-height:1.12;}
@@ -432,16 +454,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .product-maker{color:var(--text);font-weight:900;}
   .product-maker::before{content:'By ';color:var(--text-muted);font-weight:700;}
   .layout-grid .card-meta .product-maker,.layout-pricewall .card-meta .product-maker{flex-basis:100%;}
-  .card-desc{font-size:var(--tv-meta-size);line-height:1.28;color:var(--text-muted);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
+  .card-desc{font-size:var(--tv-meta-size);font-weight:650;line-height:1.24;color:var(--text);opacity:0.86;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
   .layout-showcase .card-desc{max-width:62ch;font-size:var(--tv-hero-meta-size);-webkit-line-clamp:3;}
   .layout-sparse .hero-card .card-desc{font-size:var(--tv-feature-meta-size);-webkit-line-clamp:3;}
   .layout-cinematic .product-card.no-image .card-body{grid-template-areas:"name price" "meta price" "desc price";}
   .layout-cinematic .product-card.no-image .card-desc{grid-area:desc;}
-  .layout-list .category-accessories .product-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta meta";align-items:start;column-gap:1rem;row-gap:0.2rem;}
-  .layout-list .category-accessories .row-name{grid-area:name;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-  .layout-list .category-accessories .row-meta{grid-area:meta;white-space:normal;overflow:visible;}
+  .layout-list .category-accessories .product-row{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price" "desc price";align-items:start;column-gap:1rem;row-gap:0.2rem;}
+  .layout-list .category-accessories .row-name{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+  .layout-list .category-accessories .row-meta{white-space:normal;overflow:visible;}
   .layout-list .category-accessories .leader{display:none;}
-  .layout-list .category-accessories .row-price{grid-area:price;}
   .layout-poster,.layout-cinematic,.layout-editorial{display:flex;flex-direction:column;gap:0.85rem;height:100%;min-height:0;}
   .layout-poster .category-block,.layout-cinematic .category-block,.layout-editorial .category-block{display:flex;flex-direction:column;flex:1 1 0;min-height:0;}
   .layout-poster .category-header,.layout-cinematic .category-header,.layout-editorial .category-header{flex:0 0 auto;}
@@ -469,10 +490,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-cinematic .card-meta{font-size:var(--tv-meta-size);line-height:1.16;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-cinematic .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
   .layout-cinematic .product-card.no-image{height:100%;min-height:7.2rem;border-color:var(--border-hover);background:radial-gradient(circle at 84% 16%,var(--accent-dim),transparent 42%),linear-gradient(145deg,rgba(255,255,255,0.075),rgba(255,255,255,0.018)),var(--bg-card);}
-  .layout-cinematic .product-card.no-image .card-body{position:static;height:100%;min-height:7.2rem;padding:1rem 1.15rem;background:transparent;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.4rem;box-shadow:inset 0.38rem 0 var(--accent);}
-  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-name-size);line-height:1.08;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-cinematic .product-card.no-image .card-body{position:static;height:100%;min-height:7.2rem;padding:1rem 1.15rem;background:transparent;display:grid;grid-template-columns:minmax(0,1fr);grid-template-areas:"name" "meta" "desc" "price";align-content:center;align-items:center;row-gap:0.28rem;box-shadow:inset 0.38rem 0 var(--accent);}
+  .layout-cinematic .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-name-size);line-height:1.08;display:block;white-space:normal;overflow:visible;}
   .layout-cinematic .product-card.no-image .card-meta{grid-area:meta;font-size:var(--tv-meta-size);white-space:normal;overflow:visible;}
-  .layout-cinematic .product-card.no-image .card-price{grid-area:price;font-size:var(--tv-price-size);line-height:1;text-align:right;}
+  .layout-cinematic .product-card.no-image .card-desc{grid-area:desc;}
+  .layout-cinematic .product-card.no-image .card-price{grid-area:price;font-size:var(--tv-price-size);line-height:1;text-align:left;margin-top:0.15rem;}
 
   .layout-showcase .showcase-products{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;}
   .layout-showcase .product-card{display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center;}
@@ -491,11 +513,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-editorial .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
   .layout-editorial .product-card.no-image{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:1rem;padding:0.85rem 1rem;min-height:5.8rem;height:100%;}
   .layout-editorial .product-card.no-image .card-body{position:static;padding:0;min-width:0;background:none;display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price" "desc price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.2rem;}
-  .layout-editorial .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-editorial-name-size);line-height:1.08;white-space:normal;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+  .layout-editorial .product-card.no-image .card-name{grid-area:name;font-size:var(--tv-editorial-name-size);line-height:1.08;white-space:normal;overflow:visible;}
   .layout-editorial .product-card.no-image .card-meta{grid-area:meta;font-size:var(--tv-meta-size);white-space:normal;overflow-wrap:anywhere;}
   .layout-editorial .product-card.no-image .card-desc{grid-area:desc;}
   .layout-editorial .product-card.no-image .card-price{grid-area:price;font-size:var(--tv-price-size);line-height:1;text-align:right;}
 
+  .font-scale-maximum .compact-desc{display:block;white-space:normal;overflow:visible;-webkit-line-clamp:unset;}
+  .font-scale-maximum .layout-list .row-desc{white-space:normal;overflow:visible;text-overflow:clip;}
+  .font-scale-maximum .layout-list .row-price{overflow:visible;line-height:1.08;}
+  .font-scale-maximum .layout-showcase .card-price{font-size:clamp(8rem,12vw,14rem);overflow:visible;line-height:1;}
   .out-of-stock{opacity:0.5;}
   .out-of-stock .card-image{filter:grayscale(0.6);}
   .card-price-orig{color:var(--text-muted);font-size:0.72em;font-weight:750;text-decoration:line-through;text-decoration-thickness:0.1em;}
@@ -529,20 +555,24 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .demo-pill{display:none;padding:0.38rem 0.75rem;border-radius:999px;background:rgba(250,204,21,0.16);border:1px solid rgba(250,204,21,0.34);color:#fde68a;font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(10px);white-space:nowrap;}
   .demo-pill.visible{display:block;}
 
+  .price-pair{display:inline-flex;align-items:baseline;justify-content:flex-end;gap:0.42rem;white-space:nowrap;}
+  .price-value{font:inherit;color:inherit;}
+  .price-weight{display:inline-flex;align-items:center;padding:0.2em 0.42em;border:1px solid var(--accent);border-radius:0.42em;background:var(--accent-dim);color:var(--text);font-size:0.62em;font-weight:950;line-height:1;letter-spacing:0.025em;white-space:nowrap;}
+  .card-price-orig{display:block;margin-top:0.22rem;}
   .price-tiers{display:flex;flex-wrap:wrap;gap:0.45rem 0.55rem;margin-top:auto;align-items:stretch;}
-  .price-tiers .tier{display:inline-flex;flex-direction:column;align-items:flex-start;gap:0.08rem;padding:0.34rem 0.5rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.75rem;}
-  .price-tiers .tier-label{font-size:var(--tv-tier-label-size);font-weight:850;text-transform:uppercase;letter-spacing:0.06em;color:var(--text);opacity:0.78;line-height:1;}
+  .price-tiers .tier{display:inline-flex;flex-direction:row;align-items:baseline;gap:0.32rem;padding:0.34rem 0.5rem;border-radius:0.45rem;background:rgba(255,255,255,0.045);border:1px solid var(--border);min-width:3.75rem;}
+  .price-tiers .tier-label{font-size:var(--tv-tier-label-size);font-weight:950;text-transform:uppercase;letter-spacing:0.04em;color:var(--text);line-height:1;}
   .price-tiers .tier-price{font-size:var(--tv-tier-price-size);font-weight:950;line-height:1.05;color:var(--text);}
-  .layout-grid .price-tiers{justify-content:flex-end;gap:0.35rem;margin-top:0;}
+  .layout-grid .price-tiers{display:grid;grid-template-columns:repeat(2,minmax(3.5rem,1fr));width:11.75rem;max-width:100%;justify-content:flex-end;gap:0.35rem;margin-top:0;}
   .layout-grid .price-tiers .tier{min-width:3.5rem;padding:0.28rem 0.42rem;border-radius:0.38rem;}
   .layout-grid .price-tiers .tier-label{font-size:var(--tv-tier-label-size);}
   .layout-grid .price-tiers .tier-price{font-size:var(--tv-tier-price-size);}
   .layout-pricewall .price-tiers{display:grid;grid-template-columns:repeat(2,minmax(4.5rem,1fr));gap:0.38rem;min-width:10rem;}
-  .layout-pricewall .price-tiers .tier{min-width:0;align-items:flex-end;padding:0.3rem 0.44rem;}
+  .layout-pricewall .price-tiers .tier{min-width:0;justify-content:flex-end;padding:0.3rem 0.44rem;}
   .layout-pricewall .price-tiers .tier-label{font-size:var(--tv-tier-label-size);}
   .layout-pricewall .price-tiers .tier-price{font-size:var(--tv-tier-price-size);font-variant-numeric:tabular-nums;}
-  .layout-list .price-tiers{margin-top:0;gap:0.35rem;}
-  .layout-list .price-tiers .tier{padding:0;background:transparent;border:0;min-width:auto;flex-direction:row;align-items:baseline;gap:0.25rem;}
+  .layout-list .price-tiers{display:grid;grid-template-columns:repeat(3,max-content);margin-top:0;gap:0.35rem;}
+  .layout-list .price-tiers .tier{padding:0;background:transparent;border:0;min-width:auto;align-items:baseline;gap:0.25rem;}
   .layout-list .price-tiers .tier-price{font-size:var(--tv-tier-price-size);}
   .layout-poster .price-tiers .tier-price{font-size:var(--tv-feature-meta-size);}
   .layout-cinematic .price-tiers .tier-price{font-size:var(--tv-tier-price-size);color:var(--text);}
@@ -555,21 +585,21 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-sparse .category-block{display:flex;flex-direction:column;flex:1;min-height:0;}
   .layout-sparse .category-header{flex-shrink:0;}
   .layout-sparse .sparse-products{display:flex;flex-direction:column;gap:1rem;flex:1;min-height:0;}
-  .layout-sparse .hero-card{display:grid;grid-template-columns:1.2fr 1fr;grid-template-rows:1fr;gap:1.5rem;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.8rem;overflow:hidden;flex:1.2;min-height:0;padding:1.5rem;}
+  .layout-sparse .hero-card{display:grid;grid-template-columns:1.2fr 1fr;grid-template-rows:1fr;gap:1.5rem;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.8rem;overflow:hidden;flex:0.82;min-height:0;padding:1.5rem;}
   .layout-sparse .hero-card .card-image{width:100%;height:100%;object-fit:cover;border-radius:0.6rem;min-height:0;}
   .layout-sparse .hero-card.no-image{grid-template-columns:1fr;}
   .layout-sparse .hero-info{display:flex;flex-direction:column;justify-content:center;gap:0.75rem;min-width:0;}
   .layout-sparse .hero-name{font-size:var(--tv-feature-name-size);font-weight:900;line-height:1.1;color:var(--text);overflow-wrap:break-word;}
   .layout-sparse .hero-meta{font-size:var(--tv-feature-meta-size);color:var(--text);}
   .layout-sparse .hero-price{font-size:var(--tv-feature-price-size);font-weight:950;color:var(--text);margin-top:auto;}
-  .layout-sparse .stack{display:flex;flex-direction:column;gap:0.75rem;flex:1;min-height:0;}
+  .layout-sparse .stack{display:flex;flex-direction:column;gap:0.75rem;flex:1.18;min-height:0;}
   .layout-sparse .stack-card{display:grid;grid-template-columns:110px 1fr auto;gap:1rem;align-items:center;background:var(--card-grad),var(--bg-card);border:1px solid var(--border);border-radius:0.6rem;overflow:hidden;padding:0.75rem;flex:1;min-height:0;}
   .layout-sparse .stack-card .card-image{width:110px;height:85px;object-fit:cover;border-radius:0.4rem;}
   .layout-sparse .stack-card.no-image{grid-template-columns:1fr auto;}
   .layout-sparse .stack-card .card-name{font-size:var(--tv-name-size);font-weight:850;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .layout-sparse .stack-card .card-meta{font-size:var(--tv-meta-size);color:var(--text);}
   .layout-sparse .stack-card .card-price{font-size:var(--tv-price-size);font-weight:950;color:var(--text);}
-  .layout-sparse .stack-info{min-width:0;}
+  .layout-sparse .stack-info{min-width:0;display:grid;gap:0.18rem;}
 
   /* Single-product sparse category: vertical hero card fills remaining viewport */
   .menu-content.layout-sparse{display:flex;flex-direction:column;min-height:0;}
@@ -757,6 +787,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var TV_FONT_SCALE_DEFAULT = ${TV_FONT_SCALE_DEFAULT};
   var normalizeTvFontScale = ${normalizeTvFontScale.toString()};
   var tvFontSizeClass = ${tvFontSizeClass.toString()};
+  var compactDescription = ${compactTvDescription.toString()};
   var TV_PAGE_DURATION_OPTIONS = ${serializeInlineScriptJson(TV_PAGE_DURATION_OPTIONS)};
   var TV_PAGE_DURATION_DEFAULT = ${TV_PAGE_DURATION_DEFAULT};
   var TV_PAGE_TRANSITION_DEFAULT = ${serializeInlineScriptJson(TV_PAGE_TRANSITION_DEFAULT)};
@@ -887,6 +918,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     Object.keys(tokens).forEach(function(name){document.body.style.setProperty(name,tokens[name]);});
     document.body.setAttribute('data-font-scale',String(fontScale));
     document.body.classList.toggle('font-scale-large',fontScale>=130);
+    document.body.classList.toggle('font-scale-maximum',fontScale>=220);
   }
   function customFontClass(v){
     var lower = String(v || '').toLowerCase();
@@ -1353,12 +1385,24 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return '<span class="strain-badge-tv">' + escapeHtml(label) + '</span>';
   }
 
+  function hasTierPrices(p){
+    return !!(p && Array.isArray(p.priceTiers) && p.priceTiers.length);
+  }
+
+  function hasSinglePrice(p){
+    return !!(p && (typeof p.price === 'number' || (typeof p.price === 'string' && p.price.trim())));
+  }
+
+  function weightBelongsInMeta(p){
+    return !!(p && p.weight && !hasTierPrices(p) && !hasSinglePrice(p));
+  }
+
   function makeSub(p){
     var parts = [];
     if(p.inStock === false) parts.push('<span class="oos-text">Sold Out</span>');
     if(config.showBrand !== false && p.brand) parts.push('<span class="product-maker">' + escapeHtml(p.brand) + '</span>');
     if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
-    if(p.weight) parts.push(escapeHtml(p.weight));
+    if(weightBelongsInMeta(p)) parts.push(escapeHtml(p.weight));
     if(p.thc) parts.push('THC ' + escapeHtml(p.thc));
     if(p.cbd) parts.push('CBD ' + escapeHtml(p.cbd));
     return parts.join(' \u00B7 ');
@@ -1380,7 +1424,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     } else if(p.isPromo || p.special){
       promo = '<span class="promo-price">Special</span> ';
     }
-    if(Array.isArray(p.priceTiers) && p.priceTiers.length){
+    if(hasTierPrices(p)){
       var tiers = p.priceTiers.map(function(t){
         var label = escapeHtml((t && t.label) || '');
         var price = escapeHtml((t && t.price) || '');
@@ -1391,19 +1435,31 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         return promo + '<div class="price-tiers">' + tiers + '</div>';
       }
     }
-    var hasPrice = typeof p.price === 'number' || (typeof p.price === 'string' && p.price.trim());
+    var hasPrice = hasSinglePrice(p);
     var orig = p.priceOriginal || p.originalPrice;
-    if(orig && hasPrice && orig !== p.price){
-      return promo + '<span class="card-price-orig">$' + formatPriceValue(orig) + '</span> <span class="sale-text">Now $' + formatPriceValue(p.price) + '</span>';
-    }
     if(!hasPrice) return promo.trim();
-    return promo + '$' + formatPriceValue(p.price);
+    var weight = p.weight ? '<span class="price-weight">' + escapeHtml(p.weight) + '</span>' : '';
+    var current = orig && orig !== p.price
+      ? '<span class="sale-text">Now $' + formatPriceValue(p.price) + '</span>'
+      : '<span class="price-value">$' + formatPriceValue(p.price) + '</span>';
+    var original = orig && orig !== p.price
+      ? '<span class="card-price-orig">Was $' + formatPriceValue(orig) + '</span>'
+      : '';
+    return promo + '<span class="price-pair">' + weight + current + '</span>' + original;
   }
 
-  function makeDesc(p){
+  function makeDesc(p,compact){
     if(config && config.showDescription === false) return '';
     if(!p || !p.description) return '';
-    return '<div class="card-desc">' + escapeHtml(p.description) + '</div>';
+    var description = compact ? compactDescription(p.description) : String(p.description);
+    return description ? '<div class="card-desc' + (compact ? ' compact-desc' : '') + '">' + escapeHtml(description) + '</div>' : '';
+  }
+
+  function makeListDesc(p){
+    if(config && config.showDescription === false) return '';
+    if(!p || !p.description) return '';
+    var description = compactDescription(p.description);
+    return description ? '<div class="row-desc">' + escapeHtml(description) + '</div>' : '';
   }
 
   function gridStrainClass(p){
@@ -1417,7 +1473,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var parts = [];
     if(config.showBrand !== false && p.brand) parts.push('<span class="product-maker">' + escapeHtml(p.brand) + '</span>');
     if(config.showStrain !== false && p.strain) parts.push(strainBadge(p));
-    if(p.weight) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
+    if(weightBelongsInMeta(p)) parts.push('<span>' + escapeHtml(p.weight) + '</span>');
     if(p.thc) parts.push('<span>THC ' + escapeHtml(p.thc) + '</span>');
     if(p.cbd) parts.push('<span>CBD ' + escapeHtml(p.cbd) + '</span>');
     return parts.join('');
@@ -1436,7 +1492,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         var visual = hasImage ? imgMarkup(p, true) : '';
         var card = document.createElement('div');
         card.className = 'product-card' + (hasImage ? ' has-image' : ' no-image') + (config.showStrain !== false ? gridStrainClass(p) : '') + (p.inStock === false ? ' out-of-stock' : '');
-        card.innerHTML = '<span class="strain-bar"></span>' + visual + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p) + '</div><div class="card-price">' + makePrice(p) + '</div>';
+        card.innerHTML = '<span class="strain-bar"></span>' + visual + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p,true) + '</div><div class="card-price">' + makePrice(p) + '</div>';
         grid.appendChild(card);
       });
       catEl.appendChild(grid);
@@ -1492,7 +1548,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var row = document.createElement('div');
         row.className = 'product-row' + (p.inStock === false ? ' out-of-stock' : '');
-        row.innerHTML = '<div class="row-name">' + escapeHtml(p.name) + '</div><div class="row-meta">' + makeSub(p) + '</div><div class="leader"></div><div class="row-price">' + makePrice(p) + '</div>';
+        row.innerHTML = '<div class="row-name">' + escapeHtml(p.name) + '</div><div class="row-meta">' + makeSub(p) + '</div><div class="leader"></div>' + makeListDesc(p) + '<div class="row-price">' + makePrice(p) + '</div>';
         list.appendChild(row);
       });
       catEl.appendChild(list);
@@ -1573,7 +1629,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         card.className = 'product-card ' + (hasImage ? 'has-image' : 'no-image') + (p.inStock === false ? ' out-of-stock' : '');
         var img = hasImage ? imgMarkup(p, true) : '';
-        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p) + '<div class="card-price">' + makePrice(p) + '</div></div>';
+        card.innerHTML = img + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeSub(p) + '</div>' + makeDesc(p,true) + '<div class="card-price">' + makePrice(p) + '</div></div>';
         grid.appendChild(card);
       });
       catEl.appendChild(grid);

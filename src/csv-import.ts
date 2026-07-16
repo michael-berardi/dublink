@@ -1,4 +1,5 @@
 import type { Category, Product } from './types';
+import { cleanProductDescription } from './product-description';
 
 const MAX_CSV_BYTES = 5 * 1024 * 1024;
 const MAX_CSV_ROWS = 5000;
@@ -161,7 +162,7 @@ export function importMenuFromCSV(csvText: string): { categories: Category[]; er
       const strain = row.strain.toLowerCase();
       if (strain === 'indica' || strain === 'sativa' || strain === 'hybrid') product.strain = strain;
     }
-    if (row.description) product.description = row.description;
+    if (row.description) product.description = cleanProductDescription(row.description);
 
     cat.products.push(product);
   });

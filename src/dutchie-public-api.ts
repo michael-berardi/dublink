@@ -1,5 +1,6 @@
 import type { ScrapedCategory, ScrapedProduct } from './dutchie-scraper';
 import { extractProductDescription } from './product-description';
+import { firstPositiveIndexedPrice } from './product-option';
 
 const DUTCHIE_GRAPHQL_URL = 'https://dutchie.com/graphql';
 const DUTCHIE_PRODUCTS_GRAPHQL_URL = 'https://dutchie.com/api-4/graphql';
@@ -326,20 +327,18 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
       ? p.brand
       : p.brand?.name
   ) || p.brandName || p.POSMetaData?.canonicalBrandName || p.posMetadata?.canonicalBrandName;
-  const basePrice =
-    firstNumber(p.recPrices) ||
-    firstNumber(p.prices) ||
-    firstNumber(p.Prices) ||
-    firstNumber(p.medicalPrices) ||
-    firstNumber(p.variants?.[0]?.recPrice) ||
-    firstNumber(p.variants?.[0]?.price) ||
-    firstNumber(p.POSMetaData?.children?.[0]?.recPrice) ||
-    firstNumber(p.POSMetaData?.children?.[0]?.price) ||
-    firstNumber(p.posMetadata?.children?.[0]?.recPrice) ||
-    firstNumber(p.posMetadata?.children?.[0]?.price);
+  const indexedPrice = firstPositiveIndexedPrice(p.recPrices, p.prices, p.Prices, p.medicalPrices);
+  const variantPrice = firstPositiveIndexedPrice(p.variants?.map((variant) => variant.recPrice || variant.price));
+  const posChildren = p.POSMetaData?.children || p.posMetadata?.children;
+  const childPrice = firstPositiveIndexedPrice(posChildren?.map((child) => child.recPrice || child.price));
+  const weightPrice = firstPositiveIndexedPrice(p.weights?.map((weight) => weight.price));
+  const basePrice = indexedPrice?.price || variantPrice?.price || childPrice?.price || weightPrice?.price || 0;
   if (!basePrice) return null;
+  const alignedSpecialPrice = indexedPrice
+    ? firstNumber(p.recSpecialPrices?.[indexedPrice.index])
+    : 0;
   const dealPrice =
-    firstNumber(p.recSpecialPrices) ||
+    alignedSpecialPrice ||
     firstNumber([p.salePrice, p.specialPrice, p.discountPrice, p.discountedPrice]);
   const explicitOriginalPrice = firstNumber([p.originalPrice, p.retailPrice, p.listPrice]);
   const price = dealPrice && dealPrice < basePrice ? dealPrice : basePrice;
@@ -367,14 +366,22 @@ function toProduct(p: DutchiePublicProduct): ScrapedProduct | null {
     potencyValue(p.CBD) ||
     potencyValue(p.CBDContent) ||
     extractCannabinoid(p, 'CBD');
+  const indexedWeight = indexedPrice
+    ? p.options?.[indexedPrice.index] ||
+      p.Options?.[indexedPrice.index] ||
+      (p.weights?.[indexedPrice.index]?.value
+        ? `${p.weights[indexedPrice.index].value}${p.weights[indexedPrice.index].unit || 'g'}`
+        : undefined) ||
+      posChildren?.[indexedPrice.index]?.option
+    : undefined;
   const rawWeight =
-    Array.isArray(p.options) ? p.options[0] :
-    Array.isArray(p.Options) ? p.Options[0] :
-    p.weights?.[0]?.value ? `${p.weights[0].value}${p.weights[0].unit || 'g'}` :
-    p.POSMetaData?.children?.[0]?.option ||
-    p.posMetadata?.children?.[0]?.option ||
-    p.variants?.[0]?.option;
-  const weight = cleanWeight(parseWeight(rawName) || rawWeight);
+    indexedWeight ||
+    (variantPrice ? p.variants?.[variantPrice.index]?.option : undefined) ||
+    (childPrice ? posChildren?.[childPrice.index]?.option : undefined) ||
+    (weightPrice && p.weights?.[weightPrice.index]?.value
+      ? `${p.weights[weightPrice.index].value}${p.weights[weightPrice.index].unit || 'g'}`
+      : undefined);
+  const weight = cleanWeight(rawWeight) || cleanWeight(parseWeight(rawName));
   return {
     id: String(p.id || p.name || p.Name || crypto.randomUUID()).replace(/[^a-zA-Z0-9_-]/g, '-'),
     name: rawName.replace(/\s+/g, ' ').trim(),

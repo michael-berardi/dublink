@@ -20,6 +20,23 @@ describe('product descriptions', () => {
     expect(description).toMatch(/…$/);
   });
 
+  it('keeps the most purchase-relevant source details instead of generic lead-in copy', () => {
+    const description = cleanProductDescription(
+      'A premium product for every occasion. Made with live resin and bright citrus terpenes. Ten 10mg servings make dosing easy to understand.',
+    );
+
+    expect(description).toBe('Made with live resin and bright citrus terpenes. Ten 10mg servings make dosing easy to understand.');
+  });
+
+  it('removes compliance boilerplate and chooses the most informative description field', () => {
+    const description = extractProductDescription({
+      description: 'Keep out of reach of children. Results may vary.',
+      shortDescription: 'Hand-blown borosilicate glass with a stable base and reusable travel case.',
+    });
+
+    expect(description).toBe('Hand-blown borosilicate glass with a stable base and reusable travel case.');
+  });
+
   it('drops markup-only and non-string values', () => {
     expect(cleanProductDescription('<script>alert(1)</script>')).toBeUndefined();
     expect(extractProductDescription({ description: { text: 'not a supported shape' } })).toBeUndefined();

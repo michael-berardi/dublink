@@ -88,7 +88,7 @@ describe('importDutchieMenu', () => {
               thc: { value: 22, unit: 'PERCENT' },
               cbd: { value: 0.1, unit: 'PERCENT' },
               image: 'https://images.dutchie.com/prod1.jpg',
-              recPrices: [12, 35, 60],
+              recPrices: [0, 35, 60],
               Options: ['1g', '3.5g', '7g'],
             },
           ],
@@ -106,11 +106,10 @@ describe('importDutchieMenu', () => {
     expect(result.categories[0].products[0].brand).toBe('High Garden');
     expect(result.categories[0].products[0].strain).toBe('hybrid');
     expect(result.categories[0].products[0].thc).toBe('22%');
-    expect(result.categories[0].products[0].weight).toBe('1g');
+    expect(result.categories[0].products[0]).toMatchObject({ price: 35, weight: '3.5g' });
     expect(result.categories[0].products[0].image).toBe('https://images.dutchie.com/prod1.jpg?h=400&w=400');
     expect(result.categories[0].products[0].description).toBe('Bright citrus flower');
     expect(result.categories[0].products[0].priceTiers).toEqual([
-      { label: '1g', price: '$12' },
       { label: '3.5g', price: '$35' },
       { label: '7g', price: '$60' },
     ]);

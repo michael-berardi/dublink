@@ -25,6 +25,11 @@ export function buildTvCatalogPagePlan(
     return undefined;
   };
 
+  const pageCategoryName = (name: string, strain?: 'Indica' | 'Sativa' | 'Hybrid'): string => {
+    if (!strain || new RegExp(`\\b${strain}\\b`, 'i').test(name)) return name;
+    return `${name} · ${strain}`;
+  };
+
   const capacity = () => {
     const demoMode = options.demoMode === true;
     let productsPerPage: number;
@@ -50,7 +55,7 @@ export function buildTvCatalogPagePlan(
     const hasAccessories = (categories || []).some((category) => /accessor/i.test(category?.name || ''));
     if (fontScale >= 220) {
       productsPerPage = options.layout === 'pricewall' ? Math.min(productsPerPage, 2) : 1;
-      if (options.layout !== 'pricewall') categoriesPerPage = 1;
+      categoriesPerPage = 1;
     } else if (fontScale >= 190) {
       if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 4);
       else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 2);
@@ -73,7 +78,7 @@ export function buildTvCatalogPagePlan(
       if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 12);
       else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
       else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 4);
-      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 4);
       else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 7);
     } else if (fontScale >= 115) {
       if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 14);
@@ -136,7 +141,7 @@ export function buildTvCatalogPagePlan(
 
       return plan.map((page) => ({
         ...category,
-        name: page.strain ? `${category.name} · ${page.strain}` : category.name,
+        name: pageCategoryName(category.name, page.strain),
         products: page.products,
       }));
     });
