@@ -64,5 +64,35 @@ export function allocateCategoriesForDisplay<T extends DisplayCategory>(
     groups.push(categories.slice(cursor, end));
     cursor = end;
   }
-  return groups[displayIndex] || [];
+  const groupCounts = groups.map(function (group) {
+    return group.reduce(function (total, category) {
+      return total + (category.products || []).length;
+    }, 0);
+  });
+  const totalProducts = groupCounts.reduce(function (total, count) { return total + count; }, 0);
+  const targetProducts = totalProducts / safeDisplayTotal;
+  const shouldBalanceByProduct = Math.max(...groupCounts) - Math.min(...groupCounts) > Math.ceil(targetProducts * 0.5);
+  if (!shouldBalanceByProduct) return groups[displayIndex] || [];
+
+  const baseProducts = Math.floor(totalProducts / safeDisplayTotal);
+  const extraProducts = totalProducts % safeDisplayTotal;
+  const productStart = displayIndex * baseProducts + Math.min(displayIndex, extraProducts);
+  const productCount = baseProducts + (displayIndex < extraProducts ? 1 : 0);
+  const productEnd = productStart + productCount;
+  const balanced: T[] = [];
+  let categoryStart = 0;
+  for (const category of categories) {
+    const products = category.products || [];
+    const categoryEnd = categoryStart + products.length;
+    const overlapStart = Math.max(productStart, categoryStart);
+    const overlapEnd = Math.min(productEnd, categoryEnd);
+    if (overlapStart < overlapEnd) {
+      balanced.push(Object.assign({}, category, {
+        products: products.slice(overlapStart - categoryStart, overlapEnd - categoryStart),
+      }) as T);
+    }
+    categoryStart = categoryEnd;
+    if (categoryStart >= productEnd) break;
+  }
+  return balanced;
 }

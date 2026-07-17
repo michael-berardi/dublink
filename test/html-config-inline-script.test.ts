@@ -117,9 +117,10 @@ describe('configPage remote-control UI', () => {
     const layoutCard = between(html, '<h2 class="card-title">Layout</h2>', '<h2 class="card-title">Template Intelligence</h2>');
     expect(layoutCard).toContain('Auto-Rotate Menu Pages');
     expect(layoutCard).toContain('id="animationSettings"');
-    expect(layoutCard).toContain('type="range" id="pageDurationSeconds" min="5" max="20" step="5"');
+    expect(layoutCard).toContain('type="range" id="pageDurationSeconds" min="5" max="20" step="1"');
+    expect(layoutCard).toContain('nearestPageDuration(this.valueAsNumber)');
     expect(layoutCard).toContain('id="pageDurationSecondsValue"');
-    expect(layoutCard).toContain("debounceConfig('pageDurationSeconds',this.valueAsNumber)");
+    expect(layoutCard).toContain("debounceConfig('pageDurationSeconds',duration)");
     expect(layoutCard).toContain('id="pageTransition"');
     expect(layoutCard).toContain('<option value="fade">Fade · Recommended</option>');
     expect(layoutCard).toContain('<option value="none">Instant</option>');

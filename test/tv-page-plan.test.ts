@@ -57,6 +57,37 @@ describe('buildTvCatalogPagePlan', () => {
     }
   });
 
+  it('shows a full Simply Green-sized catalog within a five-minute pricewall cycle', () => {
+    const specs = [
+      ['Flower', 125],
+      ['Pre-Rolls', 82],
+      ['Vapes', 65],
+      ['Concentrates', 24],
+      ['Edibles', 147],
+      ['Tinctures', 6],
+      ['Topicals', 3],
+      ['CBD', 12],
+      ['Accessories', 42],
+    ] as const;
+    const categories: Category[] = specs.map(([name, count], order) => ({
+      id: name.toLowerCase(),
+      name,
+      order,
+      products: products(name, count),
+    }));
+
+    const pages = buildTvCatalogPagePlan(categories, {
+      layout: 'pricewall',
+      fontScale: 100,
+    });
+
+    expect(pages.length * 8).toBeLessThanOrEqual(300);
+    expect(pages.every((page) => page.length <= 2)).toBe(true);
+    expect(pages.every((page) => productIds(page).length <= 16)).toBe(true);
+    expect(plannedProductIds(pages).sort()).toEqual(productIds(categories).sort());
+    expect(new Set(plannedProductIds(pages)).size).toBe(506);
+  });
+
   it('creates labeled strain pages and retains unknown-strain products in fallback pages', () => {
     const category: Category = {
       id: 'flower',
@@ -199,6 +230,26 @@ describe('buildTvCatalogPagePlan', () => {
 
     expect(plannedProductIds(pages).sort()).toEqual(productIds(categories).sort());
     expect(new Set(plannedProductIds(pages)).size).toBe(16);
+  });
+
+  it('gives long product names extra row capacity without dropping products', () => {
+    const category: Category = {
+      id: 'edibles',
+      name: 'Edibles',
+      order: 0,
+      products: products('Long edible name', 6),
+    };
+
+    const pages = buildTvCatalogPagePlan([category], {
+      fontScale: 100,
+      layout: 'pricewall',
+      productRowWeight: () => 2,
+    });
+
+    expect(pages).toHaveLength(1);
+    expect(pages[0]).toHaveLength(2);
+    expect(pages[0].every((pageCategory) => pageCategory.products.length <= 4)).toBe(true);
+    expect(plannedProductIds(pages)).toEqual(productIds([category]));
   });
 
   it('uses one exhaustive product page per SKU in showcase mode', () => {

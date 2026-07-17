@@ -89,7 +89,7 @@ export interface ReferenceStyleProfile {
 export const TV_FONT_SCALE_MIN = 100;
 export const TV_FONT_SCALE_MAX = 250;
 export const TV_FONT_SCALE_DEFAULT = 140;
-export const TV_PAGE_DURATION_OPTIONS = [5, 10, 15, 20] as const;
+export const TV_PAGE_DURATION_OPTIONS = [5, 8, 10, 15, 20] as const;
 export type TvPageDurationSeconds = (typeof TV_PAGE_DURATION_OPTIONS)[number];
 export const TV_PAGE_DURATION_DEFAULT: TvPageDurationSeconds = 10;
 export const TV_PAGE_TRANSITIONS = ['fade', 'none'] as const;

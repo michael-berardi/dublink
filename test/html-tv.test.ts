@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildTvManualSpecialsCategory,
   compactTvDescription,
+  formatTvProductName,
+  formatTvPageProgress,
   isVisuallyBlankImageSample,
   nextTvCyclePage,
   normalizeTvUploadImageUrl,
@@ -221,6 +224,9 @@ describe('tvPage', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: false } });
     expect(page).toContain('var compactDescription = function compactTvDescription');
     expect(page).toContain('function makeListDesc');
+    expect(page).toContain('while(contentOverflows(name)&&size>22)');
+    expect(page).toContain("name.style.webkitLineClamp='3'");
+    expect(page).toContain('requestAnimationFrame(function(){fitGridCardNames(container);})');
     expect(page).toContain('makeDesc(p,true)');
     expect(page).toContain('.layout-list .row-desc{');
     expect(page).toContain("compact ? ' compact-desc' : ''");
@@ -231,6 +237,33 @@ describe('tvPage', () => {
       .toBe('Creamy vanilla and berry aromas open into a smooth, dessert-like finish.');
     expect(compactTvDescription('Bright citrus and pine notes with a clean, energizing finish.'))
       .toBe('Bright citrus and pine notes with a clean, energizing finish.');
+  });
+
+  it('removes only metadata duplicated by the TV card around the product name', () => {
+    expect(formatTvProductName({
+      name: 'Ayrloom | Rescue 1:1 Topical | 1000MG THC : 1000MG CBD',
+      brand: 'Ayrloom',
+      strain: 'Hybrid',
+      weight: '2.5g',
+    }, 'Topicals · Hybrid')).toBe('Rescue 1:1 | 1000MG THC : 1000MG CBD');
+    expect(formatTvProductName({
+      name: '1937 | Flower | Hybrid | Papaya | 14g',
+      brand: '1937',
+      strain: 'Hybrid',
+      weight: '14g',
+    }, 'Flower · Hybrid')).toBe('Papaya');
+    expect(formatTvProductName({
+      name: 'Blue Dream',
+      brand: 'North Coast Gardens',
+      strain: 'Sativa',
+      weight: '3.5g',
+    }, 'Flower · Sativa')).toBe('Blue Dream');
+    expect(formatTvProductName({
+      name: 'Dank | Infused Pre-Rolls | 5 Pack | Indica | Blackberry Kush | 2.75g',
+      brand: 'Dank By Definition.',
+      strain: 'Indica',
+      weight: '2.75g',
+    }, 'Pre-Rolls · Indica')).toBe('Infused | 5 Pack | Blackberry Kush');
   });
 
   it('injects the exhaustive page planner for imported grid boards', () => {
@@ -283,6 +316,18 @@ describe('tvPage', () => {
     expect(page).toContain("promo = '<span class=\"promo-price\">Special</span> '");
   });
 
+  it('keeps every active manual special in the TV category', () => {
+    const specials = Array.from({ length: 10 }, (_, index) => ({
+      id: `deal-${index}`,
+      title: `Deal ${index}`,
+      active: true,
+    }));
+    const category = buildTvManualSpecialsCategory({ specials });
+
+    expect(category?.products).toHaveLength(10);
+    expect(category?.products.map((product) => product.id)).toEqual(specials.map((special) => special.id));
+  });
+
   it('maps manual special price, originalPrice, and priceTiers to the specials category', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', {
       initialConfig: {
@@ -304,9 +349,20 @@ describe('tvPage', () => {
         ],
       },
     });
-    expect(page).toContain('originalPrice: typeof s.originalPrice');
-    expect(page).toContain('priceTiers: Array.isArray(s.priceTiers)');
-    expect(page).toContain("price: typeof s.price === 'number' ? s.price : undefined");
+    const special = buildTvManualSpecialsCategory({
+      specials: [{
+        id: 'tier-deal',
+        title: 'Tiered Flower Special',
+        price: 25,
+        originalPrice: 40,
+        priceTiers: [{ label: '1g', price: '$12' }],
+      }],
+    })?.products[0];
+    expect(special).toMatchObject({
+      price: 25,
+      originalPrice: 40,
+      priceTiers: [{ label: '1g', price: '$12' }],
+    });
     expect(page).toContain('Tiered Flower Special');
   });
 
@@ -339,6 +395,9 @@ describe('tvPage', () => {
     expect(page).toContain('<body class="template-default font-medium" data-font-scale="135">');
     expect(page).toContain("document.body.setAttribute('data-font-scale',String(fontScale))");
     expect(page).toContain('fontScale:activeTvFontScale(config)');
+    expect(page).toContain('if(!Number.isFinite(numeric))');
+    expect(page).toContain('if(URL_FONT_SCALE !== null) return URL_FONT_SCALE');
+    expect(page).toContain('if(URL_FONT_SIZE !== null) return normalizeTvFontScale(undefined,URL_FONT_SIZE)');
   });
 
   it('gives every TV font setting explicit menu-board typography tokens', () => {
@@ -349,6 +408,7 @@ describe('tvPage', () => {
     expect(page).toContain('--tv-meta-size:clamp(0.98rem,1.15vw,1.25rem)');
     expect(page).toContain('--tv-price-size:clamp(1.95rem,2.3vw,2.55rem)');
     expect(page).toContain('.layout-grid .card-name,.layout-pricewall .card-name{font-size:var(--tv-name-size);font-weight:900');
+    expect(page).toContain("if(!isMobileViewport()) return maximum+'rem'");
     expect(page).toContain('.layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950');
   });
 
@@ -385,8 +445,20 @@ describe('tvPage', () => {
     expect(nextTvCyclePage(2, 0)).toBe(0);
   });
 
+  it('formats category-local progress for the visible TV page', () => {
+    const pagePlan = [
+      [{ name: 'Flower · Indica' }, { name: 'Pre-Rolls · Sativa' }],
+      [{ name: 'Flower · Sativa' }, { name: 'Edibles' }],
+      [{ name: 'Flower · Hybrid' }, { name: 'Pre-Rolls · Hybrid' }],
+    ];
+
+    expect(formatTvPageProgress(pagePlan, 1)).toBe('Flower 2/3 · Edibles 1/1');
+    expect(formatTvPageProgress([], 0)).toBe('');
+  });
+
   it('normalizes explicit page duration seconds and legacy speed values', () => {
     expect(normalizeTvPageDurationSeconds(5)).toBe(5);
+    expect(normalizeTvPageDurationSeconds(8)).toBe(8);
     expect(normalizeTvPageDurationSeconds(10)).toBe(10);
     expect(normalizeTvPageDurationSeconds(15)).toBe(15);
     expect(normalizeTvPageDurationSeconds(20)).toBe(20);
@@ -577,7 +649,7 @@ describe('tvPage', () => {
     // Grid renderer: no image column, no placeholder column, and uses the no-image class branch.
     expect(page).toContain('var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false)');
     expect(page).toContain("var visual = hasImage ? imgMarkup(p, true) : ''");
-    expect(page).toContain("'product-card' + (hasImage ? ' has-image' : ' no-image')");
+    expect(page).toContain("'product-card' + nameClass + (hasImage ? ' has-image' : ' no-image')");
   });
 
   it('adds the competitor-inspired dense price wall shell', () => {
@@ -603,8 +675,16 @@ describe('tvPage', () => {
     expect(page).toContain("if(getTotalProductCount(cfg) >= 36) return 'pricewall'");
     expect(page).toContain("else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats)");
     expect(page).toContain('pricewall-shell');
+    expect(page).toContain('.layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-width:0;min-height:0;}');
+    expect(page).toContain('.layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)){grid-template-columns:minmax(0,1fr) minmax(23rem,0.72fr);}');
+    expect(page).toContain('.layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .category-block{grid-column:1;}');
+    expect(page).toContain('.layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .pricewall-shell{grid-column:2;}');
+    expect(page).toContain('.font-scale-high .layout-pricewall .pricewall-shell{display:none;}');
+    expect(page).toContain('.font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)){grid-template-columns:minmax(0,1fr);}');
+    expect(page).toContain('.font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(3)){grid-template-columns:repeat(2,minmax(0,1fr));}');
     expect(page).toContain('pricewall-status');
     expect(page).toContain('Featured deals');
+    expect(page).toContain('escapeHtml(formatProductName(p,p.categoryName))');
   });
 
   it('keeps sparse price-wall category rows top-aligned instead of stretching a single product', () => {
@@ -638,7 +718,7 @@ describe('tvPage', () => {
 
   it('does not render manual specials without prices as zero-dollar products', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, specials: [{ id: 'bogo', title: 'BOGO gummies', active: true }] } });
-    expect(page).toContain("price: typeof s.price === 'number' ? s.price : undefined");
+    expect(buildTvManualSpecialsCategory({ specials: [{ id: 'bogo', title: 'BOGO gummies', active: true }] })?.products[0]?.price).toBeUndefined();
     expect(page).toContain('if(!hasPrice) return promo.trim()');
   });
 

@@ -410,11 +410,9 @@ export class SessionDurableObject implements DurableObject {
           return new Response(JSON.stringify({ ok: false, error: 'Invalid imported categories' }), { status: 400 });
         }
 
-        this.config = {
-          ...this.config,
-          dispensaryName: typeof data.dispensaryName === 'string' ? this.sanitizeString(data.dispensaryName) : this.config.dispensaryName,
-          logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
-          categories: this.sanitizeCategories(data.categories),
+        const hasExistingCatalog = this.config.categories.some((category) => category.products.length > 0);
+        const applyPresentation = data.presentationDefaults !== true || !hasExistingCatalog;
+        const presentationUpdate: Partial<MenuConfig> = applyPresentation ? {
           layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
           layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? this.config.layoutMode,
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
@@ -428,7 +426,6 @@ export class SessionDurableObject implements DurableObject {
           template: this.sanitizeTemplate(data.template) ?? this.config.template,
           primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
           secondaryColor: this.sanitizeHexColor(data.secondaryColor) ?? this.config.secondaryColor,
-          displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
           autoScroll: typeof data.autoScroll === 'boolean' ? data.autoScroll : this.config.autoScroll,
           pageDurationSeconds: this.sanitizePageDurationSeconds(data.pageDurationSeconds) ?? (
             data.autoScrollSpeed === undefined
@@ -436,14 +433,23 @@ export class SessionDurableObject implements DurableObject {
               : normalizeTvPageDurationSeconds(undefined, data.autoScrollSpeed)
           ),
           pageTransition: this.sanitizePageTransition(data.pageTransition) ?? this.config.pageTransition,
-          showImages: typeof data.showImages === 'boolean' ? data.showImages : true,
-          showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : true,
-          showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : true,
-          showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : true,
+          showImages: typeof data.showImages === 'boolean' ? data.showImages : this.config.showImages,
+          showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : this.config.showLogo,
+          showBrand: typeof data.showBrand === 'boolean' ? data.showBrand : this.config.showBrand,
+          showStrain: typeof data.showStrain === 'boolean' ? data.showStrain : this.config.showStrain,
           showPromos: typeof data.showPromos === 'boolean' ? data.showPromos : this.config.showPromos,
           showDescription: typeof data.showDescription === 'boolean' ? data.showDescription : this.config.showDescription,
-          styleProfile: this.sanitizeStyleProfile(isRecord(data) ? data.styleProfile : undefined) ?? this.config.styleProfile,
-          tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : false,
+          styleProfile: this.sanitizeStyleProfile(data.styleProfile) ?? this.config.styleProfile,
+          tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : this.config.tvDemo,
+        } : {};
+
+        this.config = {
+          ...this.config,
+          dispensaryName: typeof data.dispensaryName === 'string' ? this.sanitizeString(data.dispensaryName) : this.config.dispensaryName,
+          logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
+          categories: this.sanitizeCategories(data.categories),
+          displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
+          ...presentationUpdate,
         };
         if (!this.ownerAccountId) {
           this.ownerAccountId = accountId;

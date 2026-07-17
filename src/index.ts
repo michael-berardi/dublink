@@ -27,7 +27,12 @@ import { analyzeReferenceStyle, resolveImportedPresentation } from './reference-
 import { createStarterConfig, createDemoConfig } from './starter-template';
 import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads, deleteUpload, bundleImportedImages } from './upload';
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, cancelSubscription } from './stripe';
-import type { Category, MenuConfig } from './types';
+import {
+  TV_FONT_SCALE_DEFAULT,
+  TV_FONT_SCALE_MIN,
+  type Category,
+  type MenuConfig,
+} from './types';
 
 export { SessionDurableObject, AccountDurableObject, StatsDurableObject, DomainDurableObject };
 
@@ -85,6 +90,9 @@ type MenuImportPayload = {
   layout?: string;
   layoutMode?: string;
   fontSize?: string;
+  fontScale?: number;
+  pageDurationSeconds?: number;
+  presentationDefaults?: boolean;
   autoScroll: boolean;
   showImages: boolean;
   showDescription: boolean;
@@ -311,6 +319,11 @@ async function buildMenuImport(
     template: resolvedTemplate,
     summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
   };
+  const importedFontScale = style.fontSize === 'small'
+    ? TV_FONT_SCALE_MIN
+    : style.fontSize === 'large'
+      ? 180
+      : TV_FONT_SCALE_DEFAULT;
   const importPayload: MenuImportPayload = {
     dispensaryName: formatted.dispensaryName,
     logo: formatted.logo,
@@ -318,6 +331,11 @@ async function buildMenuImport(
     productCount: formatted.productCount,
     displayCount: style.displayCount,
     autoScroll: true,
+    layout: resolvedLayout,
+    fontSize: style.fontSize,
+    fontScale: importedFontScale,
+    pageDurationSeconds: 8,
+    presentationDefaults: true,
     showImages: style.showImages,
     showDescription: style.showDescription,
     showBrand: style.showBrand,

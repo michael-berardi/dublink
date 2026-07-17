@@ -181,7 +181,7 @@ describe('Session Durable Object integrity', () => {
     });
   });
 
-  it('retains manual layout and font choices across ordinary inventory imports', async () => {
+  it('retains manual presentation choices across an inferred-default inventory reimport', async () => {
     const session = new SessionDurableObject(fakeSessionState(), {} as Env);
     const importedCategory = (id: string) => [{
       id,
@@ -208,7 +208,15 @@ describe('Session Durable Object integrity', () => {
     const second = await session.fetch(new Request('https://internal/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Account-Id': 'owner' },
-      body: JSON.stringify({ categories: importedCategory('edibles'), autoScroll: true }),
+      body: JSON.stringify({
+        categories: importedCategory('edibles'),
+        presentationDefaults: true,
+        layout: 'auto',
+        fontSize: 'small',
+        fontScale: 100,
+        autoScroll: true,
+        pageDurationSeconds: 5,
+      }),
     }));
     expect(second.status).toBe(200);
 
@@ -222,7 +230,7 @@ describe('Session Durable Object integrity', () => {
         layoutMode: 'columns',
         fontSize: 'large',
         fontScale: 135,
-        autoScroll: true,
+        autoScroll: false,
         pageDurationSeconds: 15,
         pageTransition: 'none',
       },
@@ -427,6 +435,68 @@ describe('session ownership isolation', () => {
       const statusResponse = await authedFetch(started.statusUrl, cookie);
       const status = (await statusResponse.json()) as { job?: { status?: string; productCount?: number } };
       expect(status.job).toMatchObject({ status: 'success', productCount: 1 });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('applies dense automatic presentation defaults to a first large wizard import', async () => {
+    const sessionId = `IMPORT-DENSE-${unique()}`;
+    const cookie = await signupCookie();
+    expect((await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' })).status).toBe(200);
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const operationName = JSON.parse(String(init?.body)).operationName as string;
+      if (operationName === 'ConsumerDispensaries') {
+        return Response.json({
+          data: {
+            filteredDispensaries: [{ id: 'd-1', name: 'Simply Green' }],
+          },
+        });
+      }
+      return Response.json({
+        data: {
+          filteredProducts: {
+            products: Array.from({ length: 80 }, (_, index) => ({
+              id: `p-${index + 1}`,
+              Name: `Product ${index + 1}`,
+              type: index < 40 ? 'Flower' : 'Edibles',
+              recPrices: [20 + index],
+            })),
+            totalCount: 80,
+          },
+        },
+      });
+    }) as typeof fetch;
+
+    try {
+      const response = await authedFetch('/api/import/jobs', cookie, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: 'simply-green', session: sessionId, displayCount: 3 }),
+      });
+      expect(response.status).toBe(202);
+
+      const widgetResponse = await SELF.fetch(`${BASE}/api/widget/${sessionId}`);
+      const widget = (await widgetResponse.json()) as {
+        categories?: Array<{ products?: unknown[] }>;
+        layout?: string;
+        template?: string;
+        fontSize?: string;
+        fontScale?: number;
+        pageDurationSeconds?: number;
+        displayCount?: number;
+      };
+      expect(widget.categories?.flatMap((category) => category.products || [])).toHaveLength(80);
+      expect(widget).toMatchObject({
+        layout: 'auto',
+        template: 'forest',
+        fontSize: 'small',
+        fontScale: 100,
+        pageDurationSeconds: 8,
+        displayCount: 3,
+      });
     } finally {
       globalThis.fetch = originalFetch;
     }

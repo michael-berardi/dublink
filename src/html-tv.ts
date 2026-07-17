@@ -29,6 +29,43 @@ export function tvFontSizeClass(fontScale: number): 'small' | 'medium' | 'large'
   return 'medium';
 }
 
+type TvManualSpecialInput = {
+  id?: string;
+  title?: string;
+  description?: string;
+  brand?: string;
+  image?: string;
+  price?: number;
+  originalPrice?: number;
+  priceTiers?: unknown[];
+  specialLabel?: string;
+  active?: boolean;
+};
+
+export function buildTvManualSpecialsCategory(cfg: { specials?: TvManualSpecialInput[] } | null | undefined) {
+  const specials = (Array.isArray(cfg?.specials) ? cfg.specials : [])
+    .filter((special) => special && special.active !== false && String(special.title || '').trim());
+  if (!specials.length) return null;
+  return {
+    id: 'specials',
+    name: 'Specials',
+    order: -1,
+    products: specials.map((special, index) => ({
+      id: special.id || `manual-special-${index}`,
+      name: special.title,
+      description: special.description || '',
+      brand: special.brand || '',
+      image: special.image || '',
+      price: typeof special.price === 'number' ? special.price : undefined,
+      originalPrice: typeof special.originalPrice === 'number' ? special.originalPrice : undefined,
+      priceTiers: Array.isArray(special.priceTiers) ? special.priceTiers : undefined,
+      specialLabel: special.specialLabel || 'Special',
+      inStock: true,
+      isPromo: true,
+    })),
+  };
+}
+
 export function compactTvDescription(value: unknown): string {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   if (!text) return '';
@@ -39,6 +76,91 @@ export function compactTvDescription(value: unknown): string {
   const clauseEnd = Math.max(clause.lastIndexOf(','), clause.lastIndexOf(';'), clause.lastIndexOf('—'), clause.lastIndexOf(' - '));
   if (clauseEnd >= 60) return `${clause.slice(0, clauseEnd).replace(/[,:;\s]+$/, '')}.`;
   return `${words.slice(0, 16).join(' ').replace(/[,:;\s]+$/, '')}.`;
+}
+
+type TvProductNameInput = {
+  name?: unknown;
+  brand?: unknown;
+  weight?: unknown;
+  strain?: unknown;
+};
+
+export function formatTvProductName(product: TvProductNameInput, categoryName: unknown = ''): string {
+  const original = String(product?.name || '').replace(/\s+/g, ' ').trim();
+  if (!original) return '';
+
+  const normalizeToken = (value: unknown): string =>
+    String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const brand = String(product?.brand || '').trim();
+  let displayName = original;
+  if (brand && displayName.toLowerCase().startsWith(brand.toLowerCase())) {
+    const remainder = displayName.slice(brand.length).trim();
+    if (/^(?:\||[-–—:])/.test(remainder)) displayName = remainder.replace(/^(?:\||[-–—:])\s*/, '').trim();
+  }
+  if (brand && displayName.includes('|')) {
+    const leadingSegment = displayName.split('|', 1)[0].trim();
+    const leadingToken = normalizeToken(leadingSegment);
+    if (leadingToken.length >= 3 && normalizeToken(brand).startsWith(leadingToken)) {
+      displayName = displayName.slice(displayName.indexOf('|') + 1).trim();
+    }
+  }
+
+  const category = String(categoryName || '').replace(/\s*·\s*(?:indica|sativa|hybrid)\s*$/i, '').trim();
+  const categoryPattern = (() => {
+    switch (normalizeToken(category)) {
+      case 'flower': return /\bflowers?\b/ig;
+      case 'prerolls': return /\bpre[\s-]?rolls?\b/ig;
+      case 'vapes': return /\bvapes?\b/ig;
+      case 'concentrates': return /\bconcentrates?\b/ig;
+      case 'edibles': return /\bedibles?\b/ig;
+      case 'tinctures': return /\btinctures?\b/ig;
+      case 'topicals': return /\btopicals?\b/ig;
+      case 'accessories': return /\baccessor(?:y|ies)\b/ig;
+      default: return null;
+    }
+  })();
+  const redundantTokens = new Set(
+    [brand, product?.weight, product?.strain, category]
+      .map(normalizeToken)
+      .filter(Boolean),
+  );
+  const parts = displayName.split('|').map((part) => part.trim()).filter(Boolean);
+  const conciseParts = parts
+    .map((part) => categoryPattern ? part.replace(categoryPattern, ' ').replace(/\s+/g, ' ').trim() : part)
+    .filter((part) => part && !redundantTokens.has(normalizeToken(part)));
+  if (conciseParts.length > 0) displayName = conciseParts.join(' | ');
+
+  const weight = String(product?.weight || '').trim();
+  if (weight && displayName.toLowerCase().endsWith(weight.toLowerCase())) {
+    const withoutWeight = displayName.slice(0, -weight.length).replace(/[\s|:–—-]+$/, '').trim();
+    if (withoutWeight) displayName = withoutWeight;
+  }
+
+  return displayName || original;
+}
+
+type TvPageProgressCategory = { name?: unknown };
+
+export function formatTvPageProgress(
+  pagePlan: readonly (readonly TvPageProgressCategory[])[],
+  currentPage: number,
+): string {
+  if (pagePlan.length === 0) return '';
+  const pageIndex = Math.max(0, Math.min(pagePlan.length - 1, Math.floor(currentPage)));
+  const baseName = (category: TvPageProgressCategory): string =>
+    String(category?.name || '').replace(/\s*·\s*(?:indica|sativa|hybrid)\s*$/i, '').trim();
+  const visibleNames = Array.from(new Set(pagePlan[pageIndex].map(baseName).filter(Boolean)));
+
+  return visibleNames.map((name) => {
+    let categoryPage = 0;
+    let categoryPages = 0;
+    for (let index = 0; index < pagePlan.length; index += 1) {
+      if (!pagePlan[index].some((category) => baseName(category) === name)) continue;
+      categoryPages += 1;
+      if (index <= pageIndex) categoryPage += 1;
+    }
+    return `${name} ${categoryPage}/${categoryPages}`;
+  }).join(' · ');
 }
 
 const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;
@@ -268,7 +390,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     --tv-meta-size:clamp(0.9rem,1vw,1.08rem);
     --tv-price-size:clamp(1.7rem,1.95vw,2.15rem);
     --tv-table-size:clamp(0.72rem,0.82vw,0.9rem);
-    --tv-footer-size:clamp(0.9rem,0.95vw,1.02rem);
+    --tv-footer-size:clamp(1rem,1.08vw,1.15rem);
     --tv-tier-label-size:clamp(0.72rem,0.78vw,0.84rem);
     --tv-tier-price-size:clamp(1.12rem,1.22vw,1.32rem);
     --tv-feature-name-size:clamp(2.4rem,3vw,3.4rem);
@@ -279,7 +401,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     --tv-hero-price-size:clamp(3.8rem,6vw,6.5rem);
     --tv-brand-size:clamp(2.35rem,3.35vw,3.5rem);
     --tv-promo-size:clamp(1.05rem,1.45vw,1.45rem);
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:18px;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Roboto,sans-serif;background:var(--bg);color:var(--text);user-select:none;-webkit-user-select:none;font-size:1.125rem;
   }
   body.font-small{
     --tv-category-size:clamp(1.72rem,2vw,2.1rem);
@@ -363,8 +485,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem clamp(2.5rem,3vw,3.75rem);width:100%;}
   .menu-content.page-exit{animation:menu-page-exit 180ms cubic-bezier(0.4,0,1,1) both;will-change:opacity;pointer-events:none;}
   .menu-content.page-enter{animation:menu-page-enter 220ms cubic-bezier(0.16,1,0.3,1) both;will-change:opacity;}
-  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.85rem clamp(2.5rem,3vw,3.75rem) 1.15rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:var(--tv-footer-size);font-weight:850;color:var(--text);opacity:0.9;gap:1rem;text-transform:uppercase;letter-spacing:0.035em;}
-  .footer-right{text-align:center;max-width:90%;}
+  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0.85rem clamp(2.5rem,3vw,3.75rem) 1.15rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:var(--tv-footer-size);font-weight:850;color:var(--text);opacity:0.9;gap:1rem;text-transform:uppercase;letter-spacing:0.035em;}
+  .footer-progress{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);}
+  body.font-small .footer-progress{font-size:1.2rem;}
+  .footer-right{text-align:right;max-width:58%;}
 
   .age-gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:500;gap:1.5rem;padding:2rem;text-align:center;}
   .age-gate.hidden{display:none;}
@@ -379,7 +503,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;color:inherit;}
   .cat-icon svg{width:100%;height:100%;fill:currentColor;}
   .layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.15rem;align-items:stretch;height:100%;min-height:0;}
-  .layout-grid:has(.category-block:only-child),.layout-pricewall:has(.category-block:only-child){grid-template-columns:minmax(0,1fr);}
+  .pricewall-special-name{font-weight:900;font-size:var(--tv-name-size);line-height:1.05;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)),.layout-pricewall:has(.category-block:first-child:nth-last-child(2)){grid-template-columns:repeat(2,minmax(0,1fr));}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block,.layout-pricewall:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block{min-width:0;}
   .layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
@@ -405,6 +529,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall .card-image{width:4.4rem;height:4.4rem;border-radius:0.48rem;}
   .layout-pricewall .card-body{min-width:0;display:flex;flex-direction:column;justify-content:center;gap:0.3rem;}
   .layout-grid .card-name,.layout-pricewall .card-name{font-size:var(--tv-name-size);font-weight:900;line-height:1.08;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-transform:none;}
+  body.font-small .layout-pricewall .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card.name-long{flex-grow:1.5;}
+  body.font-small .layout-pricewall .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card.name-extra-long{flex-grow:2;}
+  body.font-small .layout-pricewall .product-card.name-long .card-name{-webkit-line-clamp:3;}
+  body.font-small .layout-pricewall .product-card.name-extra-long .card-name{-webkit-line-clamp:4;}
   .font-scale-large .category-accessories .card-name{-webkit-line-clamp:4;}
   .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.82;}
   .layout-pricewall .card-meta span{white-space:nowrap;}
@@ -420,8 +548,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .font-scale-large .layout-grid .price-tiers{width:auto;grid-template-columns:repeat(3,minmax(3.5rem,max-content));justify-content:start;}
   .layout-grid .card-price,.layout-pricewall .card-price{font-size:var(--tv-price-size);font-weight:950;line-height:1;color:var(--text);min-width:7.5rem;text-align:right;font-variant-numeric:tabular-nums;}
   .layout-pricewall .card-price .promo-price{display:block;width:max-content;margin:0 0 0.25rem auto;padding:0.18rem 0.46rem;border:1px solid var(--accent);border-radius:999px;background:var(--accent-dim);color:var(--text);font-size:var(--tv-tier-label-size);line-height:1;font-weight:950;letter-spacing:0.07em;text-transform:uppercase;}
-  .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-height:0;}
+  .layout-pricewall .category-block{grid-row:1 / span 3;}
+  .layout-pricewall .pricewall-shell{grid-column:3;grid-row:1 / span 3;display:flex;flex-direction:column;gap:0.85rem;min-width:0;min-height:0;}
+  .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)){grid-template-columns:minmax(0,1fr) minmax(23rem,0.72fr);}
+  .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .category-block{grid-column:1;}
+  .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .pricewall-shell{grid-column:2;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .font-scale-high .layout-pricewall .pricewall-shell{display:none;}
+  .font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)){grid-template-columns:minmax(0,1fr);}
+  .font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .category-block{grid-column:1;}
+  .font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(3)){grid-template-columns:repeat(2,minmax(0,1fr));}
   body.has-promo-banner .menu-content{padding-top:0.95rem;padding-bottom:0.7rem;}
   body.has-promo-banner .layout-grid .category-block,body.has-promo-banner .layout-pricewall .category-block{padding:0.78rem;}
   body.has-promo-banner .layout-grid .category-header,body.has-promo-banner .layout-pricewall .category-header{margin-bottom:0.55rem;padding-bottom:0.48rem;}
@@ -437,10 +573,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .pricewall-status{display:none;}
   .pricewall-status strong{font-size:clamp(1.35rem,1.7vw,1.9rem);line-height:1;color:var(--text);letter-spacing:-0.035em;}
   .pricewall-specials{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:0.6rem;}
-  .pricewall-special-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0.75rem;align-items:center;border-top:1px solid var(--border);padding-top:0.58rem;}
+  .pricewall-special-row{display:grid;grid-template-columns:minmax(0,1fr);gap:0.3rem;align-content:start;border-top:1px solid var(--border);padding-top:0.7rem;}
   .pricewall-special-row:first-child{border-top:0;padding-top:0;}
   .pricewall-special-name{font-weight:900;font-size:var(--tv-name-size);line-height:1.12;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-  .pricewall-special-price{font-weight:1000;color:var(--accent);font-size:var(--tv-price-size);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .pricewall-special-price{min-width:0;font-weight:1000;color:var(--accent);font-size:var(--tv-price-size);font-variant-numeric:tabular-nums;}
+  .pricewall-special-price .price-pair{justify-content:flex-start;}
+  .pricewall-special-price .card-price-orig{display:inline-block;margin:0 0 0 0.65rem;}
   .layout-list .product-row{display:grid;grid-template-columns:minmax(0,auto) minmax(0,auto) minmax(1rem,1fr) auto;grid-template-areas:"name meta leader price" "desc desc desc price";align-items:baseline;column-gap:0.5rem;row-gap:0.12rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
   .layout-list .row-name{grid-area:name;font-size:var(--tv-name-size);font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
   .layout-list .row-meta{grid-area:meta;font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
@@ -454,6 +592,15 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .product-maker{color:var(--text);font-weight:900;}
   .product-maker::before{content:'By ';color:var(--text-muted);font-weight:700;}
   .layout-grid .card-meta .product-maker,.layout-pricewall .card-meta .product-maker{flex-basis:100%;}
+  body.font-small .layout-pricewall .product-card{min-height:0;padding-top:0.25rem;padding-bottom:0.25rem;}
+  body.font-small .layout-pricewall .card-body{gap:0.2rem;}
+  body.font-small .layout-pricewall .card-name{line-height:1;-webkit-line-clamp:2;}
+  body.font-small .layout-pricewall .card-meta{flex-wrap:wrap;gap:0.12rem 0.35rem;line-height:1;overflow:visible;}
+  body.font-small .layout-pricewall .card-meta span{flex:0 0 auto;}
+  body.font-small .layout-pricewall .card-meta .product-maker{flex:1 1 100%;flex-basis:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;}
+  body.font-small .layout-pricewall .card-price{line-height:0.95;}
+  body.font-small .layout-pricewall .card-price .promo-price{margin-bottom:0.12rem;padding:0.12rem 0.35rem;}
+  body.font-small .layout-pricewall .card-price-orig{margin-top:0.1rem;}
   .card-desc{font-size:var(--tv-meta-size);font-weight:650;line-height:1.24;color:var(--text);opacity:0.86;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;}
   .layout-showcase .card-desc{max-width:62ch;font-size:var(--tv-hero-meta-size);-webkit-line-clamp:3;}
   .layout-sparse .hero-card .card-desc{font-size:var(--tv-feature-meta-size);-webkit-line-clamp:3;}
@@ -777,6 +924,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   </header>
   <div class="menu-content" id="menu-content"></div>
   <footer class="menu-footer">
+    <div class="footer-progress" id="footer-progress"></div>
     <div class="footer-right" id="footer-disclaimer">For use by licensed adults only. Keep out of reach of children.</div>
   </footer>
 </div>
@@ -808,6 +956,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var normalizeTvFontScale = ${normalizeTvFontScale.toString()};
   var tvFontSizeClass = ${tvFontSizeClass.toString()};
   var compactDescription = ${compactTvDescription.toString()};
+  var formatProductName = ${formatTvProductName.toString()};
+  var manualSpecialsCategory = ${buildTvManualSpecialsCategory.toString()};
+  var formatTvPageProgress = ${formatTvPageProgress.toString()};
   var TV_PAGE_DURATION_OPTIONS = ${serializeInlineScriptJson(TV_PAGE_DURATION_OPTIONS)};
   var TV_PAGE_DURATION_DEFAULT = ${TV_PAGE_DURATION_DEFAULT};
   var TV_PAGE_TRANSITION_DEFAULT = ${serializeInlineScriptJson(TV_PAGE_TRANSITION_DEFAULT)};
@@ -842,8 +993,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return v === 'small' || v === 'medium' || v === 'large' ? v : null;
   })();
   var URL_FONT_SCALE = (function(){
-    var v = new URLSearchParams(location.search).get('fontScale');
-    return v === null || v === '' ? null : normalizeTvFontScale(v);
+    var value = new URLSearchParams(location.search).get('fontScale');
+    if(value === null || String(value).trim() === '') return null;
+    var numeric = Number(value);
+    if(!Number.isFinite(numeric)){
+      console.warn('[DubMenu TV] Invalid ?fontScale= "' + value + '" — falling back to config scale.');
+      return null;
+    }
+    return normalizeTvFontScale(numeric);
   })();
 
   var CATEGORY_ICON_SVGS = ${serializeInlineScriptJson(CATEGORY_ICON_SVGS)};
@@ -909,10 +1066,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return v === 'small' || v === 'large' || v === 'medium' ? v : 'medium';
   }
   function activeTvFontScale(cfg){
-    return normalizeTvFontScale(URL_FONT_SCALE === null ? cfg&&cfg.fontScale : URL_FONT_SCALE,URL_FONT_SIZE||(cfg&&cfg.fontSize));
+    if(URL_FONT_SCALE !== null) return URL_FONT_SCALE;
+    if(URL_FONT_SIZE !== null) return normalizeTvFontScale(undefined,URL_FONT_SIZE);
+    return normalizeTvFontScale(cfg&&cfg.fontScale,cfg&&cfg.fontSize);
   }
   function scaledClamp(min,fluid,max,factor){
-    return 'clamp('+(Math.round(min*factor*1000)/1000)+'rem,'+(Math.round(fluid*factor*1000)/1000)+'vw,'+(Math.round(max*factor*1000)/1000)+'rem)';
+    var maximum=Math.round(max*factor*1000)/1000;
+    if(!isMobileViewport()) return maximum+'rem';
+    return 'clamp('+(Math.round(min*factor*1000)/1000)+'rem,'+(Math.round(fluid*factor*1000)/1000)+'vw,'+maximum+'rem)';
   }
   function applyTvFontScale(fontScale){
     var factor=fontScale/100;
@@ -1105,30 +1266,6 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL);
   }
 
-  function manualSpecialsCategory(cfg){
-    var specials = ((cfg && cfg.specials) || []).filter(function(s){ return s && s.active !== false && String(s.title || '').trim(); });
-    if(!specials.length) return null;
-    return {
-      id: 'specials',
-      name: 'Specials',
-      order: -1,
-      products: specials.slice(0, 8).map(function(s, idx){
-        return {
-          id: s.id || ('manual-special-' + idx),
-          name: s.title,
-          description: s.description || '',
-          brand: s.brand || '',
-          image: s.image || '',
-          price: typeof s.price === 'number' ? s.price : undefined,
-          originalPrice: typeof s.originalPrice === 'number' ? s.originalPrice : undefined,
-          priceTiers: Array.isArray(s.priceTiers) ? s.priceTiers : undefined,
-          specialLabel: s.specialLabel || 'Special',
-          inStock: true,
-          isPromo: true
-        };
-      })
-    };
-  }
 
   function categoriesWithManualSpecials(cfg){
     var cats = (cfg && cfg.categories) || [];
@@ -1142,12 +1279,21 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return cfg && (cfg.tvDemo || (cfg.layout === 'auto' && cfg.layoutMode === 'auto'));
   }
 
+  function isPromotionalProduct(product){
+    return !!(product&&(product.isPromo||product.special||product.specialLabel||product.originalPrice||product.priceOriginal));
+  }
+
   function getCatalogPagePlan(cats, layout, bannerActive, demoMode){
     return buildTvCatalogPagePlan(cats,{
       layout:layout,
       bannerActive:bannerActive,
       demoMode:demoMode,
       fontScale:activeTvFontScale(config),
+      productRowWeight:function(product,category){
+        var length=formatProductName(product,category&&category.name).length;
+        var needsPromoRoom=isPromotionalProduct(product)&&length>28;
+        return length>80?2:(length>32||needsPromoRoom)?1.5:1;
+      },
     });
   }
 
@@ -1276,6 +1422,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     content.className = 'menu-content layout-' + layout;
     content.setAttribute('data-menu-page',String(cycleState.currentPage+1));
     content.setAttribute('data-menu-pages',String(cycleState.totalPages));
+    var footerProgress = document.getElementById('footer-progress');
+    if(footerProgress) footerProgress.textContent = formatTvPageProgress(pagePlan,cycleState.currentPage);
     
     if(layout==='grid') renderGrid(pageCats, content);
     else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats);
@@ -1500,6 +1648,31 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return parts.join('');
   }
 
+  function fitGridCardNames(root){
+    var contentOverflows=function(name){
+      var card=name.closest('.product-card');
+      var body=name.closest('.card-body');
+      if(name.scrollHeight>name.clientHeight+4) return true;
+      if(!card||!body) return false;
+      var cardRect=card.getBoundingClientRect();
+      var bodyRect=body.getBoundingClientRect();
+      return bodyRect.top<cardRect.top-1||bodyRect.bottom>cardRect.bottom+1;
+    };
+    Array.prototype.forEach.call(root.querySelectorAll('.card-name'),function(name){
+      var size=parseFloat(getComputedStyle(name).fontSize);
+      while(contentOverflows(name)&&size>22){
+        size=Math.max(22,size-0.5);
+        name.style.fontSize=size+'px';
+      }
+      if(name.scrollHeight>name.clientHeight+4) name.style.webkitLineClamp='3';
+      while(contentOverflows(name)&&size>18){
+        size=Math.max(18,size-0.5);
+        name.style.fontSize=size+'px';
+      }
+      if(contentOverflows(name)) name.setAttribute('data-name-overflow','true');
+    });
+  }
+
   function renderGrid(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = document.createElement('div');
@@ -1511,14 +1684,18 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         var visual = hasImage ? imgMarkup(p, true) : '';
+        var cardName = formatProductName(p,cat.name);
+        var needsPromoRoom = isPromotionalProduct(p)&&cardName.length>28;
+        var nameClass = cardName.length>80 ? ' name-extra-long' : cardName.length>32||needsPromoRoom ? ' name-long' : '';
         var card = document.createElement('div');
-        card.className = 'product-card' + (hasImage ? ' has-image' : ' no-image') + (config.showStrain !== false ? gridStrainClass(p) : '') + (p.inStock === false ? ' out-of-stock' : '');
-        card.innerHTML = '<span class="strain-bar"></span>' + visual + '<div class="card-body"><div class="card-name">' + escapeHtml(p.name) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p,true) + '</div><div class="card-price">' + makePrice(p) + '</div>';
+        card.className = 'product-card' + nameClass + (hasImage ? ' has-image' : ' no-image') + (config.showStrain !== false ? gridStrainClass(p) : '') + (p.inStock === false ? ' out-of-stock' : '');
+        card.innerHTML = '<span class="strain-bar"></span>' + visual + '<div class="card-body"><div class="card-name">' + escapeHtml(cardName) + '</div><div class="card-meta">' + makeGridMeta(p) + '</div>' + makeDesc(p,true) + '</div><div class="card-price">' + makePrice(p) + '</div>';
         grid.appendChild(card);
       });
       catEl.appendChild(grid);
       container.appendChild(catEl);
     });
+    requestAnimationFrame(function(){fitGridCardNames(container);});
   }
 
   function isSpecialCategory(cat){
@@ -1531,7 +1708,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cats.forEach(function(cat){
       var specialCat = isSpecialCategory(cat);
       (cat.products || []).forEach(function(p){
-        if(p && (specialCat || p.isPromo || p.special || p.specialLabel || p.originalPrice || p.priceOriginal)) promoProducts.push(p);
+        if(p && (specialCat || isPromotionalProduct(p))){
+          p.categoryName = cat.name;
+          promoProducts.push(p);
+        }
       });
     });
     return promoProducts;
@@ -1544,7 +1724,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderPricewallShell(cats, container){
     var promoProducts = getPricewallPromoProducts(cats).slice(0, 3);
     var specials = promoProducts.map(function(p){
-      return '<div class="pricewall-special-row"><div class="pricewall-special-name">' + escapeHtml(p.name) + '</div><div class="pricewall-special-price">' + makePrice(p) + '</div></div>';
+      return '<div class="pricewall-special-row"><div class="pricewall-special-name">' + escapeHtml(formatProductName(p,p.categoryName)) + '</div><div class="pricewall-special-price">' + makePrice(p) + '</div></div>';
     }).join('');
     if(!specials) return false;
     var shell = document.createElement('aside');

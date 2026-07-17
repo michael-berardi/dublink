@@ -95,7 +95,8 @@ export function aboutPage(origin: string): string {
 
     <div class="section">
       <h2>The DubHaven Ecosystem</h2>
-      <p>DubMenu is part of the DubHaven ecosystem, which includes DubLedger (cannabis POS) and DubHaven (cannabis software consultancy). Together, we provide a complete suite of tools for cannabis operators.</p>
+      <p>DubMenu is developed by <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a>, a cannabis technology partner for licensed operators.</p>
+      <p>For point-of-sale and retail operations, explore <a href="https://dubledger.com" target="_blank" rel="noopener noreferrer">DubLedger</a>. For compliant websites, search, and digital marketing, explore DubHaven&rsquo;s <a href="https://dubhaven.com/services/web-and-seo" target="_blank" rel="noopener noreferrer">Web &amp; Search services</a>.</p>
     </div>
 
     <div class="section">
@@ -115,7 +116,7 @@ export function aboutPage(origin: string): string {
   </div>
 
   <footer>
-    <p>&copy; 2026 DubMenu. A <a href="https://dubhaven.com" target="_blank">DubHaven</a> product.</p>
+    <p>&copy; 2026 DubMenu, a <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a> product.</p>
   </footer>
 </body>
 </html>`;

@@ -48,6 +48,8 @@ export function contactPage(origin: string): string {
     .form-group textarea{min-height:120px;resize:vertical;}
     .submit-btn{display:block;width:100%;padding:1rem;background:var(--primary);color:#0a0f0d;border:none;border-radius:var(--radius);font-weight:600;font-size:1.125rem;cursor:pointer;transition:background var(--transition);}
     .submit-btn:hover{background:var(--primary-dark);}
+    .ecosystem-handoff{margin-top:2rem;padding:1.25rem 1.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);color:var(--text-faint);font-size:0.9375rem;text-align:center;}
+    .ecosystem-handoff a{font-weight:600;}
     footer{padding:2rem 1.5rem;text-align:center;color:var(--text-faint);font-size:0.875rem;border-top:1px solid var(--border);margin-top:4rem;}
     @media(max-width:640px){
       .nav-toggle{display:block;}
@@ -107,6 +109,7 @@ export function contactPage(origin: string): string {
       <button type="submit" class="submit-btn">Send Message</button>
       <p id="form-status" style="margin-top:1rem;text-align:center;display:none;"></p>
     </form>
+    <p class="ecosystem-handoff">Need help beyond your menu board? <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a> also offers cannabis POS through <a href="https://dubledger.com" target="_blank" rel="noopener noreferrer">DubLedger</a> and <a href="https://dubhaven.com/services/web-and-seo" target="_blank" rel="noopener noreferrer">websites, search, and digital marketing services</a>.</p>
     <script>
       document.getElementById('contact-form').addEventListener('submit', async function(e){
         e.preventDefault();
@@ -138,7 +141,7 @@ export function contactPage(origin: string): string {
   </div>
 
   <footer>
-    <p>&copy; 2026 DubMenu. A <a href="https://dubhaven.com" target="_blank">DubHaven</a> product.</p>
+    <p>&copy; 2026 DubMenu, a <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a> product.</p>
   </footer>
 </body>
 </html>`;

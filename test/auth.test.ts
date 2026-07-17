@@ -98,4 +98,14 @@ describe('public pages', () => {
     expect(html).toMatch(/href="[^"]+\/privacy"/);
     expect(html).toMatch(/href="[^"]+\/terms"/);
   });
+
+  it('links the DubHaven product and service ecosystem from public marketing pages', async () => {
+    for (const path of ['/', '/about', '/contact']) {
+      const html = await (await SELF.fetch(`https://dubmenu.com${path}`)).text();
+      expect(html).toContain('https://dubhaven.com');
+      expect(html).toContain('https://dubledger.com');
+      expect(html).toContain('https://dubhaven.com/services/web-and-seo');
+      expect(html).toContain('rel="noopener noreferrer"');
+    }
+  });
 });

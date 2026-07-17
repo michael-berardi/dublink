@@ -573,7 +573,7 @@ export function configPage(sessionId: string, origin: string): string {
   <div id="animationSettings" hidden>
     <div class="field">
       <div class="font-scale-heading"><label for="pageDurationSeconds">Slide Duration</label><output class="font-scale-value" id="pageDurationSecondsValue" for="pageDurationSeconds">${TV_PAGE_DURATION_DEFAULT} seconds</output></div>
-      <input class="font-scale-range" type="range" id="pageDurationSeconds" min="${TV_PAGE_DURATION_OPTIONS[0]}" max="${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]}" step="5" value="${TV_PAGE_DURATION_DEFAULT}" aria-describedby="pageDurationSecondsHelp" oninput="syncPageDurationLabel(this.valueAsNumber);debounceConfig('pageDurationSeconds',this.valueAsNumber)">
+      <input class="font-scale-range" type="range" id="pageDurationSeconds" min="${TV_PAGE_DURATION_OPTIONS[0]}" max="${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]}" step="1" value="${TV_PAGE_DURATION_DEFAULT}" aria-describedby="pageDurationSecondsHelp" oninput="var duration=nearestPageDuration(this.valueAsNumber);this.value=String(duration);syncPageDurationLabel(duration);debounceConfig('pageDurationSeconds',duration)">
       <div class="font-scale-limits" aria-hidden="true"><span>Fast</span><span>Slow</span></div>
       <div class="helper" id="pageDurationSecondsHelp">Choose how long each product page stays visible, from ${TV_PAGE_DURATION_OPTIONS[0]} to ${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]} seconds.</div>
     </div>
@@ -832,8 +832,16 @@ function syncFontScaleLabel(value){
   var output=document.getElementById('fontScaleValue');
   if(output){output.value=scale+'%';output.textContent=scale+'%';}
 }
+function nearestPageDuration(value){
+  var options=${serializeInlineScriptJson(TV_PAGE_DURATION_OPTIONS)};
+  var requested=Number(value);
+  if(!isFinite(requested))requested=${TV_PAGE_DURATION_DEFAULT};
+  return options.reduce(function(closest,option){
+    return Math.abs(option-requested)<Math.abs(closest-requested)?option:closest;
+  },${TV_PAGE_DURATION_DEFAULT});
+}
 function syncPageDurationLabel(value){
-  var seconds=Math.round(Math.max(${TV_PAGE_DURATION_OPTIONS[0]},Math.min(${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]},Number(value)||${TV_PAGE_DURATION_DEFAULT}))/5)*5;
+  var seconds=nearestPageDuration(value);
   var output=document.getElementById('pageDurationSecondsValue');
   if(output){output.value=seconds+' seconds';output.textContent=seconds+' seconds';}
 }

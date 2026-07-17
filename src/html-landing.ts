@@ -41,6 +41,11 @@ export function landingPage(origin: string): string {
         "@type": "Organization",
         "name": "DubMenu",
         "url": "${safeOrigin}/",
+        "parentOrganization": {
+          "@type": "Organization",
+          "name": "DubHaven",
+          "url": "https://dubhaven.com"
+        },
         "sameAs": [
           "https://dubhaven.com"
         ]
@@ -831,7 +836,7 @@ export function landingPage(origin: string): string {
           </svg>
           DUBMENU
         </div>
-        <p>Digital menu boards for cannabis dispensaries. A DubHaven product. For licensed dispensaries only.</p>
+        <p>DubMenu is a <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a> product for licensed dispensaries.</p>
       </div>
       <div class="footer-col">
         <h4>Product</h4>
@@ -841,8 +846,10 @@ export function landingPage(origin: string): string {
         <a href="#how-it-works">How It Works</a>
       </div>
       <div class="footer-col">
-        <h4>Company</h4>
-        <a href="https://dubhaven.com">DubHaven</a>
+        <h4>DubHaven Ecosystem</h4>
+        <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven &mdash; Cannabis technology</a>
+        <a href="https://dubledger.com" target="_blank" rel="noopener noreferrer">DubLedger &mdash; Cannabis POS</a>
+        <a href="https://dubhaven.com/services/web-and-seo" target="_blank" rel="noopener noreferrer">Websites &amp; digital marketing</a>
         <a href="${safeOrigin}/about">About</a>
         <a href="${safeOrigin}/faq">FAQ</a>
         <a href="${safeOrigin}/contact">Contact</a>
@@ -860,7 +867,7 @@ export function landingPage(origin: string): string {
       </div>
     </div>
     <div class="footer-bottom">
-      <p>DubMenu &mdash; Digital menu boards for cannabis dispensaries. A <a href="https://dubhaven.com">DubHaven</a> product.</p>
+      <p>DubMenu &mdash; Digital menu boards for cannabis dispensaries. A <a href="https://dubhaven.com" target="_blank" rel="noopener noreferrer">DubHaven</a> product.</p>
       <p style="margin-top:0.5rem;">For licensed dispensaries only. Keep out of reach of children.</p>
     </div>
   </footer>

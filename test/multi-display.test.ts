@@ -30,6 +30,38 @@ describe('allocateCategoriesForDisplay', () => {
     expect(new Set(allocations.flatMap((group) => group.map((item) => item.id))).size).toBe(8);
   });
 
+  it('balances an uneven Simply Green-sized catalog across three and four displays', () => {
+    const categories = [
+      category('flower', 125),
+      category('pre-rolls', 82),
+      category('vapes', 65),
+      category('concentrates', 24),
+      category('edibles', 147),
+      category('tinctures', 6),
+      category('topicals', 3),
+      category('cbd', 12),
+      category('accessories', 42),
+    ];
+    const expectedIds = categories.flatMap((item) => item.products.map((product) => product.id)).sort();
+
+    for (const displayTotal of [3, 4]) {
+      const allocations = Array.from(
+        { length: displayTotal },
+        (_, index) => allocateCategoriesForDisplay(categories, index + 1, displayTotal),
+      );
+      const counts = allocations.map((group) =>
+        group.reduce((total, item) => total + item.products.length, 0),
+      );
+      const actualIds = allocations.flatMap((group) =>
+        group.flatMap((item) => item.products.map((product) => product.id)),
+      );
+
+      expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+      expect(actualIds.sort()).toEqual(expectedIds);
+      expect(new Set(actualIds).size).toBe(506);
+    }
+  });
+
   it('splits products when one category must fill four displays', () => {
     const categories = [category('flower', 10)];
     const allocations = Array.from({ length: 4 }, (_, index) => allocateCategoriesForDisplay(categories, index + 1, 4));
