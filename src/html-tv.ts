@@ -1488,6 +1488,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     document.body.className = ('template-' + getActiveTemplate(config) + ' font-' + tvFontSizeClass(fontScale) + ' ' + customFontClass(config.customFont)).trim();
     applyTvFontScale(fontScale);
     applyBrandStyle(config);
+    fitToScreen();
     var demoPill = document.getElementById('demo-pill');
     if(demoPill) demoPill.classList.toggle('visible', DEMO_MODE || !!config.tvDemo);
     var headerName = document.getElementById('dispensary-name');
@@ -1659,6 +1660,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       return bodyRect.top<cardRect.top-1||bodyRect.bottom>cardRect.bottom+1;
     };
     Array.prototype.forEach.call(root.querySelectorAll('.card-name'),function(name){
+      name.style.fontSize='';
+      name.style.webkitLineClamp='';
+      name.removeAttribute('data-name-overflow');
       var size=parseFloat(getComputedStyle(name).fontSize);
       while(contentOverflows(name)&&size>22){
         size=Math.max(22,size-0.5);
@@ -2065,7 +2069,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cursorTimer=setTimeout(function(){document.body.classList.add('cursor-hidden');},5000);
   });
 
-  window.addEventListener('resize',function(){fitToScreen();});
+  window.addEventListener('resize',function(){
+    fitToScreen();
+    requestAnimationFrame(function(){
+      var content=document.getElementById('menu-content');
+      if(content&&(content.classList.contains('layout-grid')||content.classList.contains('layout-pricewall'))) fitGridCardNames(content);
+    });
+  });
   document.addEventListener('visibilitychange',function(){
     if(document.hidden){stopCycling();return;}
     requestDisplayWakeLock();

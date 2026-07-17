@@ -225,8 +225,13 @@ describe('tvPage', () => {
     expect(page).toContain('var compactDescription = function compactTvDescription');
     expect(page).toContain('function makeListDesc');
     expect(page).toContain('while(contentOverflows(name)&&size>22)');
+    expect(page).toContain("name.style.fontSize=''");
+    expect(page).toContain("name.style.webkitLineClamp=''");
+    expect(page).toContain("name.removeAttribute('data-name-overflow')");
     expect(page).toContain("name.style.webkitLineClamp='3'");
     expect(page).toContain('requestAnimationFrame(function(){fitGridCardNames(container);})');
+    expect(page).toContain("applyBrandStyle(config);\n    fitToScreen();\n    var demoPill");
+    expect(page).toContain("if(content&&(content.classList.contains('layout-grid')||content.classList.contains('layout-pricewall'))) fitGridCardNames(content)");
     expect(page).toContain('makeDesc(p,true)');
     expect(page).toContain('.layout-list .row-desc{');
     expect(page).toContain("compact ? ' compact-desc' : ''");
