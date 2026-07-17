@@ -7,10 +7,19 @@ import { bundleImportedImages } from '../src/upload';
 const DUTCHIE_MENU_URL = 'https://overseer-browser-production.up.railway.app/scrape-dutchie-menu';
 const BROWSERLESS_URL = 'https://overseer-browser-production.up.railway.app/scrape-specials';
 
-function structuredResponse(products: unknown[]) {
+function structuredResponse(products: unknown[], totalCount = products.length) {
   return new Response(
     JSON.stringify({
-      responses: [{ json: { data: { filteredProducts: { products } } } }],
+      responses: [{
+        json: {
+          data: {
+            filteredProducts: {
+              products,
+              queryInfo: { totalCount, totalPages: Math.max(1, Math.ceil(totalCount / 100)) },
+            },
+          },
+        },
+      }],
     }),
     { status: 200, headers: { 'Content-Type': 'application/json' } }
   );
@@ -517,6 +526,51 @@ describe('Dutchie scraper image extraction', () => {
     const result = await scrapeDutchie('structured-large', 'test-token');
     expect(result.productCount).toBe(41);
     expect(result.categories[0].products).toHaveLength(41);
+  });
+
+  it('rejects a Browserless result that is smaller than Dutchie totalCount', async () => {
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) {
+        return structuredResponse([baseProduct('partial-product')], 3);
+      }
+      if (url.startsWith(BROWSERLESS_URL)) {
+        return new Response(JSON.stringify({
+          products: [{ href: '/product/partial-product', text: 'Partial Product\n$25', img: '' }],
+          count: 3,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    await expect(scrapeDutchie('incomplete-catalog', 'test-token')).rejects.toThrow(
+      'received 1 of 3 products'
+    );
+  });
+
+  it('refuses a Simply Green scrape without a declared catalog total', async () => {
+    let fallbackCalls = 0;
+    globalThis.fetch = vi.fn(async (input: string | Request) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (url.startsWith(DUTCHIE_MENU_URL)) {
+        return new Response(JSON.stringify({
+          responses: [{
+            json: {
+              data: {
+                filteredProducts: { products: [baseProduct('unverified-product')] },
+              },
+            },
+          }],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (url.startsWith(BROWSERLESS_URL)) fallbackCalls++;
+      return new Response('Not Found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    await expect(scrapeDutchie('simply-green', 'test-token')).rejects.toThrow(
+      'Refusing to import an unverified partial Simply Green catalog'
+    );
+    expect(fallbackCalls).toBe(0);
   });
 });
 

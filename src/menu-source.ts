@@ -621,35 +621,35 @@ export async function resolveMenuSource(input: string, env: MenuImportEnv): Prom
   // rendered iframes/scripts are detected before the wizard declares a URL invalid.
   if (source.type === 'website-generic' && source.url) {
     const errors: string[] = [];
+    let crawl: OverseerProductCrawlResponse | null = null;
     try {
-      const crawl = await withTimeout(fetchOverseerProductsCrawl(source.url, env, true), 60000, 'Overseer Products Crawl timed out');
-      if (crawl) {
-        const slug = productCrawlDutchieSlug(crawl);
-        if (slug) {
-          try {
-            return await withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out; trying custom ecommerce crawler.');
-          } catch (err) {
-            errors.push(err instanceof Error ? err.message : 'Dutchie import from embedded menu failed');
-            const fallbackCrawl = await withTimeout(fetchOverseerProductsCrawl(source.url, env, false), 60000, 'Overseer Products Crawl ecommerce extraction timed out');
-            const fallbackResult = fallbackCrawl ? menuResultFromProductCrawl(fallbackCrawl, source.url) : null;
-            if (fallbackResult) return { ...fallbackResult, warnings: [...fallbackResult.warnings, ...errors] };
-          }
-        }
-        const productResult = menuResultFromProductCrawl(crawl, source.url);
-        if (productResult) return productResult;
-      }
+      crawl = await withTimeout(fetchOverseerProductsCrawl(source.url, env, true), 60000, 'Overseer Products Crawl timed out');
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Overseer Products Crawl failed');
     }
-
-    try {
-      const html = await fetchWebsiteHtml(source.url);
-      const slug = extractDutchieSlugFromHtml(html);
+    if (crawl) {
+      const slug = productCrawlDutchieSlug(crawl);
       if (slug) {
-        return await withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out.');
+        return withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out.');
       }
+      if (crawl.dutchie?.kind || crawl.dutchie?.embedId || crawl.dutchie?.embedUrl) {
+        throw new Error(`Detected a Dutchie menu on ${source.url}, but could not resolve its store slug. Refusing to use an unverified partial product crawl.`);
+      }
+      const productResult = menuResultFromProductCrawl(crawl, source.url);
+      if (productResult) return productResult;
+    }
+
+    let html: string | null = null;
+    try {
+      html = await fetchWebsiteHtml(source.url);
     } catch (err) {
       errors.push(err instanceof Error ? err.message : 'Website fetch failed');
+    }
+    if (html) {
+      const slug = extractDutchieSlugFromHtml(html);
+      if (slug) {
+        return withTimeout(importDutchieFromSlug(slug, env, `website-dutchie:${source.url}`), 90000, 'Dutchie scraper timed out.');
+      }
     }
     try {
       return { ...await scrapeGenericWebsite(source.url), source: 'website-generic' };
@@ -659,21 +659,10 @@ export async function resolveMenuSource(input: string, env: MenuImportEnv): Prom
     }
   }
 
-  // Dutchie sources resolve through a slug, with website crawl fallback when a
-  // known website shortcut still has crawlable ecommerce data.
+  // Identified Dutchie sources must either import completely or fail; do not
+  // replace them with the bounded generic website crawler.
   if (source.slug) {
-    try {
-      return await withTimeout(importDutchieFromSlug(source.slug, env, source.type), 180000, 'Dutchie scraper timed out.');
-    } catch (err) {
-      if (!source.url) throw err;
-      const crawl = await fetchOverseerProductsCrawl(source.url, env, false).catch(() => null);
-      const fallback = crawl ? menuResultFromProductCrawl(crawl, source.url) : null;
-      if (fallback) {
-        const warning = err instanceof Error ? err.message : 'Dutchie import failed';
-        return { ...fallback, warnings: [...fallback.warnings, warning] };
-      }
-      throw err;
-    }
+    return withTimeout(importDutchieFromSlug(source.slug, env, source.type), 180000, 'Dutchie scraper timed out.');
   }
 
   throw new Error(source.error || 'Could not identify a menu source to import.');
@@ -742,7 +731,11 @@ async function importDutchieFromSlug(
     }
   }
 
-  if (env.DUTCHIE_API_KEY) {
+  if (env.DUTCHIE_API_KEY && slug === 'simply-green') {
+    errors.push('Legacy Dutchie API fallback cannot verify the complete Simply Green catalog and was not used');
+  }
+
+  if (env.DUTCHIE_API_KEY && slug !== 'simply-green') {
     const failedSources = env.BROWSERLESS_TOKEN ? 'public GraphQL and browser scraper' : 'public GraphQL';
     try {
       const apiResult = await importDutchieMenu(slug, env.DUTCHIE_API_KEY);

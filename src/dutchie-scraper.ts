@@ -273,7 +273,21 @@ type ScraperRawProduct = ScraperPriceSource & {
   description?: string;
 };
 type ScraperStructuredResponse = {
-  json?: { data?: { filteredProducts?: { products?: ScraperRawProduct[] } } };
+  json?: {
+    data?: {
+      filteredProducts?: {
+        products?: ScraperRawProduct[];
+        queryInfo?: { totalCount?: number; totalPages?: number };
+      };
+    };
+  };
+};
+
+type StructuredScrapeResult = {
+  categories: ScrapedCategory[];
+  dispensaryName: string;
+  productCount: number;
+  expectedProductCount?: number;
 };
 
 function formatTierPrice(value: number): string {
@@ -377,9 +391,17 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
       return { error: err instanceof Error ? err.message : 'Structured Dutchie scrape failed' };
     }
   }));
-  const structuredResults = structuredAttempts
+  const allStructuredResults = structuredAttempts
     .map((attempt) => attempt.result)
-    .filter((result): result is NonNullable<typeof result> => Boolean(result?.categories.length));
+    .filter((result): result is StructuredScrapeResult => Boolean(result));
+  const structuredExpectedProductCount = allStructuredResults.reduce(
+    (highest, result) => Math.max(highest, result.expectedProductCount || 0),
+    0
+  );
+  const structuredResults = allStructuredResults.filter((result) => result.categories.length > 0);
+  let structuredError = structuredAttempts.map((attempt) => attempt.error).filter(Boolean).join('; ')
+    || 'Structured Dutchie scrape returned no products';
+  const requiresDeclaredCatalogTotal = dispensarySlug === 'simply-green';
   if (structuredResults.length > 0) {
     const mergedCategories = new Map<string, ScrapedProduct[]>();
     const seenProducts = new Set<string>();
@@ -394,27 +416,34 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
         }
       }
     }
-    const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
-    const categories = [...mergedCategories.entries()]
-      .sort(([a], [b]) => {
-        const ai = categoryOrder.indexOf(a);
-        const bi = categoryOrder.indexOf(b);
-        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-      })
-      .map(([name, products], order) => ({
-        id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        name,
-        order,
-        products: products.sort(compareProductNames),
-      }));
-    return {
-      categories,
-      dispensaryName: structuredResults[0].dispensaryName,
-      productCount: seenProducts.size,
-    };
+    if (requiresDeclaredCatalogTotal && structuredExpectedProductCount === 0) {
+      structuredError = 'Structured Dutchie scrape did not report the complete catalog total';
+    } else if (structuredExpectedProductCount > seenProducts.size) {
+      structuredError = `Structured Dutchie scrape received ${seenProducts.size} of ${structuredExpectedProductCount} products`;
+    } else {
+      const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Accessories', 'Other'];
+      const categories = [...mergedCategories.entries()]
+        .sort(([a], [b]) => {
+          const ai = categoryOrder.indexOf(a);
+          const bi = categoryOrder.indexOf(b);
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        })
+        .map(([name, products], order) => ({
+          id: name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          name,
+          order,
+          products: products.sort(compareProductNames),
+        }));
+      return {
+        categories,
+        dispensaryName: structuredResults[0].dispensaryName,
+        productCount: seenProducts.size,
+      };
+    }
   }
-  const structuredError = structuredAttempts.map((attempt) => attempt.error).filter(Boolean).join('; ')
-    || 'Structured Dutchie scrape returned no products';
+  if (requiresDeclaredCatalogTotal && structuredExpectedProductCount === 0) {
+    throw new Error(`${structuredError}. Refusing to import an unverified partial Simply Green catalog.`);
+  }
 
   let data: { products: Array<{ href: string; text: string; img: string }>; count: number } | undefined;
   let scrapeError: string | undefined;
@@ -503,6 +532,13 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
     categoryMap.get(category)!.push(product);
   }
 
+  const fallbackExpectedProductCount = Math.max(data.count || 0, structuredExpectedProductCount);
+  if (fallbackExpectedProductCount > seen.size) {
+    throw new Error(
+      `Dutchie browser scrape received ${seen.size} of ${fallbackExpectedProductCount} products. Retry to load the complete menu.`
+    );
+  }
+
   const categoryOrder = ['Flower', 'Pre-Rolls', 'Vapes', 'Concentrates', 'Edibles', 'Tinctures', 'Topicals', 'CBD', 'Other'];
   const categories: ScrapedCategory[] = Array.from(categoryMap.entries())
     .sort((a, b) => {
@@ -533,7 +569,7 @@ export async function scrapeDutchie(dispensarySlug: string, token: string): Prom
   return { categories, dispensaryName, productCount: seen.size };
 }
 
-async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {
+async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promise<StructuredScrapeResult> {
   const resp = await fetch(`${DUTCHIE_MENU_URL}?url=${encodeURIComponent(dutchieUrl)}`, {
     headers: { 'Authorization': `Bearer ${token}` },
     signal: AbortSignal.timeout(45000),
@@ -543,9 +579,15 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
   const data = await resp.json() as { responses?: ScraperStructuredResponse[] };
   const seen = new Set<string>();
   const categoryMap = new Map<string, ScrapedProduct[]>();
+  let expectedProductCount = 0;
 
   for (const response of data.responses || []) {
-    const products = response.json?.data?.filteredProducts?.products || [];
+    const filteredProducts = response.json?.data?.filteredProducts;
+    const reportedProductCount = filteredProducts?.queryInfo?.totalCount;
+    if (typeof reportedProductCount === 'number' && Number.isFinite(reportedProductCount)) {
+      expectedProductCount = Math.max(expectedProductCount, reportedProductCount);
+    }
+    const products = filteredProducts?.products || [];
     for (const p of products) {
       const id = String(p.id || p._id || p.Name || crypto.randomUUID());
       const sku = typeof p.sku === 'string' ? p.sku.trim() : '';
@@ -618,7 +660,12 @@ async function scrapeDutchieStructured(dutchieUrl: string, token: string): Promi
   const slug = path.split('/stores/')[1]?.split('/')[0] || path.split('/embedded-menu/')[1]?.split('/')[0] || 'dutchie-menu';
   const dispensaryName = slug.split(/[-_]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
-  return { categories, dispensaryName, productCount: seen.size };
+  return {
+    categories,
+    dispensaryName,
+    productCount: seen.size,
+    expectedProductCount: expectedProductCount || undefined,
+  };
 }
 
 async function scrapeDutchieDirect(dutchieUrl: string): Promise<{ categories: ScrapedCategory[]; dispensaryName: string; productCount: number }> {

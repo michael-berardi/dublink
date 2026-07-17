@@ -303,6 +303,89 @@ describe('resolveMenuSource', () => {
     expect(mockFetch.mock.calls[0]?.[0]).toBe('https://crawl.example/v2/products/crawl');
   });
 
+  it('rejects instead of using bounded crawl products after discovering a Dutchie menu', async () => {
+    let crawlCalls = 0;
+    let websiteCalls = 0;
+    globalThis.fetch = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url === 'https://crawl.example/v2/products/crawl') {
+        crawlCalls++;
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          sourceURL: 'https://partner.example/menu',
+          dutchie: { kind: 'iframe', slug: 'green-leaf', embedUrl: 'https://dutchie.com/embedded-menu/green-leaf' },
+          products: [{ id: 'partial', name: 'Partial Product', price: 25 }],
+          categories: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      if (url === 'https://partner.example/menu') {
+        websiteCalls++;
+        return Promise.resolve(new Response('<script type="application/ld+json">{"@type":"Product","name":"Partial Product","offers":{"price":25}}</script>'));
+      }
+      if (url.startsWith('https://dutchie.com/graphql')) {
+        return Promise.resolve(new Response(JSON.stringify({ errors: [{ message: 'Unavailable' }] }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response('Not Found', { status: 404 }));
+    });
+
+    await expect(resolveMenuSource('https://partner.example/menu', {
+      OVERSEER_CRAWL_URL: 'https://crawl.example',
+      OVERSEER_CRAWL_API_KEY: 'crawl-key',
+    })).rejects.toThrow('Could not import live menu products');
+    expect(crawlCalls).toBe(1);
+    expect(websiteCalls).toBe(0);
+  });
+
+  it('rejects an embed-id-only Dutchie crawl instead of accepting its bounded products', async () => {
+    globalThis.fetch = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url === 'https://crawl.example/v2/products/crawl') {
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          sourceURL: 'https://partner.example/menu',
+          dutchie: { kind: 'script', embedId: 'dispensary-123' },
+          products: [{ id: 'partial', name: 'Partial Product', price: 25 }],
+          categories: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      return Promise.resolve(new Response('Not Found', { status: 404 }));
+    });
+
+    await expect(resolveMenuSource('https://partner.example/menu', {
+      OVERSEER_CRAWL_URL: 'https://crawl.example',
+      OVERSEER_CRAWL_API_KEY: 'crawl-key',
+    })).rejects.toThrow('Refusing to use an unverified partial product crawl');
+  });
+
+  it('rejects instead of using JSON-LD products after discovering a Dutchie iframe', async () => {
+    let websiteCalls = 0;
+    globalThis.fetch = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url === 'https://partner.example/menu') {
+        websiteCalls++;
+        return Promise.resolve(new Response(
+          '<iframe src="https://dutchie.com/embedded-menu/green-leaf"></iframe>'
+          + '<script type="application/ld+json">{"@type":"Product","name":"Partial Product","offers":{"price":25}}</script>'
+        ));
+      }
+      if (url.startsWith('https://dutchie.com/graphql')) {
+        return Promise.resolve(new Response(JSON.stringify({ errors: [{ message: 'Unavailable' }] }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response('Not Found', { status: 404 }));
+    });
+
+    await expect(resolveMenuSource('https://partner.example/menu', {})).rejects.toThrow(
+      'Could not import live menu products'
+    );
+    expect(websiteCalls).toBe(1);
+  });
+
   it('imports standardized products from Overseer Products Crawl for arbitrary ecommerce sites', async () => {
     const mockFetch = vi.fn<typeof fetch>(() =>
       Promise.resolve(
@@ -465,6 +548,7 @@ describe('resolveMenuSource', () => {
                         products: [
                           { id: 'p1', name: 'Blue Dream 3.5g', brandName: 'Simply Green', type: 'Flower', recPrices: [35], strainType: 'Hybrid' },
                         ],
+                        queryInfo: { totalCount: 1, totalPages: 1 },
                       },
                     },
                   },
@@ -487,6 +571,45 @@ describe('resolveMenuSource', () => {
     expect(result.productCount).toBe(1);
     expect(result.categories[0].name).toBe('Flower');
     expect(structuredUrls[0]).toContain(encodeURIComponent('https://dutchie.com/stores/simply-green'));
+    expect(privateCalls).toBe(0);
+  });
+
+  it('does not replace a failed Simply Green import with a bounded crawl subset', async () => {
+    let crawlCalls = 0;
+    let privateCalls = 0;
+    globalThis.fetch = vi.fn<typeof fetch>((input, init) => {
+      if (new Headers(init?.headers).has('x-api-key')) {
+        privateCalls++;
+        return Promise.resolve(new Response('Private API should not be called', { status: 500 }));
+      }
+      const url = String(input);
+      if (url.startsWith('https://dutchie.com/graphql')) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ errors: [{ message: 'Forbidden' }] }), {
+            status: 403,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+      if (url.startsWith('https://crawl.example/v2/products/crawl')) {
+        crawlCalls++;
+        return Promise.resolve(
+          new Response(JSON.stringify({
+            success: true,
+            productCount: 40,
+            products: [{ id: 'partial', name: 'Partial Product', price: 25 }],
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        );
+      }
+      return Promise.resolve(new Response('Not Found', { status: 404 }));
+    });
+
+    await expect(resolveMenuSource('https://simplygreenny.com/shop', {
+      OVERSEER_CRAWL_URL: 'https://crawl.example',
+      OVERSEER_CRAWL_API_KEY: 'crawl-key',
+      DUTCHIE_API_KEY: 'private-key',
+    })).rejects.toThrow('Could not import live menu products');
+    expect(crawlCalls).toBe(0);
     expect(privateCalls).toBe(0);
   });
 
