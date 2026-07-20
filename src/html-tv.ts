@@ -1981,7 +1981,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     };
     ws.onclose=function(){
       if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}
-      stopCycling();
+      if(config&&hasProducts(config)) resumeCycling();
+      else stopCycling();
       setConn('disconnected');
       scheduleReconnect();
     };

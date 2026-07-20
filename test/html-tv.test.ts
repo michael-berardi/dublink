@@ -1,3 +1,4 @@
+import { runInThisContext } from 'node:vm';
 import { describe, it, expect } from 'vitest';
 import {
   buildTvManualSpecialsCategory,
@@ -12,7 +13,12 @@ import {
   shouldRunTvCycle,
   tvPage,
 } from '../src/html-tv';
-import { normalizeTvPageDurationSeconds, normalizeTvPageTransition } from '../src/types';
+import {
+  normalizeTvPageDurationSeconds,
+  normalizeTvPageTransition,
+  TV_PAGE_DURATION_DEFAULT,
+  TV_PAGE_DURATION_OPTIONS,
+} from '../src/types';
 
 describe('tvPage', () => {
   const sampleConfig = {
@@ -474,6 +480,23 @@ describe('tvPage', () => {
     expect(normalizeTvPageDurationSeconds('invalid')).toBe(10);
   });
 
+  it('executes the serialized TV duration normalizer with only its injected constants', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
+    const match = page.match(/var normalizeTvPageDurationSeconds = ([\s\S]+?);\n {2}var normalizeTvPageTransition/);
+    if (!match) throw new Error('Serialized TV duration normalizer not found');
+
+    const normalizeInline = runInThisContext(`(() => {
+      const TV_PAGE_DURATION_DEFAULT = ${JSON.stringify(TV_PAGE_DURATION_DEFAULT)};
+      const TV_PAGE_DURATION_OPTIONS = ${JSON.stringify(TV_PAGE_DURATION_OPTIONS)};
+      return (${match[1]});
+    })()`) as (value: unknown, legacySpeed?: unknown) => number;
+
+    expect(normalizeInline(5)).toBe(5);
+    expect(normalizeInline(12)).toBe(10);
+    expect(normalizeInline(undefined, 100)).toBe(15);
+    expect(normalizeInline('invalid')).toBe(10);
+  });
+
   it('normalizes page transition choices to the calm fade default', () => {
     expect(normalizeTvPageTransition('fade')).toBe('fade');
     expect(normalizeTvPageTransition('none')).toBe('none');
@@ -487,11 +510,102 @@ describe('tvPage', () => {
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
   });
 
-  it('keeps a populated TV menu rotating when the controlling phone disconnects', () => {
+  it('keeps an overflow TV menu rotating when its WebSocket disconnects', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
-    expect(page).toContain("if(msg.type==='unpaired'){paired=false;if(hasProducts(config)){setPhase('menu');resumeCycling();}else{stopCycling();setPhase('pairing');}}");
-    expect(page).toContain("if(paired||hasProducts(config)){setPhase('menu');renderMenu();}");
-    expect(page).toContain('if(!hasProducts(config))return;');
+    const extractFunction = (name: string, nextName: string): string => {
+      const start = page.indexOf(`function ${name}(`);
+      const end = page.indexOf(`\n\n  function ${nextName}(`, start);
+      if (start < 0 || end < 0) throw new Error(`Generated ${name} function not found`);
+      return page.slice(start, end);
+    };
+    const oncloseStart = page.indexOf('ws.onclose=function(){');
+    const oncloseTerminator = '\n    };';
+    const oncloseEnd = page.indexOf(oncloseTerminator, oncloseStart);
+    if (oncloseStart < 0 || oncloseEnd < 0) throw new Error('Generated WebSocket close handler not found');
+
+    const cycleFunctions = [
+      extractFunction('getCycleInterval', 'cancelPageTransition'),
+      extractFunction('cancelPageTransition', 'stopCycling'),
+      extractFunction('stopCycling', 'scheduleNextCycle'),
+      extractFunction('scheduleNextCycle', 'advanceCyclePage'),
+      extractFunction('advanceCyclePage', 'startCycling'),
+      extractFunction('startCycling', 'resumeCycling'),
+      extractFunction('resumeCycling', 'emptyMenuMarkup'),
+    ].join('\n');
+    const oncloseSource = page.slice(oncloseStart, oncloseEnd + oncloseTerminator.length);
+    const result = runInThisContext(`(() => {
+      const calls = [];
+      const timers = new Map();
+      let nextTimerId = 1;
+      let latestTimerId = null;
+      function clearTimeout(timerId) { timers.delete(timerId); }
+      function clearInterval() { calls.push('heartbeat-cleared'); }
+      function setTimeout(callback, delay) {
+        const timerId = nextTimerId++;
+        timers.set(timerId, { callback, delay });
+        latestTimerId = timerId;
+        return timerId;
+      }
+      let heartbeatTimer = 1;
+      const config = { autoScroll: true, pageDurationSeconds: 10, pageTransition: 'fade' };
+      const cycleState = {
+        currentPage: 0,
+        totalPages: 2,
+        interval: null,
+        intervalMs: 0,
+        isTransitioning: false,
+        pageSignature: '',
+        swapTimer: null,
+        cleanupTimer: null,
+      };
+      const document = { hidden: false, getElementById() { return null; } };
+      const window = { matchMedia() { return { matches: true }; } };
+      const ws = {};
+      function shouldRunTvCycle(autoScroll, totalPages, hidden) {
+        return autoScroll === true && totalPages > 1 && !hidden;
+      }
+      function normalizeTvPageDurationSeconds() { return 10; }
+      function normalizeTvPageTransition() { return 'fade'; }
+      function nextTvCyclePage(currentPage, totalPages) {
+        return totalPages > 0 ? (currentPage + 1) % totalPages : 0;
+      }
+      function renderCurrentPage() { calls.push('rendered'); }
+      function hasProducts() { return true; }
+      function setConn(state) { calls.push('connection:' + state); }
+      function scheduleReconnect() { calls.push('reconnect'); }
+      ${cycleFunctions}
+      ${oncloseSource}
+      ws.onclose();
+      const pageBeforeTimer = cycleState.currentPage;
+      const firstTimerId = latestTimerId;
+      const firstTimer = timers.get(firstTimerId);
+      const firstTimerActiveAfterClose = firstTimer !== undefined;
+      if (!firstTimer) throw new Error('Active cycle timer was not scheduled');
+      timers.delete(firstTimerId);
+      firstTimer.callback();
+      return {
+        calls,
+        firstDelay: firstTimer.delay,
+        firstTimerActiveAfterClose,
+        pageBeforeTimer,
+        pageAfterTimer: cycleState.currentPage,
+      };
+    })()`) as {
+      calls: string[];
+      firstDelay: number;
+      firstTimerActiveAfterClose: boolean;
+      pageBeforeTimer: number;
+      pageAfterTimer: number;
+    };
+
+    expect(result.calls).toContain('heartbeat-cleared');
+    expect(result.calls).toContain('connection:disconnected');
+    expect(result.calls).toContain('reconnect');
+    expect(result.calls).toContain('rendered');
+    expect(result.firstDelay).toBe(10_000);
+    expect(result.firstTimerActiveAfterClose).toBe(true);
+    expect(result.pageBeforeTimer).toBe(0);
+    expect(result.pageAfterTimer).toBe(1);
   });
 
   it('uses a 400ms fade, recursive dwell scheduling, and instant reduced-motion replacement', () => {

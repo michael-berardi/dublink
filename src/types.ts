@@ -96,25 +96,27 @@ export const TV_PAGE_TRANSITIONS = ['fade', 'none'] as const;
 export type TvPageTransition = (typeof TV_PAGE_TRANSITIONS)[number];
 export const TV_PAGE_TRANSITION_DEFAULT: TvPageTransition = 'fade';
 
-function parseTvPageDurationNumber(value: unknown): number {
-  if (typeof value === 'number') return value;
-  if (typeof value === 'string' && value.trim() !== '') return Number(value);
-  return Number.NaN;
-}
-
-function closestTvPageDurationSeconds(requested: number): TvPageDurationSeconds {
-  return TV_PAGE_DURATION_OPTIONS.reduce((closest, option) =>
-    Math.abs(option - requested) < Math.abs(closest - requested) ? option : closest
-  , TV_PAGE_DURATION_DEFAULT);
-}
-
 export function normalizeTvPageDurationSeconds(value: unknown, legacySpeed?: unknown): TvPageDurationSeconds {
-  const explicit = parseTvPageDurationNumber(value);
-  if (Number.isFinite(explicit)) return closestTvPageDurationSeconds(explicit);
+  function parseDurationNumber(input: unknown): number {
+    if (typeof input === 'number') return input;
+    if (typeof input === 'string' && input.trim() !== '') return Number(input);
+    return Number.NaN;
+  }
 
-  const legacy = parseTvPageDurationNumber(legacySpeed);
-  const requested = Number.isFinite(legacy) ? 5 + legacy / 10 : TV_PAGE_DURATION_DEFAULT;
-  return closestTvPageDurationSeconds(requested);
+  const explicit = parseDurationNumber(value);
+  let requested = explicit;
+
+  if (!Number.isFinite(requested)) {
+    const legacy = parseDurationNumber(legacySpeed);
+    requested = TV_PAGE_DURATION_DEFAULT;
+    if (Number.isFinite(legacy)) requested = 5 + legacy / 10;
+  }
+
+  return TV_PAGE_DURATION_OPTIONS.reduce(function (closest, option) {
+    const closestDistance = Math.abs(closest - requested);
+    const optionDistance = Math.abs(option - requested);
+    return optionDistance < closestDistance ? option : closest;
+  }, TV_PAGE_DURATION_DEFAULT);
 }
 
 export function normalizeTvPageTransition(value: unknown): TvPageTransition {
