@@ -1,6 +1,70 @@
+import type { ScreenConfig } from './types';
+
 export type DisplayCategory<TProduct = unknown> = {
+  id?: string;
   products?: TProduct[];
 };
+
+export const MAX_DISPLAYS = 4;
+export const MIN_DISPLAYS = 1;
+
+export function clampDisplayCount(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.max(MIN_DISPLAYS, Math.min(MAX_DISPLAYS, Math.floor(numeric)));
+}
+
+export function normalizeScreens(screens: unknown, _displayCount: number = 1): ScreenConfig[] {
+  const defaults: ScreenConfig[] = Array.from({ length: MAX_DISPLAYS }, (_, index) => ({
+    id: `screen-${index + 1}`,
+    name: `Display ${index + 1}`,
+    categoryIds: [],
+  }));
+  const input = Array.isArray(screens) ? screens : [];
+  return defaults.map((defaultScreen) => {
+    const existing = input.find((screen) => screen && screen.id === defaultScreen.id);
+    const categoryIds = Array.isArray(existing?.categoryIds)
+      ? existing.categoryIds.filter((id): id is string => typeof id === 'string')
+      : [];
+    const name = typeof existing?.name === 'string' && existing.name.trim() !== ''
+      ? existing.name.trim()
+      : defaultScreen.name;
+    const layout = existing?.layout && typeof existing.layout === 'string'
+      ? existing.layout
+      : undefined;
+    return {
+      id: defaultScreen.id,
+      name,
+      categoryIds,
+      layout,
+    };
+  });
+}
+
+export function getScreenConfig(
+  screens: readonly ScreenConfig[] | null | undefined,
+  displayNumber: number,
+): ScreenConfig | undefined {
+  const index = Math.max(1, Math.floor(displayNumber)) - 1;
+  return (screens || [])[index];
+}
+
+export function selectCategoriesForDisplay<T extends DisplayCategory>(
+  allCategories: readonly T[] | null | undefined,
+  screens: readonly ScreenConfig[] | null | undefined,
+  displayNumber: number,
+  displayTotal: number,
+): T[] {
+  const categories = allCategories || [];
+  const screen = getScreenConfig(screens, displayNumber);
+  if (screen && screen.categoryIds.length > 0) {
+    const categoryIds = screen.categoryIds;
+    return categoryIds
+      .map((id) => categories.find((category) => category.id === id))
+      .filter((category): category is T => !!category);
+  }
+  return allocateCategoriesForDisplay(categories, displayNumber, displayTotal);
+}
 
 /**
  * Allocates menu categories to one TV in a multi-display wall.

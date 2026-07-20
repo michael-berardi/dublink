@@ -65,16 +65,18 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('mobilePreviewKeydown');
   });
 
-  it('collapses secondary phone controls into a six-button remote', () => {
+  it('collapses secondary phone controls into a seven-button remote', () => {
     expect(html).toContain('mobile-control-hub');
     expect(html).toContain("openControlSection('brand')");
     expect(html).toContain("openControlSection('design')");
     expect(html).toContain("openControlSection('promos')");
     expect(html).toContain("openControlSection('inventory')");
     expect(html).toContain("openControlSection('legal')");
+    expect(html).toContain("openControlSection('screens')");
     expect(html).toContain("openControlSection('import')");
     expect(html).toContain('id="section-import"');
     expect(html).toContain('id="section-design"');
+    expect(html).toContain('id="section-screens"');
     expect(html).toContain('id="section-inventory"');
     expect(html).toContain('closeControlSection');
     expect(html).toContain('body:not(.section-open){height:100dvh;overflow:hidden;}');
@@ -182,12 +184,16 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain('Reconnect before applying reference style');
   });
 
-  it('generates per-screen layout override URLs', () => {
+  it('generates per-screen persisted layout and category URLs', () => {
     expect(html).toContain('SCREEN_LAYOUT_OPTIONS');
-    expect(html).toContain('setScreenLayout');
     expect(html).toContain('tvUrlForScreen');
+    expect(html).toContain('renderScreenEditor');
+    expect(html).toContain('updateScreenField');
+    expect(html).toContain('updateScreenCategories');
+    expect(html).toContain('setScreenDisplayCount');
     expect(html).toContain('&layout=');
     expect(html).toContain('screen-layout-select');
+    expect(html).toContain('screenEditorList');
   });
 });
 

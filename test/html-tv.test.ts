@@ -596,8 +596,11 @@ describe('tvPage', () => {
 
   it('injects the tested multi-display allocator into the TV runtime', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, showImages: true } });
+    expect(page).toContain('var MIN_DISPLAYS = 1');
+    expect(page).toContain('var MAX_DISPLAYS = 4');
     expect(page).toContain('var allocateCategoriesForDisplay = function allocateCategoriesForDisplay');
-    expect(page).toContain('return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL)');
+    expect(page).toContain('var selectCategoriesForDisplay = function selectCategoriesForDisplay');
+    expect(page).toContain('return selectCategoriesForDisplay(allCats, normalizeScreens(config && config.screens, DISPLAY_TOTAL), DISPLAY_NUM, DISPLAY_TOTAL)');
   });
 
   it('falls back to the first planned page when cycle state is stale', () => {

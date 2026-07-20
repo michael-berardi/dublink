@@ -538,6 +538,25 @@ describe('session ownership isolation', () => {
     const sessionId = `MULTI-TV-${unique()}`;
     const cookie = await signupCookie();
     expect((await authedFetch(`/api/claim/${sessionId}`, cookie, { method: 'POST' })).status).toBe(200);
+    const csvImport = await authedFetch(`/api/import/csv/${sessionId}`, cookie, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv' },
+      body: 'name,price,category\nFlower Product,20,Flower\nPre-Roll Product,12,Pre-Rolls\nVape Product,30,Vapes',
+    });
+    expect(csvImport.status).toBe(200);
+    const importedConfig = (await (await SELF.fetch(`${BASE}/api/widget/${sessionId}`)).json()) as {
+      categories: Array<{ id: string; name: string }>;
+    };
+    const flowerId = importedConfig.categories.find((category) => category.name === 'Flower')?.id;
+    const preRollId = importedConfig.categories.find((category) => category.name === 'Pre-Rolls')?.id;
+    const vapeId = importedConfig.categories.find((category) => category.name === 'Vapes')?.id;
+    if (!flowerId || !preRollId || !vapeId) throw new Error('Expected imported category IDs');
+    const screens = [
+      { id: 'screen-1', name: 'Flower + Pre-Rolls', categoryIds: [flowerId, preRollId], layout: 'grid' },
+      { id: 'screen-2', name: 'Vapes', categoryIds: [vapeId], layout: 'list' },
+      { id: 'screen-3', name: 'Display 3', categoryIds: [] },
+      { id: 'screen-4', name: 'Display 4', categoryIds: [] },
+    ];
 
     const [tvOneResponse, tvTwoResponse, phoneResponse] = await Promise.all([
       SELF.fetch(`${BASE}/ws/${sessionId}?role=tv`, { headers: { Upgrade: 'websocket' } }),
@@ -554,8 +573,24 @@ describe('session ownership isolation', () => {
 
     const waitForLargeGrid = (socket: WebSocket) => new Promise<void>((resolve) => {
       socket.addEventListener('message', (event) => {
-        const message = JSON.parse(String(event.data)) as { type?: string; payload?: { fontSize?: string; fontScale?: number; layout?: string; pageDurationSeconds?: number; pageTransition?: string } };
-        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none') resolve();
+        const message = JSON.parse(String(event.data)) as {
+          type?: string;
+          payload?: {
+            fontSize?: string;
+            fontScale?: number;
+            layout?: string;
+            pageDurationSeconds?: number;
+            pageTransition?: string;
+            displayCount?: number;
+            screens?: Array<{ name?: string; categoryIds?: string[]; layout?: string }>;
+          };
+        };
+        const screenOne = message.payload?.screens?.[0];
+        const hasScreenConfig = message.payload?.displayCount === 2
+          && screenOne?.name === 'Flower + Pre-Rolls'
+          && screenOne.categoryIds?.length === 2
+          && screenOne.layout === 'grid';
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none' && hasScreenConfig) resolve();
       });
     });
     const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
@@ -565,7 +600,78 @@ describe('session ownership isolation', () => {
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontScale: 135 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageDurationSeconds: 15 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageTransition: 'none' } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { displayCount: 2, screens } }));
     await bothTVsUpdated;
+    const persistedResponse = await authedFetch(`/api/export/${sessionId}`, cookie);
+    expect(persistedResponse.status).toBe(200);
+    const persisted = (await persistedResponse.json()) as {
+      displayCount: number;
+      screens: Array<{ id: string; name: string; categoryIds: string[]; layout?: string }>;
+    };
+    expect(persisted.displayCount).toBe(2);
+    expect(persisted.screens.slice(0, 2)).toEqual([
+      { id: 'screen-1', name: 'Flower + Pre-Rolls', categoryIds: [flowerId, preRollId], layout: 'grid' },
+      { id: 'screen-2', name: 'Vapes', categoryIds: [vapeId], layout: 'list' },
+    ]);
+
+    const waitForSparseScreens = new Promise<void>((resolve) => {
+      tvOne.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as {
+          type?: string;
+          payload?: {
+            displayCount?: number;
+            screens?: Array<{ id?: string; name?: string; categoryIds?: string[]; layout?: string }>;
+          };
+        };
+        const screenOne = message.payload?.screens?.[0];
+        const screenTwo = message.payload?.screens?.[1];
+        if (
+          message.type === 'config'
+          && message.payload?.displayCount === 2
+          && screenOne?.id === 'screen-1'
+          && screenOne.name === 'Display 1'
+          && screenTwo?.id === 'screen-2'
+          && screenTwo.name === 'Sparse Vapes'
+          && screenTwo.layout === 'list'
+        ) resolve();
+      });
+    });
+    phone.send(JSON.stringify({
+      type: 'config_update',
+      payload: {
+        screens: [{ id: 'screen-2', name: 'Sparse Vapes', categoryIds: [vapeId], layout: 'list' }],
+      },
+    }));
+    await waitForSparseScreens;
+    const sparsePersisted = (await (await authedFetch(`/api/export/${sessionId}`, cookie)).json()) as {
+      displayCount: number;
+      screens: Array<{ id: string; name: string; categoryIds: string[]; layout?: string }>;
+    };
+    expect(sparsePersisted.screens.slice(0, 2)).toEqual([
+      { id: 'screen-1', name: 'Display 1', categoryIds: [] },
+      { id: 'screen-2', name: 'Sparse Vapes', categoryIds: [vapeId], layout: 'list' },
+    ]);
+
+    const waitForOrderedValidation = new Promise<void>((resolve) => {
+      tvOne.addEventListener('message', (event) => {
+        const message = JSON.parse(String(event.data)) as {
+          type?: string;
+          payload?: { displayCount?: number; pageTransition?: string };
+        };
+        if (
+          message.type === 'config'
+          && message.payload?.displayCount === 2
+          && message.payload.pageTransition === 'fade'
+        ) resolve();
+      });
+    });
+    phone.send(JSON.stringify({ type: 'config_update', payload: { displayCount: 2.5 } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { pageTransition: 'fade' } }));
+    await waitForOrderedValidation;
+    const validatedPersisted = (await (await authedFetch(`/api/export/${sessionId}`, cookie)).json()) as {
+      displayCount: number;
+    };
+    expect(validatedPersisted.displayCount).toBe(2);
 
     tvOne.close(1000, 'test complete');
     tvTwo.close(1000, 'test complete');

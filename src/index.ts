@@ -1,5 +1,5 @@
 import { Env as SessionEnv, SessionDurableObject, SESSION_ID_REGEX } from './session';
-import { AccountDurableObject, createAccount, authenticate, signToken, verifyToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, updateAccountStripe, addSessionToAccount, generateSessionId, constantTimeEqual, ensureDemoAccount, type DurableObjectBinding } from './auth';
+import { AccountDurableObject, createAccount, authenticate, signToken, verifyToken, setCookie, clearCookie, getCookieValue, isSubscriptionActive, getAccount, updateAccountStripe, addSessionToAccount, generateSessionId, constantTimeEqual, ensureDemoAccount, ensureBusinessAccount, resolveBusinessAccount, createBusinessMenu, createBusinessInvitation, revokeBusinessInvitation, listPendingInvitations, acceptBusinessInvitation, sendBusinessInviteEmail, isBusinessOwner, parseInviteToken, type DurableObjectBinding, type Account } from './auth';
 import { StatsDurableObject, claimStripeEvent, completeStripeEvent, releaseStripeEvent, type StatsEvent, type StatsSnapshot } from './stats';
 import { DomainDurableObject } from './domains';
 import { buildDubHavenAuthUrl, DUBHAVEN_STATE_COOKIE, handleDubHavenCallback, isDubHavenStartConfigured } from './dubhaven-auth';
@@ -14,7 +14,7 @@ import { aboutPage } from './html-about';
 import { contactPage } from './html-contact';
 import { privacyPage } from './html-privacy';
 import { termsPage } from './html-terms';
-import { authPage } from './html-auth';
+import { authPage, inviteAcceptPage } from './html-auth';
 import { demoLoginPage } from './html-demo-login';
 import { statusPage } from './html-status';
 import { adminPage } from './html-admin';
@@ -481,6 +481,80 @@ async function requireAuth(request: Request, env: Env): Promise<{ accountId: str
   return { accountId: account.id, email: account.email };
 }
 
+async function requireAuthAndOwner(
+  request: Request,
+  env: Env
+): Promise<{ actor: Account; owner: Account } | null> {
+  const auth = await requireAuth(request, env);
+  if (!auth) return null;
+  let actor = await getAccount(env, auth.accountId);
+  if (!actor) return null;
+  actor = await ensureBusinessAccount(env, actor);
+  const owner = await resolveBusinessAccount(env, actor);
+  if (!owner) return actor.businessId ? null : { actor, owner: actor };
+  if (owner.id === actor.id) return { actor, owner };
+  const isAcceptedManager = (owner.businessMembers || []).some(
+    (member) => member.accountId === actor.id && member.role === 'manager'
+  );
+  return isAcceptedManager ? { actor, owner } : null;
+}
+
+async function ensureOwnerBusinessIdentity(
+  env: Env,
+  account: Account,
+  sessionId: string
+): Promise<Account | null> {
+  if (account.businessId) return account;
+  let businessName = account.email.split('@')[0] || 'My Business';
+  try {
+    const session = env.SESSION.get(env.SESSION.idFromName(sessionId));
+    const cfgRes = await session.fetch(new Request('https://internal/tv-config'));
+    if (cfgRes.ok) {
+      const cfg = (await cfgRes.json()) as { dispensaryName?: string };
+      if (cfg.dispensaryName?.trim()) businessName = cfg.dispensaryName.trim().slice(0, 100);
+    }
+  } catch {
+    // The session owner check below remains authoritative; a default name is sufficient here.
+  }
+  const accountStub = env.ACCOUNTS.get(env.ACCOUNTS.idFromName(account.id));
+  const businessRes = await accountStub.fetch(
+    new Request('https://internal/business', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessId: account.id, businessName }),
+    })
+  );
+  if (!businessRes.ok) return null;
+  const refreshed = await getAccount(env, account.id);
+  return refreshed?.businessId === account.id ? refreshed : null;
+}
+
+async function persistBusinessSession(env: Env, owner: Account, sessionId: string): Promise<void> {
+  await addSessionToAccount(env, owner.id, sessionId);
+  if (!owner.businessMenuSessionId) {
+    const accountStub = env.ACCOUNTS.get(env.ACCOUNTS.idFromName(owner.id));
+    const businessRes = await accountStub.fetch(
+      new Request('https://internal/business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessMenuSessionId: sessionId }),
+      })
+    );
+    if (!businessRes.ok) {
+      throw new Error(`Failed to persist canonical business menu (${businessRes.status})`);
+    }
+  }
+  const refreshed = await getAccount(env, owner.id);
+  if (
+    !refreshed
+    || refreshed.businessId !== owner.id
+    || !refreshed.sessions.includes(sessionId)
+    || !refreshed.businessMenuSessionId
+  ) {
+    throw new Error('Failed to verify business session persistence');
+  }
+}
+
 function appUrl(env: Env, request: Request): string {
   // On localhost the hardcoded APP_URL from wrangler.toml points at the
   // production domain, which breaks cookie-scoped fetches and redirects
@@ -579,9 +653,12 @@ function safeRedirectUrl(env: Env, request: Request, next: string, fallback: str
 // Auto-create a starter display for an account with zero sessions. Seeds the
 // new Session Durable Object with the starter template, claims ownership for
 // the account, and registers the session on the account. Returns the new sessionId.
-async function createStarterDisplay(env: Env, accountId: string): Promise<string> {
+async function createStarterDisplay(env: Env, accountId: string, businessName?: string): Promise<string> {
   const sessionId = generateSessionId();
   const starter = createStarterConfig();
+  if (businessName) {
+    starter.dispensaryName = businessName.slice(0, 100);
+  }
   const id = env.SESSION.idFromName(sessionId);
   const session = env.SESSION.get(id);
   const importRes = await session.fetch(new Request('https://internal/import', {
@@ -645,6 +722,28 @@ function escapeHtml(str: unknown): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+async function parseBodyFields(request: Request): Promise<Record<string, string>> {
+  const contentType = request.headers.get('Content-Type') || '';
+  if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
+    const form = await request.formData();
+    const out: Record<string, string> = {};
+    for (const [key, value] of form.entries()) {
+      if (typeof value === 'string') out[key] = value;
+    }
+    return out;
+  }
+  try {
+    return (await request.json()) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function isHtmlFormRequest(request: Request): boolean {
+  const contentType = request.headers.get('Content-Type') || '';
+  return contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data');
 }
 
 // Render a print-optimized standalone menu page for an operator's own session.
@@ -997,18 +1096,44 @@ export default {
       return htmlResponse(authPage(origin, 'signup', undefined, undefined, dubHavenEnabled, next));
     }
     if (path === '/account' && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return redirectResponse(`${origin}/login`);
-      const account = await getAccount(env, auth.accountId);
-      if (!account) return redirectResponse(`${origin}/login`);
-      // Frictionless onboarding: active/trial accounts with no displays get an
-      // auto-created starter display and land directly in the editor.
-      if (isSubscriptionActive(account) && (!account.sessions || account.sessions.length === 0)) {
-        const newId = await createStarterDisplay(env, auth.accountId);
-        await recordEvent(env, { type: 'session.created', accountId: auth.accountId, payload: { sessionId: newId, starter: true } });
-        return redirectResponse(`${origin}/config/${newId}`);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) {
+        const auth = await requireAuth(request, env);
+        return auth
+          ? errorResponse('Business access is no longer valid', 403)
+          : redirectResponse(`${origin}/login`);
       }
-      return htmlResponse(authPage(origin, 'account', account));
+      const { actor: account, owner: businessAccount } = actorAndOwner;
+      const manage = url.searchParams.get('manage') === '1';
+      const accountError = url.searchParams.get('error') || undefined;
+      if (
+        !manage
+        && !accountError
+        && businessAccount.businessName
+        && businessAccount.businessMenuSessionId
+        && isSubscriptionActive(businessAccount)
+      ) {
+        return redirectResponse(`${origin}/config/${businessAccount.businessMenuSessionId}`);
+      }
+      const isOwner = account.id === businessAccount.id;
+      const sessions = businessAccount.sessions || [];
+      const members = businessAccount.businessMembers || [];
+      const pendingInvites = listPendingInvitations(businessAccount);
+      const accountView = isOwner ? account : {
+        ...account,
+        businessName: businessAccount.businessName,
+        businessMenuSessionId: businessAccount.businessMenuSessionId,
+        subscriptionStatus: businessAccount.subscriptionStatus,
+        trialEndsAt: businessAccount.trialEndsAt,
+      };
+      return htmlResponse(
+        authPage(origin, 'account', accountView, accountError, false, undefined, {
+          sessions,
+          members,
+          pendingInvites,
+          isOwner,
+        })
+      );
     }
 
     if (path === '/auth/dubhaven' && request.method === 'GET') {
@@ -1141,6 +1266,203 @@ export default {
       return redirectResponse(portal.url || `${origin}/account`);
     }
 
+    // Business onboarding: name the business and seed a single canonical menu.
+    if (path === '/api/business/onboarding' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      if (!isSubscriptionActive(account)) {
+        return redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent('An active subscription is required')}`);
+      }
+      const form = await request.formData();
+      const businessName = String(form.get('businessName') || '').trim();
+      if (!businessName || businessName.length > 100) {
+        return redirectResponse(`${origin}/account?manage=1&error=invalid-business-name`);
+      }
+      const result = await createBusinessMenu(env, account, businessName);
+      if ('error' in result) {
+        return redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent(result.error)}`);
+      }
+      return redirectResponse(`${origin}/config/${result.sessionId}`);
+    }
+
+    if (path === '/api/business/name' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      if (!isBusinessOwner(account)) {
+        return jsonResponse({ error: 'Only business owners can update the business name' }, 403);
+      }
+      const htmlForm = isHtmlFormRequest(request);
+      const body = await parseBodyFields(request);
+      const businessName = String(body.businessName || '').trim();
+      if (!businessName || businessName.length > 100) {
+        return htmlForm
+          ? redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent('Invalid business name')}`)
+          : jsonResponse({ error: 'Invalid business name' }, 400);
+      }
+      const stub = env.ACCOUNTS.get(env.ACCOUNTS.idFromName(account.id));
+      const res = await stub.fetch(
+        new Request('https://internal/business', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessName }),
+        })
+      );
+      const data = (await res.json()) as { account?: Account };
+      if (htmlForm) return redirectResponse(`${origin}/account?manage=1`);
+      return jsonResponse({ ok: true, businessName: data.account?.businessName });
+    }
+
+    // Authenticated business summary (owner or manager). Never returns password hashes or token hashes.
+    if (path === '/api/business' && request.method === 'GET') {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { actor: account, owner: businessAccount } = actorAndOwner;
+      const isOwner = account.id === businessAccount.id;
+      const pendingInvites = isOwner
+        ? listPendingInvitations(businessAccount).map((i) => ({
+            id: i.id,
+            email: i.email,
+            role: i.role,
+            createdAt: i.createdAt,
+            expiresAt: i.expiresAt,
+            acceptedAt: i.acceptedAt,
+          }))
+        : [];
+      const active = isSubscriptionActive(businessAccount);
+      return jsonResponse({
+        business: {
+          id: businessAccount.id,
+          businessId: businessAccount.businessId,
+          businessName: businessAccount.businessName || '',
+          menuSessionId: businessAccount.businessMenuSessionId || null,
+          subscriptionStatus: businessAccount.subscriptionStatus,
+          isSubscriptionActive: active,
+          sessions: businessAccount.sessions || [],
+          members: businessAccount.businessMembers || [],
+          pendingInvites,
+        },
+        role: isOwner ? 'owner' : 'manager',
+        isOwner,
+      });
+    }
+
+    if (path === '/api/business/members' && request.method === 'GET') {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      return jsonResponse({ members: actorAndOwner.owner.businessMembers || [] });
+    }
+
+    if (path === '/api/business/invites' && request.method === 'GET') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      if (!isBusinessOwner(account)) {
+        return jsonResponse({ error: 'Only business owners can list invitations' }, 403);
+      }
+      const businessAccount = await resolveBusinessAccount(env, account) || account;
+      return jsonResponse({ invites: listPendingInvitations(businessAccount) });
+    }
+
+    if (path === '/api/business/invite' && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      if (!isBusinessOwner(account)) {
+        return jsonResponse({ error: 'Only business owners can send invitations' }, 403);
+      }
+      const htmlForm = isHtmlFormRequest(request);
+      const body = await parseBodyFields(request);
+      const email = String(body.email || '').trim().toLowerCase();
+      if (!email) {
+        return htmlForm
+          ? redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent('Email is required')}`)
+          : jsonResponse({ error: 'Email is required' }, 400);
+      }
+      const created = await createBusinessInvitation(env, account, email);
+      if ('error' in created) {
+        return htmlForm
+          ? redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent(created.error)}`)
+          : jsonResponse({ error: created.error }, created.status);
+      }
+      const sent = await sendBusinessInviteEmail(env, created.token, account, email, origin);
+      if (!sent) {
+        await revokeBusinessInvitation(env, account, created.invite.id);
+        return htmlForm
+          ? redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent('Failed to send invitation email')}`)
+          : jsonResponse({ error: 'Failed to send invitation email' }, 502);
+      }
+      if (htmlForm) return redirectResponse(`${origin}/account?manage=1`);
+      return jsonResponse({ ok: true, invite: created.invite });
+    }
+
+    if (path.startsWith('/api/business/invites/') && request.method === 'POST') {
+      const auth = await requireAuth(request, env);
+      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const account = await getAccount(env, auth.accountId);
+      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      if (!isBusinessOwner(account)) {
+        return jsonResponse({ error: 'Only business owners can revoke invitations' }, 403);
+      }
+      const segments = path.split('/');
+      const inviteId = segments[4];
+      const action = segments[5];
+      if (!inviteId || action !== 'revoke') return jsonResponse({ error: 'Invalid route' }, 400);
+      const ok = await revokeBusinessInvitation(env, account, inviteId);
+      if (!ok) return jsonResponse({ error: 'Invitation not found' }, 404);
+      return jsonResponse({ ok: true });
+    }
+
+    if (path.startsWith('/invite/')) {
+      const rawToken = path.slice('/invite/'.length).split('/')[0];
+      if (!rawToken) return errorResponse('Invalid invitation', 400);
+      let token: string;
+      try {
+        token = decodeURIComponent(rawToken);
+      } catch {
+        return errorResponse('Invalid invitation token', 400);
+      }
+      const parsed = parseInviteToken(token);
+      if (!parsed) return errorResponse('Invalid invitation token', 400);
+      const ownerAccount = await getAccount(env, parsed.ownerAccountId);
+      if (!ownerAccount) return errorResponse('Invalid invitation', 404);
+      const businessName = ownerAccount.businessName || 'DubMenu';
+
+      if (request.method === 'GET') {
+        const auth = await requireAuth(request, env);
+        if (!auth) {
+          return redirectResponse(`${origin}/login?next=${encodeURIComponent(`/invite/${token}`)}`);
+        }
+        const account = await getAccount(env, auth.accountId);
+        if (!account) return redirectResponse(`${origin}/login?next=${encodeURIComponent(`/invite/${token}`)}`);
+        return htmlResponse(inviteAcceptPage(origin, token, businessName, account.email));
+      }
+
+      if (request.method === 'POST') {
+        const auth = await requireAuth(request, env);
+        if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+        const account = await getAccount(env, auth.accountId);
+        if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+        const result = await acceptBusinessInvitation(env, account, token);
+        if (!result.success) {
+          return htmlResponse(inviteAcceptPage(origin, token, businessName, account.email, result.error || 'Invitation could not be accepted'));
+        }
+        const invitee = await getAccount(env, auth.accountId);
+        const owner = invitee ? await resolveBusinessAccount(env, invitee) : null;
+        if (owner?.businessMenuSessionId) {
+          return redirectResponse(safeRedirectUrl(env, request, `${origin}/config/${owner.businessMenuSessionId}`, `${origin}/account`));
+        }
+        return redirectResponse(`${origin}/account?manage=1`);
+      }
+
+      return jsonResponse({ error: 'Method not allowed' }, 405);
+    }
+
     if (path === '/api/stripe/webhook' && request.method === 'POST') {
       if (!env.STRIPE_WEBHOOK_SECRET || !env.STRIPE_API_KEY) {
         return jsonResponse({ error: 'Webhook not configured' }, 500);
@@ -1204,22 +1526,33 @@ export default {
     }
 
     if (path === '/api/sessions' && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      return jsonResponse({ sessions: account?.sessions || [] });
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { actor, owner } = actorAndOwner;
+      return jsonResponse({
+        sessions: owner.sessions || [],
+        business: {
+          name: owner.businessName || '',
+          menuSessionId: owner.businessMenuSessionId || null,
+        },
+        role: actor.id === owner.id ? 'owner' : 'manager',
+      });
     }
 
     if (path.startsWith('/api/export/') && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { actor, owner } = actorAndOwner;
       const sessionId = path.split('/')[3];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
+      if (sessionId !== owner.businessMenuSessionId && !owner.sessions.includes(sessionId)) {
+        return jsonResponse({ error: 'Session owned by another account' }, 403);
+      }
       const id = env.SESSION.idFromName(sessionId);
       const session = env.SESSION.get(id);
       const res = await session.fetch(new Request('https://internal/config', {
         method: 'GET',
-        headers: { 'X-Account-Id': auth.accountId },
+        headers: { 'X-Account-Id': actor.id },
       }));
       if (res.status === 403) return jsonResponse({ error: 'Session owned by another account' }, 403);
       if (!res.ok) return jsonResponse({ error: 'Failed to export config' }, 500);
@@ -1234,42 +1567,50 @@ export default {
       });
     }
 
-    // GDPR/CCPA data portability: bundle the entire account record (minus the
-    // password hash), every owned session's full config, and the list of R2
-    // upload keys under the account prefix into a downloadable JSON file.
+    // GDPR/CCPA data portability: bundle the account record (minus the
+    // password hash and token hashes), every owned session's full config, and
+    // the list of R2 upload keys under the account prefix into a downloadable
+    // JSON file. Managers receive a personal export of their own account only.
     if (path === '/api/account/export' && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account) return jsonResponse({ error: 'Account not found' }, 404);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { actor, owner } = actorAndOwner;
+      const isOwner = actor.id === owner.id;
+      const exportAccount = isOwner ? owner : actor;
 
-      const { passwordHash: _ph, passwordSalt: _ps, ...safeAccount } = account;
+      const { passwordHash: _ph, passwordSalt: _ps, businessInvitations, ...accountRest } = exportAccount;
+      const safeAccount = {
+        ...accountRest,
+        businessInvitations: (businessInvitations || []).map(({ tokenHash: _tokenHash, ...inv }) => inv),
+      };
 
       const sessions: Record<string, unknown> = {};
-      for (const sid of account.sessions) {
-        if (!SESSION_ID_REGEX.test(sid)) continue;
-        try {
-          const id = env.SESSION.idFromName(sid);
-          const session = env.SESSION.get(id);
-          const res = await session.fetch(new Request('https://internal/config', {
-            method: 'GET',
-            headers: { 'X-Account-Id': auth.accountId },
-          }));
-          if (res.ok) {
-            const data: unknown = await res.json();
-            sessions[sid] = isRecord(data) && 'config' in data ? data.config : { error: 'invalid response' };
-          } else {
-            sessions[sid] = { error: `status ${res.status}` };
+      if (isOwner) {
+        for (const sid of exportAccount.sessions) {
+          if (!SESSION_ID_REGEX.test(sid)) continue;
+          try {
+            const id = env.SESSION.idFromName(sid);
+            const session = env.SESSION.get(id);
+            const res = await session.fetch(new Request('https://internal/config', {
+              method: 'GET',
+              headers: { 'X-Account-Id': exportAccount.id },
+            }));
+            if (res.ok) {
+              const data: unknown = await res.json();
+              sessions[sid] = isRecord(data) && 'config' in data ? data.config : { error: 'invalid response' };
+            } else {
+              sessions[sid] = { error: `status ${res.status}` };
+            }
+          } catch {
+            sessions[sid] = { error: 'fetch failed' };
           }
-        } catch {
-          sessions[sid] = { error: 'fetch failed' };
         }
       }
 
       let uploads: string[] = [];
-      if (env.UPLOADS) {
+      if (isOwner && env.UPLOADS) {
         try {
-          const prefix = `${auth.accountId}/`;
+          const prefix = `${exportAccount.id}/`;
           let cursor: string | undefined;
           do {
             const listed = await env.UPLOADS.list({ prefix, cursor, limit: 1000 });
@@ -1288,7 +1629,7 @@ export default {
         uploads,
       };
       const ts = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `dubmenu-account-export-${auth.accountId}-${ts}.json`;
+      const filename = `dubmenu-account-export-${exportAccount.id}-${ts}.json`;
       return new Response(JSON.stringify(bundle, null, 2), {
         headers: {
           'Content-Type': 'application/json',
@@ -1370,15 +1711,32 @@ export default {
     }
 
     if (path.startsWith('/api/claim/') && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      let actor = actorAndOwner.actor;
       const sessionId = path.split('/')[3];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
       const id = env.SESSION.idFromName(sessionId);
       const session = env.SESSION.get(id);
+
+      // A new owner needs a business identity before the Session DO can
+      // authorize the ownership claim. Do not attach the session to the
+      // account until the Session DO confirms that it is unowned.
+      if (!actor.businessId) {
+        const bootstrapped = await ensureOwnerBusinessIdentity(env, actor, sessionId);
+        if (!bootstrapped) {
+          return jsonResponse({ error: 'Failed to initialize business ownership' }, 500);
+        }
+        actor = bootstrapped;
+      }
+
+      if (!isBusinessOwner(actor)) {
+        return jsonResponse({ error: 'Only business owners can claim displays' }, 403);
+      }
+
       const ownerRes = await session.fetch(new Request('https://internal/owner', {
         method: 'POST',
-        headers: { 'X-Account-Id': auth.accountId },
+        headers: { 'X-Account-Id': actor.id },
       }));
       if (ownerRes.status === 403) {
         return jsonResponse({ error: 'Session already owned by another account' }, 403);
@@ -1386,8 +1744,8 @@ export default {
       if (!ownerRes.ok) {
         return jsonResponse({ error: 'Failed to claim session' }, 500);
       }
-      await addSessionToAccount(env, auth.accountId, sessionId);
-      await recordEvent(env, { type: 'session.created', accountId: auth.accountId, payload: { sessionId, claimed: true } });
+      await persistBusinessSession(env, actor, sessionId);
+      await recordEvent(env, { type: 'session.created', accountId: actor.id, payload: { sessionId, claimed: true } });
       return jsonResponse({ ok: true, sessionId });
     }
 
@@ -1438,14 +1796,14 @@ export default {
     }
 
     if (path === '/api/style/analyze' && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       try {
-        const body = await request.json() as { sourceUrl?: string; notes?: string; productCount?: number; currentDisplayCount?: number };
+        const body = (await request.json()) as { sourceUrl?: string; notes?: string; productCount?: number; currentDisplayCount?: number };
         const sourceUrl = typeof body.sourceUrl === 'string' ? body.sourceUrl.trim().slice(0, 300) : '';
         const notes = typeof body.notes === 'string' ? body.notes.trim().slice(0, 500) : '';
         const fetchedText = await fetchReferenceStyleText(sourceUrl);
@@ -1467,24 +1825,27 @@ export default {
     }
 
     if (path === '/api/import/jobs' && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       try {
-        const body = await request.json() as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
+        const body = (await request.json()) as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
         const urlStr = (body.url || '').trim();
         const sessionId = (body.session || '').trim();
         if (!urlStr) return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
         if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
+        if (sessionId !== owner.businessMenuSessionId && !owner.sessions.includes(sessionId)) {
+          return jsonResponse({ error: 'Session must be part of the business' }, 403);
+        }
 
         const displayCount = Math.max(1, Math.min(4, typeof body.displayCount === 'number' ? Math.floor(body.displayCount) : 1));
         const styleNotes = typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '';
         const jobId = crypto.randomUUID();
         const startedAt = new Date().toISOString();
-        await setSessionImportJob(env, sessionId, auth.accountId, importJobStatus({
+        await setSessionImportJob(env, sessionId, owner.id, importJobStatus({
           id: jobId,
           status: 'queued',
           stage: 1,
@@ -1495,7 +1856,7 @@ export default {
           debug: [`${startedAt} Import job queued for ${urlStr.slice(0, 160)}`],
         }));
 
-        await runMenuImportJob({ env, accountId: auth.accountId, sessionId, jobId, urlStr, styleNotes, displayCount, startedAt });
+        await runMenuImportJob({ env, accountId: owner.id, sessionId, jobId, urlStr, styleNotes, displayCount, startedAt });
         return jsonResponse({ success: true, jobId, status: 'queued', statusUrl: `/api/import/jobs/${encodeURIComponent(jobId)}?session=${encodeURIComponent(sessionId)}` }, 202);
       } catch {
         return jsonResponse({ error: 'Invalid import job request' }, 400);
@@ -1503,16 +1864,19 @@ export default {
     }
 
     if (path.startsWith('/api/import/jobs/') && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       const jobId = path.split('/')[4] || '';
       const sessionId = url.searchParams.get('session') || '';
       if (!jobId || !sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid import job request' }, 400);
-      const res = await getSessionImportJob(env, sessionId, auth.accountId);
+      if (sessionId !== owner.businessMenuSessionId && !owner.sessions.includes(sessionId)) {
+        return jsonResponse({ error: 'Session must be part of the business' }, 403);
+      }
+      const res = await getSessionImportJob(env, sessionId, owner.id);
       const data = await res.json() as { job?: ImportJobStatus; error?: string };
       if (!res.ok) return jsonResponse(data, res.status);
       if (!data.job || data.job.id !== jobId) return jsonResponse({ error: 'Import job not found' }, 404);
@@ -1520,33 +1884,36 @@ export default {
     }
 
     if (path === '/api/scrape-dutchie' && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       try {
-        const body = await request.json() as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
+        const body = (await request.json()) as { url?: string; session?: string; styleNotes?: string; displayCount?: number };
         const urlStr = (body.url || '').trim();
         if (!urlStr) return jsonResponse({ error: 'Paste a menu URL, Dutchie link, or store slug first.' }, 400);
 
         const displayCount = Math.max(1, Math.min(4, typeof body.displayCount === 'number' ? Math.floor(body.displayCount) : 1));
         const styleNotes = typeof body.styleNotes === 'string' ? body.styleNotes.trim().slice(0, 500) : '';
-        const built = await buildMenuImport(env, auth.accountId, urlStr, styleNotes, displayCount);
+        const built = await buildMenuImport(env, owner.id, urlStr, styleNotes, displayCount);
         if (body.session && SESSION_ID_REGEX.test(body.session)) {
+          if (body.session !== owner.businessMenuSessionId && !owner.sessions.includes(body.session)) {
+            return jsonResponse({ error: 'Session must be part of the business' }, 403);
+          }
           const id = env.SESSION.idFromName(body.session);
           const session = env.SESSION.get(id);
           const importRes = await session.fetch(new Request('https://internal/import', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
+            headers: { 'Content-Type': 'application/json', 'X-Account-Id': owner.id },
             body: JSON.stringify(built.bundledPayload),
           }));
           if (!importRes.ok) {
             const details = await importRes.text().catch(() => '');
             throw new Error(`Session import failed (${importRes.status})${details ? `: ${details.slice(0, 200)}` : ''}`);
           }
-          await addSessionToAccount(env, auth.accountId, body.session);
+          await addSessionToAccount(env, owner.id, body.session);
         }
         return jsonResponse(built.responseBody);
       } catch (err) {
@@ -1557,14 +1924,24 @@ export default {
     }
 
     if (path.startsWith('/api/import/csv/') && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      let { actor, owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
         return jsonResponse({ error: 'Active subscription required' }, 403);
       }
       const sessionId = path.split('/')[4];
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return jsonResponse({ error: 'Invalid session ID' }, 400);
+      const sessionAlreadyLinked = sessionId === owner.businessMenuSessionId || owner.sessions.includes(sessionId);
+      if (!sessionAlreadyLinked && actor.id !== owner.id) {
+        return jsonResponse({ error: 'Session must be part of the business' }, 403);
+      }
+      if (!owner.businessId) {
+        const bootstrapped = await ensureOwnerBusinessIdentity(env, owner, sessionId);
+        if (!bootstrapped) return jsonResponse({ error: 'Failed to initialize business ownership' }, 500);
+        actor = bootstrapped;
+        owner = bootstrapped;
+      }
       try {
         const body = await request.text();
         const { categories, errors } = importMenuFromCSV(body);
@@ -1575,7 +1952,7 @@ export default {
         const session = env.SESSION.get(id);
         const ownerRes = await session.fetch(new Request('https://internal/owner', {
           method: 'POST',
-          headers: { 'X-Account-Id': auth.accountId },
+          headers: { 'X-Account-Id': actor.id },
         }));
         if (ownerRes.status === 403) {
           return jsonResponse({ error: 'Session owned by another account' }, 403);
@@ -1583,11 +1960,11 @@ export default {
         if (!ownerRes.ok) return jsonResponse({ error: 'Failed to verify session ownership' }, 500);
         const importRes = await session.fetch(new Request('https://internal/import', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Account-Id': auth.accountId },
-          body: JSON.stringify({ categories, dispensaryName: account.email.split('@')[0] }),
+          headers: { 'Content-Type': 'application/json', 'X-Account-Id': owner.id },
+          body: JSON.stringify({ categories, dispensaryName: owner.businessName || owner.email.split('@')[0] }),
         }));
         if (!importRes.ok) return jsonResponse({ error: 'Failed to persist imported menu' }, 500);
-        await addSessionToAccount(env, auth.accountId, sessionId);
+        await persistBusinessSession(env, owner, sessionId);
         return jsonResponse({ ok: true, categoriesImported: categories.length, productsImported: categories.reduce((a, c) => a + c.products.length, 0), errors });
       } catch (err) {
         return jsonResponse({ error: err instanceof Error ? err.message : 'CSV import failed' }, 500);
@@ -1595,19 +1972,17 @@ export default {
     }
 
     if (path === '/api/upload' && request.method === 'POST') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      return handleImageUpload(request, env, auth.accountId);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      return handleImageUpload(request, env, actorAndOwner.owner.id);
     }
 
-    // Image library: list this account's uploads for the frontend gallery.
-    // Authenticated only. Supports optional ?limit and ?cursor pagination; in
-    // the common case the full list (capped at 1000 by listAccountUploads)
-    // is returned with nextCursor: null.
+    // Image library: list this business's uploads for the frontend gallery.
     if (path === '/api/uploads' && request.method === 'GET') {
-      const auth = await requireAuth(request, env);
-      if (!auth) return jsonResponse({ error: 'Unauthorized' }, 401);
-      const uploads = await listAccountUploads(env, auth.accountId);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const ownerId = actorAndOwner.owner.id;
+      const uploads = await listAccountUploads(env, ownerId);
 
       let limit = 50;
       const limitParam = url.searchParams.get('limit');
@@ -1629,11 +2004,7 @@ export default {
         startIndex + slice.length < uploads.length
           ? String(startIndex + slice.length)
           : null;
-      // Expose accountId so the image-library client can resolve upload URLs
-      // even on fresh accounts that have no product/logo already using an
-      // upload URL (resolveAccountId() in html-config.ts would otherwise have
-      // nothing to derive from).
-      return jsonResponse({ uploads: slice, nextCursor, accountId: auth.accountId });
+      return jsonResponse({ uploads: slice, nextCursor, accountId: ownerId });
     }
 
     // Per-upload routes under /api/uploads/[...]. GET is the public image
@@ -1712,10 +2083,24 @@ export default {
           const signInUrl = isDubHavenStartConfigured(env, url.origin) ? `${url.origin}/auth/dubhaven?next=${next}` : `${url.origin}/login?next=${next}`;
           return redirectResponse(signInUrl);
         }
-        const newId = generateSessionId();
-        await addSessionToAccount(env, auth.accountId, newId);
-        await recordEvent(env, { type: 'session.created', accountId: auth.accountId, payload: { sessionId: newId } });
-        return redirectResponse(`${tvUrl(env)}/tv/${newId}`);
+        const actorAndOwner = await requireAuthAndOwner(request, env);
+        if (!actorAndOwner) return redirectResponse(`${origin}/login`);
+        const { actor, owner } = actorAndOwner;
+        if (!owner.businessName) {
+          return redirectResponse(`${origin}/account?manage=1`);
+        }
+        if (owner.businessMenuSessionId) {
+          return redirectResponse(`${origin}/config/${owner.businessMenuSessionId}`);
+        }
+        if (actor.id !== owner.id) {
+          return redirectResponse(`${origin}/account?manage=1`);
+        }
+        const result = await createBusinessMenu(env, owner, owner.businessName || actor.email.split('@')[0]);
+        if ('error' in result) {
+          return redirectResponse(`${origin}/account?manage=1&error=${encodeURIComponent(result.error)}`);
+        }
+        await recordEvent(env, { type: 'session.created', accountId: owner.id, payload: { sessionId: result.sessionId, businessId: owner.id } });
+        return redirectResponse(`${origin}/config/${result.sessionId}`);
       }
 
       // For an existing saved session, preload the persisted public config so the TV
@@ -1741,16 +2126,14 @@ export default {
 
       // Desktop simulator requests the TV page inside an iframe on the same
       // origin. Relax frame-ancestors for that specific embed mode only, and
-      // bypass the age gate when the request is authenticated for the account
-      // that owns this session. Unauthenticated or foreign-session embeds still
-      // render the normal TV page (with age gate) so public TV behavior is
-      // preserved.
+      // bypass the age gate when the request is authenticated for the business
+      // that owns this session.
       if (url.searchParams.get('embed') === '1') {
         let noAgeGate = false;
-        const auth = await requireAuth(request, env);
-        if (auth) {
-          const account = await getAccount(env, auth.accountId);
-          if (account && account.sessions.includes(sessionId)) {
+        const actorAndOwner = await requireAuthAndOwner(request, env);
+        if (actorAndOwner) {
+          const { owner } = actorAndOwner;
+          if (sessionId === owner.businessMenuSessionId || owner.sessions.includes(sessionId)) {
             noAgeGate = true;
           }
         }
@@ -1763,11 +2146,12 @@ export default {
     if (path.startsWith('/print/')) {
       const sessionId = path.split('/')[2] || '';
       if (!sessionId || !SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
-      const auth = await requireAuth(request, env);
-      if (!auth) return errorResponse('Authentication required', 401);
-      const account = await getAccount(env, auth.accountId);
-      if (!account) return errorResponse('Account not found', 404);
-      if (!account.sessions.includes(sessionId)) return errorResponse('Forbidden', 403);
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return errorResponse('Authentication required', 401);
+      const { owner } = actorAndOwner;
+      if (sessionId !== owner.businessMenuSessionId && !owner.sessions.includes(sessionId)) {
+        return errorResponse('Forbidden', 403);
+      }
       const id = env.SESSION.idFromName(sessionId);
       const session = env.SESSION.get(id);
       const res = await session.fetch(new Request('https://internal/widget', { method: 'GET' }));
@@ -1799,8 +2183,8 @@ export default {
     if (path.startsWith('/config/')) {
       const sessionId = path.split('/')[2] || 'default';
       if (!SESSION_ID_REGEX.test(sessionId)) return errorResponse('Invalid session ID format', 400);
-      const auth = await requireAuth(request, env);
-      if (!auth) {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) {
         const next = encodeURIComponent(path);
         if (demoLoginEnabled(env) && url.searchParams.get('demo') === '1') {
           return redirectResponse(`${origin}/demo-login?next=${next}`);
@@ -1808,21 +2192,36 @@ export default {
         const signInUrl = isDubHavenStartConfigured(env, origin) ? `${origin}/auth/dubhaven?next=${next}` : `${origin}/login?next=${next}`;
         return redirectResponse(signInUrl);
       }
-      const account = await getAccount(env, auth.accountId);
-      if (!account || !isSubscriptionActive(account)) {
-        return redirectResponse(`${origin}/account?error=subscription`);
+      let { actor, owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) {
+        return redirectResponse(`${origin}/account?manage=1&error=subscription`);
+      }
+      const sessionAlreadyLinked = sessionId === owner.businessMenuSessionId || owner.sessions.includes(sessionId);
+      if (!sessionAlreadyLinked && actor.id !== owner.id) {
+        return htmlResponse(authPage(origin, 'account', actor, 'This display is not part of your business.'));
+      }
+      if (!owner.businessId) {
+        const bootstrapped = await ensureOwnerBusinessIdentity(env, owner, sessionId);
+        if (!bootstrapped) {
+          return htmlResponse(authPage(origin, 'account', actor, 'Unable to initialize your business.'));
+        }
+        actor = bootstrapped;
+        owner = bootstrapped;
       }
       const id = env.SESSION.idFromName(sessionId);
       const session = env.SESSION.get(id);
       const ownerRes = await session.fetch(new Request('https://internal/owner', {
         method: 'POST',
-        headers: { 'X-Account-Id': auth.accountId },
+        headers: { 'X-Account-Id': actor.id },
       }));
       if (ownerRes.status === 403) {
-        return htmlResponse(authPage(origin, 'account', account, 'This display is managed by another account.'));
+        return htmlResponse(authPage(origin, 'account', actor, 'This display is managed by another account.'));
       }
-      await addSessionToAccount(env, auth.accountId, sessionId);
-      await recordEvent(env, { type: 'pairing.start', accountId: auth.accountId, payload: { sessionId } });
+      if (!ownerRes.ok) {
+        return htmlResponse(authPage(origin, 'account', actor, 'Unable to verify display ownership.'));
+      }
+      await persistBusinessSession(env, owner, sessionId);
+      await recordEvent(env, { type: 'pairing.start', accountId: actor.id, payload: { sessionId, businessId: owner.id } });
       return htmlResponse(configPage(sessionId, url.origin));
     }
     if (path === '/pricing') return htmlResponse(pricingPage(origin));

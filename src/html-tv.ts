@@ -1,5 +1,5 @@
 import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './category-icons';
-import { allocateCategoriesForDisplay } from './multi-display';
+import { allocateCategoriesForDisplay, clampDisplayCount, getScreenConfig, normalizeScreens, selectCategoriesForDisplay } from './multi-display';
 import { buildTvCatalogPagePlan } from './tv-page-plan';
 import { serializeInlineScriptJson } from './inline-script-json';
 import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITION_DEFAULT, normalizeTvPageDurationSeconds, normalizeTvPageTransition } from './types';
@@ -12,12 +12,20 @@ export type TvPageInitialConfig = {
 } & Record<string, unknown>;
 
 export function normalizeTvFontScale(value: unknown, legacyFontSize: unknown = 'medium'): number {
-  const numeric = typeof value === 'number'
-    ? value
-    : typeof value === 'string' && value.trim() !== ''
-      ? Number(value)
-      : Number.NaN;
-  const legacyScale = legacyFontSize === 'small' ? TV_FONT_SCALE_MIN : legacyFontSize === 'large' ? 180 : TV_FONT_SCALE_DEFAULT;
+  let numeric = Number.NaN;
+  if (typeof value === 'number') {
+    numeric = value;
+  } else if (typeof value === 'string' && value.trim() !== '') {
+    numeric = Number(value);
+  }
+
+  let legacyScale = TV_FONT_SCALE_DEFAULT;
+  if (legacyFontSize === 'small') {
+    legacyScale = TV_FONT_SCALE_MIN;
+  } else if (legacyFontSize === 'large') {
+    legacyScale = 180;
+  }
+
   const requested = Number.isFinite(numeric) ? numeric : legacyScale;
   const clamped = Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, requested));
   return Math.round(clamped / 5) * 5;
@@ -1164,7 +1172,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     }
   };
 
+  var MIN_DISPLAYS = 1;
+  var MAX_DISPLAYS = 4;
   var allocateCategoriesForDisplay = ${allocateCategoriesForDisplay.toString()};
+  var clampDisplayCount = ${clampDisplayCount.toString()};
+  var normalizeScreens = ${normalizeScreens.toString()};
+  var getScreenConfig = ${getScreenConfig.toString()};
+  var selectCategoriesForDisplay = ${selectCategoriesForDisplay.toString()};
   ${GET_CATEGORY_TYPE_JS}
   function categoryIconSvg(type){
     return CATEGORY_ICON_SVGS[type] || CATEGORY_ICON_SVGS.generic;
@@ -1186,6 +1200,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   //   6. 'grid' fallback. Color templates never choose layouts.
   function getActiveLayout(cfg){
     if(URL_LAYOUT) return URL_LAYOUT;
+    var screen = getScreenConfig(normalizeScreens(cfg && cfg.screens, DISPLAY_TOTAL), DISPLAY_NUM);
+    if(screen && screen.layout && screen.layout !== 'auto'){
+      var explicit = screen.layout;
+      if(explicit === 'compact' || explicit === 'cards') explicit = 'list';
+      if(ALLOWED_LAYOUTS.indexOf(explicit) !== -1) return explicit;
+    }
     if(cfg && cfg.layout && cfg.layout !== 'auto'){
       var explicit = cfg.layout;
       if(explicit === 'compact' || explicit === 'cards') explicit = 'list';
@@ -1263,7 +1283,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   function getCategoriesForDisplay(allCats){
-    return allocateCategoriesForDisplay(allCats,DISPLAY_NUM,DISPLAY_TOTAL);
+    return selectCategoriesForDisplay(allCats, normalizeScreens(config && config.screens, DISPLAY_TOTAL), DISPLAY_NUM, DISPLAY_TOTAL);
   }
 
 

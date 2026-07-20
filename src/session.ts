@@ -1,5 +1,5 @@
-import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITIONS, normalizeTvPageDurationSeconds, normalizeTvPageTransition, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile } from './types';
-import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, jsonResponse, type Env as AuthEnv } from './auth';
+import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITIONS, normalizeTvPageDurationSeconds, normalizeTvPageTransition, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile, type ScreenConfig } from './types';
+import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, resolveBusinessAccount, jsonResponse, type Account, type Env as AuthEnv } from './auth';
 
 export type Env = AuthEnv;
 
@@ -108,10 +108,14 @@ export class SessionDurableObject implements DurableObject {
 
   private normalizeStoredConfig(config: MenuConfig): MenuConfig {
     const legacyConfig = config as MenuConfig & { autoScrollSpeed?: unknown };
+    const categories = this.sanitizeCategories(config.categories);
+    const displayCount = this.sanitizeDisplayCount(config.displayCount) ?? DEFAULT_CONFIG.displayCount;
     const normalized = {
       ...structuredClone(DEFAULT_CONFIG),
       ...config,
-      categories: config.categories,
+      categories,
+      displayCount,
+      screens: this.sanitizeScreens(config.screens, categories),
       pageDurationSeconds: normalizeTvPageDurationSeconds(config.pageDurationSeconds, legacyConfig.autoScrollSpeed),
       pageTransition: normalizeTvPageTransition(config.pageTransition),
     };
@@ -307,7 +311,8 @@ export class SessionDurableObject implements DurableObject {
       (config.pageDurationSeconds === undefined || this.sanitizePageDurationSeconds(config.pageDurationSeconds) !== undefined) &&
       (config.pageTransition === undefined || this.sanitizePageTransition(config.pageTransition) !== undefined) &&
       ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
-      typeof config.displayCount === 'number'
+      typeof config.displayCount === 'number' &&
+      (config.screens === undefined || Array.isArray(config.screens))
     );
   }
 
@@ -368,7 +373,8 @@ export class SessionDurableObject implements DurableObject {
     if (url.pathname === '/import-job') {
       const accountId = request.headers.get('X-Account-Id') || undefined;
       if (!accountId) return jsonResponse({ error: 'Missing account' }, 400);
-      if (this.ownerAccountId && this.ownerAccountId !== accountId) {
+      const businessOwner = await this.getAuthorizedBusinessOwner(accountId);
+      if (!businessOwner || (this.ownerAccountId && this.ownerAccountId !== businessOwner.id)) {
         return jsonResponse({ error: 'Forbidden' }, 403);
       }
 
@@ -384,7 +390,7 @@ export class SessionDurableObject implements DurableObject {
           return jsonResponse({ error: 'Invalid import job status' }, 400);
         }
         if (!this.ownerAccountId) {
-          this.ownerAccountId = accountId;
+          this.ownerAccountId = businessOwner.id;
           await this.persistConfig();
         }
         await this.state.storage.put('importJob', data);
@@ -402,8 +408,9 @@ export class SessionDurableObject implements DurableObject {
         if (!accountId) {
           return new Response(JSON.stringify({ ok: false, error: 'Owner required' }), { status: 403 });
         }
-        if (this.ownerAccountId && this.ownerAccountId !== accountId) {
-          return new Response(JSON.stringify({ ok: false, error: 'Not owner' }), { status: 403 });
+        const businessOwner = await this.getAuthorizedBusinessOwner(accountId);
+        if (!businessOwner || (this.ownerAccountId && this.ownerAccountId !== businessOwner.id)) {
+          return new Response(JSON.stringify({ ok: false, error: 'Not authorized for this business' }), { status: 403 });
         }
         const data: unknown = await request.json();
         if (!isRecord(data) || !this.isValidImportedCategories(data.categories) || data.categories.length < 1) {
@@ -416,12 +423,9 @@ export class SessionDurableObject implements DurableObject {
           layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
           layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? this.config.layoutMode,
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
-          fontScale: this.sanitizeFontScale(data.fontScale) ?? (
-            data.fontSize === 'small' ? TV_FONT_SCALE_MIN :
-            data.fontSize === 'large' ? 120 :
-            data.fontSize === 'medium' ? 100 :
-            this.config.fontScale
-          ),
+          fontScale: this.sanitizeFontScale(data.fontScale)
+            ?? this.fontScaleForFontSize(data.fontSize)
+            ?? this.config.fontScale,
           theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
           template: this.sanitizeTemplate(data.template) ?? this.config.template,
           primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
@@ -443,16 +447,19 @@ export class SessionDurableObject implements DurableObject {
           tvDemo: typeof data.tvDemo === 'boolean' ? data.tvDemo : this.config.tvDemo,
         } : {};
 
+        const categories = this.sanitizeCategories(data.categories);
+        const displayCount = this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount;
         this.config = {
           ...this.config,
           dispensaryName: typeof data.dispensaryName === 'string' ? this.sanitizeString(data.dispensaryName) : this.config.dispensaryName,
           logo: typeof data.logo === 'string' ? this.sanitizeString(data.logo) : this.config.logo,
-          categories: this.sanitizeCategories(data.categories),
-          displayCount: this.sanitizeDisplayCount(data.displayCount) ?? this.config.displayCount,
+          categories,
+          displayCount,
+          screens: this.sanitizeScreens(this.config.screens, categories),
           ...presentationUpdate,
         };
         if (!this.ownerAccountId) {
-          this.ownerAccountId = accountId;
+          this.ownerAccountId = businessOwner.id;
         }
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
@@ -464,26 +471,31 @@ export class SessionDurableObject implements DurableObject {
       }
     }
 
-    // Internal endpoint to set/check owner (POST only — never expose owner
-    // identity unauthenticated). index.ts uses POST exclusively.
+    // Internal endpoint to set/check the business owner. The authenticated
+    // account may be the owner or an accepted manager; the durable session is
+    // always claimed to the owner account so every business member sees the
+    // same persistent menu.
     if (url.pathname === '/owner' && request.method === 'POST') {
       const accountId = request.headers.get('X-Account-Id') || undefined;
       if (!accountId) return new Response('Missing account', { status: 400 });
-      if (this.ownerAccountId && this.ownerAccountId !== accountId) {
+      const businessOwner = await this.getAuthorizedBusinessOwner(accountId);
+      if (!businessOwner) return new Response('Forbidden', { status: 403 });
+      if (this.ownerAccountId && this.ownerAccountId !== businessOwner.id) {
         return new Response(JSON.stringify({ owned: true }), { status: 403 });
       }
       if (!this.ownerAccountId) {
-        this.ownerAccountId = accountId;
+        this.ownerAccountId = businessOwner.id;
         await this.persistConfig();
       }
       return new Response(JSON.stringify({ ownerAccountId: this.ownerAccountId }));
     }
 
-    // Internal endpoint to export config (owner only)
+    // Internal endpoint to export config (business members only)
     if (url.pathname === '/config' && request.method === 'GET') {
       const accountId = request.headers.get('X-Account-Id') || undefined;
       if (!accountId) return new Response('Missing account', { status: 400 });
-      if (this.ownerAccountId && this.ownerAccountId !== accountId) {
+      const businessOwner = await this.getAuthorizedBusinessOwner(accountId);
+      if (!businessOwner || (this.ownerAccountId && this.ownerAccountId !== businessOwner.id)) {
         return new Response('Forbidden', { status: 403 });
       }
       return jsonResponse({ config: this.config });
@@ -586,7 +598,8 @@ export class SessionDurableObject implements DurableObject {
     // this session before invoking.
     if (url.pathname === '/' && request.method === 'DELETE') {
       const accountId = request.headers.get('X-Account-Id') || undefined;
-      if (!accountId || !this.ownerAccountId || accountId !== this.ownerAccountId) {
+      const businessOwner = accountId ? await this.getAuthorizedBusinessOwner(accountId) : null;
+      if (!accountId || !businessOwner || accountId !== businessOwner.id || !this.ownerAccountId || businessOwner.id !== this.ownerAccountId) {
         return jsonResponse({ error: 'Forbidden' }, 403);
       }
       try {
@@ -804,15 +817,20 @@ export class SessionDurableObject implements DurableObject {
           if (profile) sanitizedPayload.styleProfile = profile;
           else delete sanitizedPayload.styleProfile;
         }
+        if (sanitizedPayload.screens !== undefined) {
+          sanitizedPayload.screens = this.sanitizeScreens(sanitizedPayload.screens, this.config.categories);
+        }
         this.config = { ...this.config, ...sanitizedPayload };
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
       }
+
       case 'config_replace': {
         if (!(await this.requireModifyPermission(conn, server))) return;
         const payload = msg.payload;
         if (!isRecord(payload) || !this.isValidImportedCategories(payload.categories)) return;
+        const categories = this.sanitizeCategories(payload.categories);
         this.config = {
           ...this.config,
           ...payload,
@@ -824,7 +842,8 @@ export class SessionDurableObject implements DurableObject {
               : normalizeTvPageDurationSeconds(undefined, payload.autoScrollSpeed)
           ),
           pageTransition: this.sanitizePageTransition(payload.pageTransition) ?? this.config.pageTransition,
-          categories: this.sanitizeCategories(payload.categories),
+          categories,
+          screens: this.sanitizeScreens(payload.screens ?? this.config.screens, categories),
           styleProfile: this.sanitizeStyleProfile(payload.styleProfile),
         };
         delete (this.config as MenuConfig & { autoScrollSpeed?: unknown }).autoScrollSpeed;
@@ -865,7 +884,7 @@ export class SessionDurableObject implements DurableObject {
         if (typeof updates.order === 'number') {
           cat.order = Math.max(0, Math.floor(updates.order));
         }
-        
+
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -879,6 +898,7 @@ export class SessionDurableObject implements DurableObject {
         this.config.categories = this.config.categories.filter(
           c => c.id !== payload.categoryId
         );
+        this.config.screens = this.sanitizeScreens(this.config.screens, this.config.categories);
         await this.persistConfig();
         this.broadcast({ type: 'config', payload: this.config });
         break;
@@ -1070,18 +1090,18 @@ export class SessionDurableObject implements DurableObject {
 
   private isValidConfigUpdate(payload: unknown): payload is Partial<MenuConfig> {
     if (!isRecord(payload)) return false;
-    
+
     const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
                          'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'pageDurationSeconds', 'pageTransition', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
-                         'displayCount', 'styleProfile'];
-    
+                         'displayCount', 'screens', 'styleProfile'];
+
     for (const key of Object.keys(payload)) {
       if (!allowedKeys.includes(key)) return false;
     }
-    
+
     if (payload.dispensaryName !== undefined && typeof payload.dispensaryName !== 'string') return false;
     if (payload.logo !== undefined && typeof payload.logo !== 'string') return false;
     if (payload.primaryColor !== undefined && (typeof payload.primaryColor !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(payload.primaryColor))) return false;
@@ -1097,6 +1117,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.displayCount !== undefined && this.sanitizeDisplayCount(payload.displayCount) === undefined) return false;
     if (payload.pageDurationSeconds !== undefined && this.sanitizePageDurationSeconds(payload.pageDurationSeconds) === undefined) return false;
     if (payload.pageTransition !== undefined && this.sanitizePageTransition(payload.pageTransition) === undefined) return false;
+    if (payload.screens !== undefined && !Array.isArray(payload.screens)) return false;
     for (const key of ['showStrain', 'showLogo', 'showDescription', 'showImages', 'showBrand', 'showPromos', 'autoScroll', 'ageVerified', 'analyticsEnabled'] as const) {
       if (payload[key] !== undefined && typeof payload[key] !== 'boolean') return false;
     }
@@ -1106,7 +1127,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.disclaimer !== undefined && typeof payload.disclaimer !== 'string') return false;
     if (payload.complianceState !== undefined && payload.complianceState !== '' && this.sanitizeComplianceState(payload.complianceState) === undefined) return false;
     if (payload.styleProfile !== undefined && payload.styleProfile !== null && !this.sanitizeStyleProfile(payload.styleProfile)) return false;
-    
+
     return true;
   }
 
@@ -1337,6 +1358,19 @@ export class SessionDurableObject implements DurableObject {
     return rounded;
   }
 
+  private fontScaleForFontSize(value: unknown): number | undefined {
+    switch (this.sanitizeFontSize(value)) {
+      case 'small':
+        return TV_FONT_SCALE_MIN;
+      case 'medium':
+        return 100;
+      case 'large':
+        return 120;
+      default:
+        return undefined;
+    }
+  }
+
   private sanitizeHexColor(value: unknown): string | undefined {
     if (typeof value !== 'string') return undefined;
     const v = value.trim();
@@ -1353,8 +1387,34 @@ export class SessionDurableObject implements DurableObject {
     return undefined;
   }
 
+  private sanitizeScreens(value: unknown, categories: readonly Category[]): ScreenConfig[] {
+    const requested = Array.isArray(value) ? value : [];
+    const validCategoryIds = new Set(categories.map((category) => category.id));
+    return DEFAULT_CONFIG.screens.map((defaultScreen, index) => {
+      const requestedScreen = requested.find(
+        (candidate) => isRecord(candidate) && candidate.id === defaultScreen.id
+      );
+      const raw = isRecord(requestedScreen) ? requestedScreen : {};
+      const categoryIds = Array.isArray(raw.categoryIds)
+        ? [...new Set(raw.categoryIds.filter((categoryId): categoryId is string =>
+            typeof categoryId === 'string' && validCategoryIds.has(categoryId)
+          ))].slice(0, 20)
+        : [];
+      const name = typeof raw.name === 'string' && raw.name.trim()
+        ? this.sanitizeString(raw.name).slice(0, 60)
+        : defaultScreen.name;
+      const layout = this.sanitizeLayout(raw.layout);
+      return {
+        id: defaultScreen.id || `screen-${index + 1}`,
+        name,
+        categoryIds,
+        ...(layout && layout !== 'auto' ? { layout } : {}),
+      };
+    });
+  }
+
   private sanitizeDisplayCount(value: unknown): number | undefined {
-    return typeof value === 'number' && value >= 1 && value <= 4 ? value : undefined;
+    return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 4 ? value : undefined;
   }
 
   private async requireModifyPermission(conn: WSConnection, server: WebSocket): Promise<boolean> {
@@ -1363,20 +1423,42 @@ export class SessionDurableObject implements DurableObject {
     return false;
   }
 
+  private async getAuthorizedBusinessOwner(accountId: string): Promise<Account | null> {
+    // Direct Durable Object unit tests do not provide the Worker-level ACCOUNTS
+    // binding. Production always does, so retain the original single-owner
+    // behavior only for that isolated storage test harness.
+    if (!this.env.ACCOUNTS) {
+      return {
+        id: accountId,
+        email: 'internal-test@dubmenu.invalid',
+        createdAt: 0,
+        updatedAt: 0,
+        subscriptionStatus: 'active',
+        sessions: [],
+        businessId: accountId,
+      };
+    }
+    const account = await getAccount(this.env, accountId);
+    if (!account) return null;
+    const businessOwner = await resolveBusinessAccount(this.env, account);
+    if (!businessOwner) return null;
+    if (businessOwner.id === account.id) return businessOwner;
+    const isAcceptedMember = (businessOwner.businessMembers || []).some((member) =>
+      member.accountId === account.id && member.role === 'manager'
+    );
+    return isAcceptedMember ? businessOwner : null;
+  }
+
   private async canModifyConfig(conn: WSConnection): Promise<boolean> {
     if (conn.role !== 'phone') return false;
     if (!conn.accountId) return false;
-    // A session must be explicitly claimed by its creator before any
-    // config mutation is allowed. The owner is set via POST /owner
-    // (called by index.ts when a user visits /config/<id> or imports).
-    // We never auto-claim on first write — that created a race where
-    // the first authenticated phone to connect stole any unowned session.
+    // A session is claimed to the business owner account. Accepted managers
+    // resolve to that same owner and may edit the shared menu; billing remains
+    // attached to the owner.
     if (!this.ownerAccountId) return false;
-    if (this.ownerAccountId !== conn.accountId) return false;
-    if (!this.env.ACCOUNTS) return false;
-    const account = await getAccount(this.env, conn.accountId);
-    if (!account) return false;
-    return isSubscriptionActive(account);
+    const businessOwner = await this.getAuthorizedBusinessOwner(conn.accountId);
+    if (!businessOwner || this.ownerAccountId !== businessOwner.id) return false;
+    return isSubscriptionActive(businessOwner);
   }
 
   private broadcast(msg: WSMessage, excludeId?: string) {

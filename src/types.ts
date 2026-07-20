@@ -96,29 +96,36 @@ export const TV_PAGE_TRANSITIONS = ['fade', 'none'] as const;
 export type TvPageTransition = (typeof TV_PAGE_TRANSITIONS)[number];
 export const TV_PAGE_TRANSITION_DEFAULT: TvPageTransition = 'fade';
 
-export function normalizeTvPageDurationSeconds(value: unknown, legacySpeed?: unknown): TvPageDurationSeconds {
-  const explicit = typeof value === 'number'
-    ? value
-    : typeof value === 'string' && value.trim() !== ''
-      ? Number(value)
-      : Number.NaN;
-  const legacy = typeof legacySpeed === 'number'
-    ? legacySpeed
-    : typeof legacySpeed === 'string' && legacySpeed.trim() !== ''
-      ? Number(legacySpeed)
-      : Number.NaN;
-  const requested = Number.isFinite(explicit)
-    ? explicit
-    : Number.isFinite(legacy)
-      ? 5 + legacy / 10
-      : TV_PAGE_DURATION_DEFAULT;
+function parseTvPageDurationNumber(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string' && value.trim() !== '') return Number(value);
+  return Number.NaN;
+}
+
+function closestTvPageDurationSeconds(requested: number): TvPageDurationSeconds {
   return TV_PAGE_DURATION_OPTIONS.reduce((closest, option) =>
     Math.abs(option - requested) < Math.abs(closest - requested) ? option : closest
   , TV_PAGE_DURATION_DEFAULT);
 }
 
+export function normalizeTvPageDurationSeconds(value: unknown, legacySpeed?: unknown): TvPageDurationSeconds {
+  const explicit = parseTvPageDurationNumber(value);
+  if (Number.isFinite(explicit)) return closestTvPageDurationSeconds(explicit);
+
+  const legacy = parseTvPageDurationNumber(legacySpeed);
+  const requested = Number.isFinite(legacy) ? 5 + legacy / 10 : TV_PAGE_DURATION_DEFAULT;
+  return closestTvPageDurationSeconds(requested);
+}
+
 export function normalizeTvPageTransition(value: unknown): TvPageTransition {
   return value === 'none' ? 'none' : TV_PAGE_TRANSITION_DEFAULT;
+}
+
+export interface ScreenConfig {
+  id: string;
+  name: string;
+  categoryIds: string[];
+  layout?: MenuConfig['layout'];
 }
 
 export interface MenuConfig {
@@ -153,6 +160,7 @@ export interface MenuConfig {
   analyticsEnabled: boolean;
   template: 'default' | 'minimal' | 'neon' | 'light' | 'sunset' | 'forest' | 'royal' | 'gold' | 'ocean' | 'crimson' | 'bone' | 'vapor';
   displayCount: number;
+  screens: ScreenConfig[];
   tvDemo?: boolean;
   updatedAt?: string;
   styleProfile?: ReferenceStyleProfile;
@@ -193,6 +201,12 @@ export const DEFAULT_CONFIG: MenuConfig = {
   analyticsEnabled: true,
   template: 'default',
   displayCount: 1,
+  screens: [
+    { id: 'screen-1', name: 'Display 1', categoryIds: [] },
+    { id: 'screen-2', name: 'Display 2', categoryIds: [] },
+    { id: 'screen-3', name: 'Display 3', categoryIds: [] },
+    { id: 'screen-4', name: 'Display 4', categoryIds: [] },
+  ],
   updatedAt: new Date().toISOString(),
   categories: []
 };

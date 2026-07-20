@@ -8,6 +8,11 @@ describe('synchronous import ownership recording', () => {
     const account = {
       id: 'account-1',
       email: 'owner@example.com',
+      businessId: 'account-1',
+      businessName: 'Import Failure Green',
+      businessMembers: [
+        { accountId: 'account-1', email: 'owner@example.com', role: 'owner' as const, joinedAt: Date.now() },
+      ],
       createdAt: Date.now(),
       updatedAt: Date.now(),
       subscriptionStatus: 'active',

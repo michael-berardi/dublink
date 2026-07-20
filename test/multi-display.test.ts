@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { allocateCategoriesForDisplay } from '../src/multi-display';
+import {
+  allocateCategoriesForDisplay,
+  clampDisplayCount,
+  getScreenConfig,
+  normalizeScreens,
+  selectCategoriesForDisplay,
+} from '../src/multi-display';
 
 type Product = { id: string };
 type Category = { id: string; products: Product[] };
@@ -10,6 +16,90 @@ function category(id: string, productCount: number): Category {
     products: Array.from({ length: productCount }, (_, index) => ({ id: `${id}-${index + 1}` })),
   };
 }
+
+describe('screen config helpers', () => {
+  it('clamps display count to 1-4', () => {
+    expect(clampDisplayCount(0)).toBe(1);
+    expect(clampDisplayCount(1)).toBe(1);
+    expect(clampDisplayCount(4)).toBe(4);
+    expect(clampDisplayCount(5)).toBe(4);
+    expect(clampDisplayCount('2')).toBe(2);
+    expect(clampDisplayCount(undefined)).toBe(1);
+  });
+
+  it('normalizes a stable 1-4 screen list with defaults', () => {
+    const screens = normalizeScreens([], 1);
+    expect(screens).toHaveLength(4);
+    expect(screens.map((s) => s.id)).toEqual(['screen-1', 'screen-2', 'screen-3', 'screen-4']);
+    expect(screens.every((s) => Array.isArray(s.categoryIds) && s.categoryIds.length === 0)).toBe(true);
+  });
+
+  it('preserves persisted names, categoryIds, and layouts when normalizing', () => {
+    const screens = normalizeScreens(
+      [
+        { id: 'screen-1', name: 'Menu', categoryIds: ['flower'], layout: 'grid' },
+        { id: 'screen-2', name: 'Edibles', categoryIds: ['edibles'], layout: 'list' },
+      ],
+      2,
+    );
+    expect(screens[0]).toEqual({ id: 'screen-1', name: 'Menu', categoryIds: ['flower'], layout: 'grid' });
+    expect(screens[1]).toEqual({ id: 'screen-2', name: 'Edibles', categoryIds: ['edibles'], layout: 'list' });
+    expect(screens[2].categoryIds).toEqual([]);
+    expect(screens[3].categoryIds).toEqual([]);
+  });
+
+  it('selects explicit categories for a display with every product retained', () => {
+    const categories = [category('flower', 3), category('vapes', 5), category('edibles', 4)];
+    const screens: { id: string; name: string; categoryIds: string[]; layout?: string }[] = [
+      { id: 'screen-1', name: 'Display 1', categoryIds: ['flower', 'vapes'] },
+      { id: 'screen-2', name: 'Display 2', categoryIds: ['edibles'] },
+    ];
+
+    const screen1 = selectCategoriesForDisplay(categories, screens, 1, 2);
+    expect(screen1.map((c) => c.id)).toEqual(['flower', 'vapes']);
+    expect(screen1.flatMap((c) => c.products)).toHaveLength(8);
+    expect(screen1[0].products).toEqual(categories[0].products);
+
+    const screen2 = selectCategoriesForDisplay(categories, screens, 2, 2);
+    expect(screen2.map((c) => c.id)).toEqual(['edibles']);
+    expect(screen2.flatMap((c) => c.products)).toHaveLength(4);
+  });
+
+  it('duplicates a category across multiple displays', () => {
+    const categories = [category('flower', 3), category('vapes', 2)];
+    const screens: { id: string; name: string; categoryIds: string[]; layout?: string }[] = [
+      { id: 'screen-1', name: 'Display 1', categoryIds: ['flower'] },
+      { id: 'screen-2', name: 'Display 2', categoryIds: ['flower'] },
+    ];
+
+    const a = selectCategoriesForDisplay(categories, screens, 1, 2);
+    const b = selectCategoriesForDisplay(categories, screens, 2, 2);
+    expect(a.map((c) => c.id)).toEqual(['flower']);
+    expect(b.map((c) => c.id)).toEqual(['flower']);
+    expect(a[0].products).toEqual(b[0].products);
+  });
+
+  it('falls back to legacy allocation when screen selection is empty', () => {
+    const categories = [category('flower', 4), category('vapes', 4)];
+    const screens = normalizeScreens([], 2);
+
+    const allocations = Array.from({ length: 2 }, (_, i) =>
+      selectCategoriesForDisplay(categories, screens, i + 1, 2),
+    );
+    expect(allocations.map((group) => group.map((c) => c.id))).toEqual([
+      ['flower'],
+      ['vapes'],
+    ]);
+    expect(allocations.flatMap((group) => group.flatMap((c) => c.products))).toHaveLength(8);
+  });
+
+  it('picks screen config by 1-based display number', () => {
+    const screens = normalizeScreens([{ id: 'screen-2', name: 'B', categoryIds: ['b'] }], 2);
+    expect(getScreenConfig(screens, 1)?.id).toBe('screen-1');
+    expect(getScreenConfig(screens, 2)?.name).toBe('B');
+    expect(getScreenConfig(screens, 99)).toBeUndefined();
+  });
+});
 
 describe('allocateCategoriesForDisplay', () => {
   it('keeps all content on a single display', () => {

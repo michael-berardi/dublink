@@ -402,8 +402,15 @@ export function configPage(sessionId: string, origin: string): string {
 </div>
 
 <div class="screenset-info" id="screensetInfo">
-  <h3>Screen Set (<span id="screensetCount">1</span> TV<span id="screensetPlural">s</span>)</h3>
+  <h3>TV Screens</h3>
+  <div class="screenset-controls" style="margin-bottom:0.75rem;">
+    <div class="field" style="margin-bottom:0.5rem;">
+      <label for="screenDisplayCount">Number of displays</label>
+      <div class="sim-segmented" id="screenDisplayCount" role="radiogroup" aria-label="Number of displays"></div>
+    </div>
+  </div>
   <div class="screenset-list" id="screensetList"></div>
+  <div class="helper" style="margin-top:0.5rem;">Choose categories for each display. Empty selection automatically shares the menu across displays. Layout overrides the default for that display only.</div>
 </div>
 
 <div class="mobile-control-hub" aria-label="Remote control sections">
@@ -414,6 +421,7 @@ export function configPage(sessionId: string, origin: string): string {
     <button class="hub-tile" type="button" onclick="openControlSection('promos')"><span class="hub-icon" aria-hidden="true">%</span><span class="hub-label">Promos</span><span class="hub-desc">Banners and specials.</span></button>
     <button class="hub-tile" type="button" onclick="openControlSection('inventory')"><span class="hub-icon" aria-hidden="true">P</span><span class="hub-label">Products</span><span class="hub-desc">Categories and prices.</span></button>
     <button class="hub-tile" type="button" onclick="openControlSection('legal')"><span class="hub-icon" aria-hidden="true">L</span><span class="hub-label">Legal</span><span class="hub-desc">Required copy.</span></button>
+    <button class="hub-tile" type="button" onclick="openControlSection('screens')"><span class="hub-icon" aria-hidden="true">S</span><span class="hub-label">Screens</span><span class="hub-desc">Displays and layouts.</span></button>
     <button class="hub-tile" type="button" onclick="openControlSection('import')"><span class="hub-icon" aria-hidden="true">I</span><span class="hub-label">Import</span><span class="hub-desc">Menus and backups.</span></button>
   </div>
   <button class="mobile-preview-fab remote-preview-button" type="button" onclick="openMobilePreview()" aria-label="Open TV preview">
@@ -602,6 +610,28 @@ export function configPage(sessionId: string, origin: string): string {
   <button class="btn btn-primary" type="button" style="width:100%;" onclick="applyReferenceStyle()">Analyze & Apply Style</button>
   <div id="referenceStyleResult" class="helper" style="margin-top:0.75rem;">No reference style applied yet.</div>
 </div>
+</section>
+
+<section class="control-section" id="section-screens" aria-labelledby="sectionScreensTitle">
+  <div class="section-head"><button class="section-back" type="button" onclick="closeControlSection()" aria-label="Back to controls">‹</button><div><div class="section-kicker">Displays</div><h2 id="sectionScreensTitle">TV Screens</h2></div></div>
+
+<div class="card" id="screensCard">
+  <h2 class="card-title">Screens 1–4</h2>
+  <div class="field" style="margin-bottom:0.75rem;">
+    <label for="screenDisplayCountMobile">Number of displays</label>
+    <div class="sim-segmented" id="screenDisplayCountMobile" role="radiogroup" aria-label="Number of displays"></div>
+  </div>
+  <div id="screenEditorList"></div>
+  <div class="helper" style="margin-top:0.75rem;">Choose categories for each display. Empty selection automatically shares the menu across displays. Layout overrides the default for that display only.</div>
+</div>
+</div>
+
+<div class="card">
+  <h2 class="card-title">Screen URLs</h2>
+  <div class="screenset-list" id="screenUrlList"></div>
+  <div class="helper" style="margin-top:0.75rem;">Open each display on its TV. The URL carries the display index and count.</div>
+</div>
+
 </section>
 
 <section class="control-section" id="section-promos" aria-labelledby="sectionPromosTitle">
@@ -1487,75 +1517,161 @@ var SCREEN_LAYOUT_OPTIONS=[
   ['editorial','Editorial'],
   ['sparse','Single-Product Hero']
 ];
-function getScreenLayoutOverrides(){
-  try{return JSON.parse(localStorage.getItem('dubmenu_screen_layouts')||'{}')||{};}catch(e){return {};}
+function normalizeScreens(screens, displayCount){
+  var count = Math.max(1, Math.min(4, Math.floor(Number(displayCount) || 1)));
+  var defaults = [];
+  for(var i=0;i<4;i++) defaults.push({id:'screen-'+(i+1), name:'Display '+(i+1), categoryIds:[]});
+  var input = Array.isArray(screens) ? screens : [];
+  return defaults.map(function(def){
+    var existing = null;
+    for(var i=0;i<input.length;i++){ if(input[i] && input[i].id === def.id){ existing = input[i]; break; } }
+    var categoryIds = [];
+    if(existing && Array.isArray(existing.categoryIds)){
+      for(var i=0;i<existing.categoryIds.length;i++){
+        if(typeof existing.categoryIds[i] === 'string') categoryIds.push(existing.categoryIds[i]);
+      }
+    }
+    var name = existing && typeof existing.name === 'string' && existing.name.trim() ? existing.name.trim() : def.name;
+    var layout = existing && typeof existing.layout === 'string' && existing.layout ? existing.layout : undefined;
+    return {id:def.id, name:name, categoryIds:categoryIds, layout:layout};
+  });
 }
-function setScreenLayout(sid,value){
-  var overrides=getScreenLayoutOverrides();
-  if(value) overrides[sid]=value; else delete overrides[sid];
-  localStorage.setItem('dubmenu_screen_layouts',JSON.stringify(overrides));
-  updateScreenSet();
-  updateSimulator();
+function getScreenConfig(screens, displayNumber){
+  var index = Math.max(1, Math.floor(displayNumber)) - 1;
+  return (screens || [])[index];
 }
-function tvUrlForScreen(sid,index,total){
-  var url=ORIGIN+'/tv/'+sid+'?display='+(index+1)+'&displays='+total;
-  var layout=getScreenLayoutOverrides()[sid];
-  if(layout) url+='&layout='+encodeURIComponent(layout);
+function getActiveScreens(screens, displayCount){
+  return normalizeScreens(screens, displayCount).slice(0, Math.max(1, Math.min(4, Math.floor(Number(displayCount) || 1))));
+}
+function tvUrlForScreen(screenId, displayIndex, displayCount){
+  var url = ORIGIN + '/tv/' + SESSION_ID + '?display=' + (displayIndex + 1) + '&displays=' + displayCount;
+  var screens = normalizeScreens(config && config.screens, displayCount);
+  var screen = screens[displayIndex];
+  if(screen && screen.layout) url += '&layout=' + encodeURIComponent(screen.layout);
   return url;
 }
-
-// Screen set: detect TVs from cookie
-function updateScreenSet(){
-  var screens=getCookie('dubmenu_screens');
-  if(!screens)return;
-  var screenIds=screens.split(',').filter(function(s){return s;});
-  if(screenIds.length<=1)return;
-  var info=document.getElementById('screensetInfo');
-  info.classList.add('active');
-  document.getElementById('screensetCount').textContent=screenIds.length;
-  document.getElementById('screensetPlural').textContent=screenIds.length>1?'s':'';
-  var list=document.getElementById('screensetList');
-  list.innerHTML='';
-  var overrides=getScreenLayoutOverrides();
-  screenIds.forEach(function(sid,i){
-    var url=tvUrlForScreen(sid,i,screenIds.length);
-    var currentLayout=overrides[sid]||'';
-    var div=document.createElement('div');
-    div.className='screenset-tv';
-    var num=document.createElement('div');
-    num.className='screenset-tv-num';
-    num.textContent=String(i+1);
-    var urlEl=document.createElement('div');
-    urlEl.className='screenset-tv-url';
-    urlEl.textContent=url;
-    var select=document.createElement('select');
-    select.className='screen-layout-select';
-    select.setAttribute('aria-label','Layout for display '+(i+1));
-    SCREEN_LAYOUT_OPTIONS.forEach(function(opt){
-      var option=document.createElement('option');
-      option.value=opt[0];
-      option.textContent=opt[1];
-      option.selected=opt[0]===currentLayout;
-      select.appendChild(option);
-    });
-    select.addEventListener('change',function(){setScreenLayout(sid,select.value);});
-    var button=document.createElement('button');
-    button.className='btn btn-sm btn-secondary';
-    button.type='button';
-    button.textContent='Copy';
-    button.addEventListener('click',function(){navigator.clipboard.writeText(url);showToast('Copied!');});
-    div.appendChild(num);
-    div.appendChild(urlEl);
-    div.appendChild(select);
-    div.appendChild(button);
-    list.appendChild(div);
-  });
-  sendConfig('displayCount',screenIds.length);
+function renderScreenCountControls(containerId, selectedCount){
+  var container = document.getElementById(containerId);
+  if(!container) return;
+  var html = '';
+  for(var i=1;i<=4;i++){
+    html += '<button type="button" role="radio" aria-checked="' + (i===selectedCount?'true':'false') + '" onclick="setScreenDisplayCount(' + i + ')"' + (i===selectedCount?' class="active"':'') + '>' + i + '</button>';
+  }
+  container.innerHTML = html;
 }
-
-function getCookie(n){var m=document.cookie.match(new RegExp('(^| )'+n+'=([^;]+)'));return m?m[2]:null;}
-function setCookie(n,v,days){var d=new Date();d.setTime(d.getTime()+(days||7)*86400000);document.cookie=n+'='+v+';expires='+d.toUTCString()+';path=/';}
-
+function renderScreenEditor(){
+  var displayCount = Math.max(1, Math.min(4, Math.floor(Number(config && config.displayCount) || 1)));
+  renderScreenCountControls('screenDisplayCount', displayCount);
+  renderScreenCountControls('screenDisplayCountMobile', displayCount);
+  var screens = normalizeScreens(config && config.screens, displayCount);
+  var list = document.getElementById('screenEditorList');
+  if(!list) return;
+  var html = '';
+  var categories = (config && config.categories) || [];
+  screens.forEach(function(screen, idx){
+    var active = idx < displayCount;
+    html += '<div class="screen-editor-item" data-screen-id="' + escapeHtml(screen.id) + '" style="background:var(--surface);border:1px solid var(--border);border-radius:0.75rem;padding:0.75rem;margin-bottom:0.75rem;' + (active ? '' : 'opacity:0.55;') + '">';
+    html += '<div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">';
+    html += '<div class="screenset-tv-num" aria-hidden="true">' + (idx + 1) + '</div>';
+    html += '<div style="flex:1;min-width:0;">';
+    html += '<label for="screen-name-' + screen.id + '" class="sr-only" style="position:absolute;"' + (active ? '' : ' aria-hidden="true"') + '>Screen ' + (idx + 1) + ' name</label>';
+    html += '<input type="text" id="screen-name-' + screen.id + '" value="' + escapeHtml(screen.name) + '" data-field="name" data-screen-id="' + screen.id + '" onchange="updateScreenField(this)" placeholder="Display name" style="width:100%;background:var(--surface2);border:none;border-radius:0.5rem;padding:0.5rem;color:var(--text);font-size:0.9375rem;"' + (active ? '' : ' disabled') + '>';
+    html += '</div>';
+    html += '<div style="flex:0 0 auto;min-width:8rem;">';
+    html += '<label for="screen-layout-' + screen.id + '" class="sr-only" style="position:absolute;"' + (active ? '' : ' aria-hidden="true"') + '>Layout for screen ' + (idx + 1) + '</label>';
+    html += '<select id="screen-layout-' + screen.id + '" data-field="layout" data-screen-id="' + screen.id + '" onchange="updateScreenField(this)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:0.5rem;padding:0.5rem;color:var(--text);font-size:0.875rem;"' + (active ? '' : ' disabled') + '>';
+    SCREEN_LAYOUT_OPTIONS.forEach(function(opt){
+      html += '<option value="' + opt[0] + '"' + (screen.layout === opt[0] ? ' selected' : '') + '>' + opt[1] + '</option>';
+    });
+    html += '</select>';
+    html += '</div>';
+    html += '</div>';
+    html += '<fieldset class="screen-categories" style="border:0;padding:0;margin:0;"' + (active ? '' : ' disabled') + '>';
+    html += '<legend class="sr-only" style="position:absolute;">Categories for screen ' + (idx + 1) + '</legend>';
+    html += '<div class="screen-category-grid" style="display:flex;flex-wrap:wrap;gap:0.4rem;">';
+    categories.forEach(function(cat){
+      var checked = screen.categoryIds.indexOf(cat.id) !== -1 ? ' checked' : '';
+      html += '<label style="display:inline-flex;align-items:center;gap:0.35rem;background:var(--surface2);border:1px solid var(--border);border-radius:0.5rem;padding:0.35rem 0.6rem;font-size:0.85rem;cursor:pointer;">';
+      html += '<input type="checkbox" data-category-id="' + escapeHtml(cat.id) + '" data-screen-id="' + screen.id + '" onchange="updateScreenCategories(this)"' + checked + (active ? '' : ' disabled') + '>';
+      html += escapeHtml(cat.name);
+      html += '</label>';
+    });
+    if(!categories.length){
+      html += '<span style="color:var(--muted);font-size:0.85rem;">No categories available.</span>';
+    }
+    html += '</div>';
+    html += '</fieldset>';
+    html += '</div>';
+  });
+  list.innerHTML = html;
+}
+function updateScreenField(el){
+  if(!config) return;
+  var screenId = el.dataset.screenId;
+  var field = el.dataset.field;
+  var screens = normalizeScreens(config.screens, config.displayCount);
+  var screen = screens.find(function(s){ return s.id === screenId; });
+  if(!screen) return;
+  if(field === 'name') screen.name = el.value;
+  if(field === 'layout') screen.layout = el.value || undefined;
+  sendConfig('screens', screens);
+  render();
+}
+function updateScreenCategories(el){
+  if(!config) return;
+  var screenId = el.dataset.screenId;
+  var screens = normalizeScreens(config.screens, config.displayCount);
+  var screen = screens.find(function(s){ return s.id === screenId; });
+  if(!screen) return;
+  var checked = [];
+  var container = el.closest('.screen-editor-item');
+  if(container){
+    container.querySelectorAll('input[type="checkbox"]').forEach(function(cb){
+      if(cb.checked) checked.push(cb.dataset.categoryId);
+    });
+  }
+  screen.categoryIds = checked;
+  sendConfig('screens', screens);
+  render();
+}
+function setScreenDisplayCount(n){
+  n = Math.max(1, Math.min(4, Math.floor(Number(n) || 1)));
+  if(!config) return;
+  var screens = normalizeScreens(config.screens, n);
+  sendConfig('displayCount', n);
+  sendConfig('screens', screens);
+  config.displayCount = n;
+  config.screens = screens;
+  render();
+  updateSimulator();
+}
+function renderScreenUrls(){
+  var displayCount = Math.max(1, Math.min(4, Math.floor(Number(config && config.displayCount) || 1)));
+  var list = document.getElementById('screenUrlList');
+  if(!list) return;
+  var html = '';
+  for(var i=0;i<displayCount;i++){
+    var url = tvUrlForScreen('screen-' + (i + 1), i, displayCount);
+    html += '<div class="screenset-tv">';
+    html += '<div class="screenset-tv-num" aria-hidden="true">' + (i + 1) + '</div>';
+    html += '<div class="screenset-tv-url">' + escapeHtml(url) + '</div>';
+    html += '<button class="btn btn-sm btn-secondary" type="button" onclick="copyScreenUrl(' + i + ')">Copy</button>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+}
+function copyScreenUrl(index){
+  var displayCount = Math.max(1, Math.min(4, Math.floor(Number(config && config.displayCount) || 1)));
+  var url = tvUrlForScreen('screen-' + (index + 1), index, displayCount);
+  try{ navigator.clipboard.writeText(url); showToast('Copied!'); }catch(e){ showToast('Could not copy'); }
+}
+function updateScreenSet(){
+  var displayCount = Math.max(1, Math.min(4, Math.floor(Number(config && config.displayCount) || 1)));
+  var info = document.getElementById('screensetInfo');
+  if(info) info.classList.add('active');
+  renderScreenEditor();
+  renderScreenUrls();
+}
 function normalizeOwnedLogoUrl(value){
   var trimmed=String(value||'').trim();
   if(!trimmed)return '';
@@ -2167,13 +2283,7 @@ var simState={displayCount:1,selectedDisplay:1,themeOverride:'',layoutOverride:'
 var SIM_BASE_W=1920,SIM_BASE_H=1080;
 
 function initSimulator(){
-  // Default display count from config or existing screen-set cookie.
   if(config && typeof config.displayCount==='number') simState.displayCount=Math.max(1,Math.min(4,config.displayCount));
-  var cookie=getCookie('dubmenu_screens');
-  if(cookie){
-    var ids=cookie.split(',').filter(function(s){return s;});
-    if(ids.length) simState.displayCount=Math.max(1,Math.min(4,ids.length));
-  }
   simState.selectedDisplay=1;
   renderSimulatorControls();
   renderSimulatorPreview();
@@ -2182,16 +2292,10 @@ function initSimulator(){
 
 function setSimDisplayCount(n){
   n=Math.max(1,Math.min(4,n));
-  simState.displayCount=n;
   if(simState.selectedDisplay>n) simState.selectedDisplay=n;
+  setScreenDisplayCount(n);
   renderSimulatorControls();
   renderSimulatorPreview();
-  sendConfig('displayCount',n);
-  // Update the screen-set cookie so real TV URLs and the screen-set info use the same count.
-  var ids=[];
-  for(var i=0;i<n;i++) ids.push(SESSION_ID);
-  setCookie('dubmenu_screens',ids.join(','),7);
-  updateScreenSet();
 }
 
 function setSimSelectedDisplay(n){
@@ -2273,8 +2377,11 @@ function updateSimFrame(frameId,displayNum){
   var frame=document.getElementById(frameId);
   if(!frame) return;
   var url='/tv/'+SESSION_ID+'?embed=1&display='+displayNum+'&displays='+simState.displayCount;
+  var screens=normalizeScreens(config && config.screens, simState.displayCount);
+  var screen=screens[displayNum-1];
+  var layout = simState.layoutOverride || (screen && screen.layout) || '';
   if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
-  if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
+  if(layout) url+='&layout='+encodeURIComponent(layout);
   if(config&&/^(small|medium|large)$/.test(config.fontSize||'')) url+='&fontSize='+encodeURIComponent(config.fontSize);
   if(config) url+='&fontScale='+encodeURIComponent(String(resolvedFontScale(config)));
   var full=location.origin+url;
@@ -2314,8 +2421,11 @@ function debounceScaleFrames(){
 function getSimTvUrl(displayNum,embed){
   var url='/tv/'+SESSION_ID+'?display='+displayNum+'&displays='+simState.displayCount;
   if(embed) url+='&embed=1';
+  var screens=normalizeScreens(config && config.screens, simState.displayCount);
+  var screen=screens[displayNum-1];
+  var layout = simState.layoutOverride || (screen && screen.layout) || '';
   if(simState.themeOverride) url+='&theme='+encodeURIComponent(simState.themeOverride);
-  if(simState.layoutOverride) url+='&layout='+encodeURIComponent(simState.layoutOverride);
+  if(layout) url+='&layout='+encodeURIComponent(layout);
   return url;
 }
 
