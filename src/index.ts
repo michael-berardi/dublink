@@ -6,6 +6,7 @@ import { buildDubHavenAuthUrl, DUBHAVEN_STATE_COOKIE, handleDubHavenCallback, is
 import { tvPage, type TvPageInitialConfig } from './html-tv';
 import { menuPage } from './html-menu';
 import { configPage } from './html-config';
+import { displayPairingPage } from './html-display-pairing';
 import { landingPage } from './html-landing';
 import { pseoPage, getAllPSEOSlugs } from './html-pseo';
 import { pricingPage } from './html-pricing';
@@ -1539,6 +1540,66 @@ export default {
       });
     }
 
+    if (path === '/api/pair-display' && request.method === 'POST') {
+      const actorAndOwner = await requireAuthAndOwner(request, env);
+      if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
+      const { actor, owner } = actorAndOwner;
+      if (!isSubscriptionActive(owner)) return jsonResponse({ error: 'Subscription required' }, 403);
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return jsonResponse({ error: 'Invalid display assignment' }, 400);
+      }
+      if (!isRecord(body)) return jsonResponse({ error: 'Invalid display assignment' }, 400);
+      const { scannedSession, canonicalSession, assignmentToken, displayNumber, displayCount } = body;
+      if (
+        typeof scannedSession !== 'string'
+        || typeof canonicalSession !== 'string'
+        || typeof assignmentToken !== 'string'
+        || typeof displayNumber !== 'number'
+        || typeof displayCount !== 'number'
+        || !SESSION_ID_REGEX.test(scannedSession)
+        || !SESSION_ID_REGEX.test(canonicalSession)
+        || !SESSION_ID_REGEX.test(assignmentToken)
+        || scannedSession === canonicalSession
+        || canonicalSession !== owner.businessMenuSessionId
+        || !Number.isInteger(displayNumber)
+        || !Number.isInteger(displayCount)
+        || displayCount < 1
+        || displayCount > 4
+        || displayNumber < 1
+        || displayNumber > displayCount
+      ) {
+        return jsonResponse({ error: 'Invalid display assignment' }, 400);
+      }
+
+      const canonical = env.SESSION.get(env.SESSION.idFromName(canonicalSession));
+      const pairingResponse = await canonical.fetch(new Request('https://internal/pair-display', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Account-Id': actor.id },
+        body: JSON.stringify({ scannedSession, assignmentToken, displayNumber, displayCount }),
+      }));
+      if (!pairingResponse.ok) {
+        let error = 'Unable to connect this TV';
+        try {
+          const pairingError: unknown = await pairingResponse.json();
+          if (isRecord(pairingError) && typeof pairingError.error === 'string') {
+            error = pairingError.error === 'The scanned TV is no longer connected'
+              ? 'Unable to connect this TV'
+              : pairingError.error;
+          }
+        } catch {
+          // Keep the stable public error when the internal response is malformed.
+        }
+        return jsonResponse({ error }, pairingResponse.status);
+      }
+      return jsonResponse({
+        success: true,
+        redirectUrl: `/config/${encodeURIComponent(canonicalSession)}?pairedDisplay=${displayNumber}`,
+      });
+    }
+
     if (path.startsWith('/api/export/') && request.method === 'GET') {
       const actorAndOwner = await requireAuthAndOwner(request, env);
       if (!actorAndOwner) return jsonResponse({ error: 'Unauthorized' }, 401);
@@ -2220,6 +2281,70 @@ export default {
       if (!ownerRes.ok) {
         return htmlResponse(authPage(origin, 'account', actor, 'Unable to verify display ownership.'));
       }
+      if (
+        !sessionAlreadyLinked
+        && owner.businessMenuSessionId
+        && sessionId !== owner.businessMenuSessionId
+      ) {
+        const canonicalSessionId = owner.businessMenuSessionId;
+        const canonicalSession = env.SESSION.get(env.SESSION.idFromName(canonicalSessionId));
+        const displayStatusResponse = await canonicalSession.fetch(new Request('https://internal/display-status', {
+          method: 'GET',
+          headers: { 'X-Account-Id': actor.id },
+        }));
+        if (!displayStatusResponse.ok) {
+          return redirectResponse(`${origin}/config/${encodeURIComponent(canonicalSessionId)}`);
+        }
+        const displayStatus: unknown = await displayStatusResponse.json();
+        const displayCount = isRecord(displayStatus) && typeof displayStatus.displayCount === 'number'
+          ? Math.max(1, Math.min(4, Math.floor(displayStatus.displayCount)))
+          : 1;
+        const activeDisplays = isRecord(displayStatus) && Array.isArray(displayStatus.activeDisplays)
+          ? displayStatus.activeDisplays.filter((value): value is number =>
+              typeof value === 'number'
+              && Number.isInteger(value)
+              && value >= 1
+              && value <= displayCount
+            )
+          : [];
+        if (displayCount > 1 && new Set(activeDisplays).size < displayCount) {
+          const pairingTargetResponse = await session.fetch(new Request('https://internal/pairing-target', {
+            method: 'POST',
+            headers: { 'X-Account-Id': actor.id },
+          }));
+          if (!pairingTargetResponse.ok) {
+            return htmlResponse(authPage(
+              origin,
+              'account',
+              actor,
+              'Unable to identify one waiting TV. Reload the TV screen and scan again.'
+            ));
+          }
+          const pairingTarget: unknown = await pairingTargetResponse.json();
+          const assignmentToken = isRecord(pairingTarget) && typeof pairingTarget.assignmentToken === 'string'
+            ? pairingTarget.assignmentToken
+            : '';
+          if (!SESSION_ID_REGEX.test(assignmentToken)) {
+            return htmlResponse(authPage(origin, 'account', actor, 'Unable to prepare this TV for assignment.'));
+          }
+          await recordEvent(env, {
+            type: 'pairing.start',
+            accountId: actor.id,
+            payload: { sessionId, businessId: owner.id, resumedMultiDisplay: true },
+          });
+          return htmlResponse(displayPairingPage({
+            scannedSession: sessionId,
+            canonicalSession: canonicalSessionId,
+            displayCount,
+            activeDisplays,
+            assignmentToken,
+          }));
+        }
+        if (displayCount > 1) {
+          return redirectResponse(`${origin}/config/${encodeURIComponent(canonicalSessionId)}`);
+        }
+      }
+
       await persistBusinessSession(env, owner, sessionId);
       await recordEvent(env, { type: 'pairing.start', accountId: actor.id, payload: { sessionId, businessId: owner.id } });
       return htmlResponse(configPage(sessionId, url.origin));

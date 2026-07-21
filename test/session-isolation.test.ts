@@ -199,6 +199,7 @@ describe('Session Durable Object integrity', () => {
         fontSize: 'large',
         fontScale: 135,
         autoScroll: false,
+        smoothProductScroll: false,
         pageDurationSeconds: 15,
         pageTransition: 'none',
       }),
@@ -231,6 +232,7 @@ describe('Session Durable Object integrity', () => {
         fontSize: 'large',
         fontScale: 135,
         autoScroll: false,
+        smoothProductScroll: false,
         pageDurationSeconds: 15,
         pageTransition: 'none',
       },
@@ -581,6 +583,7 @@ describe('session ownership isolation', () => {
             layout?: string;
             pageDurationSeconds?: number;
             pageTransition?: string;
+            smoothProductScroll?: boolean;
             displayCount?: number;
             screens?: Array<{ name?: string; categoryIds?: string[]; layout?: string }>;
           };
@@ -590,7 +593,7 @@ describe('session ownership isolation', () => {
           && screenOne?.name === 'Flower + Pre-Rolls'
           && screenOne.categoryIds?.length === 2
           && screenOne.layout === 'grid';
-        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none' && hasScreenConfig) resolve();
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none' && message.payload.smoothProductScroll === false && hasScreenConfig) resolve();
       });
     });
     const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
@@ -600,6 +603,7 @@ describe('session ownership isolation', () => {
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontScale: 135 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageDurationSeconds: 15 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageTransition: 'none' } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { smoothProductScroll: false } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { displayCount: 2, screens } }));
     await bothTVsUpdated;
     const persistedResponse = await authedFetch(`/api/export/${sessionId}`, cookie);
@@ -607,8 +611,10 @@ describe('session ownership isolation', () => {
     const persisted = (await persistedResponse.json()) as {
       displayCount: number;
       screens: Array<{ id: string; name: string; categoryIds: string[]; layout?: string }>;
+      smoothProductScroll: boolean;
     };
     expect(persisted.displayCount).toBe(2);
+    expect(persisted.smoothProductScroll).toBe(false);
     expect(persisted.screens.slice(0, 2)).toEqual([
       { id: 'screen-1', name: 'Flower + Pre-Rolls', categoryIds: [flowerId, preRollId], layout: 'grid' },
       { id: 'screen-2', name: 'Vapes', categoryIds: [vapeId], layout: 'list' },

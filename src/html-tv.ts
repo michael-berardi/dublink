@@ -158,8 +158,25 @@ export function shouldResetTvCycle(previousSignature: string, nextSignature: str
   return previousSignature !== nextSignature;
 }
 
-export function shouldRunTvCycle(autoScroll: unknown, totalPages: number, hidden: boolean): boolean {
-  return autoScroll === true && totalPages > 1 && !hidden;
+export function shouldRunTvCycle(
+  autoScroll: unknown,
+  totalPages: number,
+  hidden: boolean,
+  allowSinglePage = false
+): boolean {
+  return autoScroll === true && (totalPages > 1 || allowSinglePage) && !hidden;
+}
+
+export function shouldUseTvSmoothProductScroll(
+  smoothProductScroll: unknown,
+  autoScroll: unknown,
+  layout: unknown,
+  reducedMotion: boolean
+): boolean {
+  return smoothProductScroll !== false
+    && autoScroll === true
+    && (layout === 'grid' || layout === 'list' || layout === 'pricewall')
+    && !reducedMotion;
 }
 
 export function nextTvCyclePage(currentPage: number, totalPages: number): number {
@@ -578,6 +595,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-list .leader{display:none;}
   .layout-list .row-price{grid-area:price;align-self:center;font-size:var(--tv-price-size);font-weight:950;color:var(--text);white-space:nowrap;}
 
+  .smooth-product-scroll.layout-grid .grid-products,.smooth-product-scroll.layout-pricewall .grid-products,.smooth-product-scroll.layout-list .list-products{overflow:hidden;scrollbar-width:none;overscroll-behavior:none;}
+  .smooth-product-scroll.layout-grid .grid-products::-webkit-scrollbar,.smooth-product-scroll.layout-pricewall .grid-products::-webkit-scrollbar,.smooth-product-scroll.layout-list .list-products::-webkit-scrollbar{display:none;}
+  .smooth-product-scroll [data-smooth-scroll-active="true"]{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 1.5rem,#000 calc(100% - 1.5rem),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 1.5rem,#000 calc(100% - 1.5rem),transparent 100%);}
+  @media (min-width:769px){
+    .smooth-product-scroll.layout-grid .grid-products .product-card,.smooth-product-scroll.layout-pricewall .grid-products .product-card{flex:0 0 auto!important;min-height:6.1rem!important;}
+    .smooth-product-scroll.layout-list .list-products .product-row{flex:0 0 auto;min-height:5.8rem;}
+  }
+
   .layout-grid .card-body{min-width:0;display:flex;flex-direction:column;gap:0.26rem;}
   .layout-grid .card-meta{display:flex;flex-wrap:wrap;align-items:center;gap:0.18rem 0.45rem;min-width:0;max-width:none;line-height:1.12;}
   .layout-grid .card-meta span{white-space:nowrap;}
@@ -944,6 +969,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var DEMO_MODE = ${options?.demo ? 'true' : 'false'};
   var shouldResetTvCycle = ${shouldResetTvCycle.toString()};
   var shouldRunTvCycle = ${shouldRunTvCycle.toString()};
+  var shouldUseTvSmoothProductScroll = ${shouldUseTvSmoothProductScroll.toString()};
   var nextTvCyclePage = ${nextTvCyclePage.toString()};
   var TV_FONT_SCALE_MIN = ${TV_FONT_SCALE_MIN};
   var TV_FONT_SCALE_MAX = ${TV_FONT_SCALE_MAX};
@@ -1184,7 +1210,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     return catEl;
   }
 
-  var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:'',swapTimer:null,cleanupTimer:null};
+  var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:'',swapTimer:null,cleanupTimer:null,scrollStartTimer:null,scrollEndTimer:null,scrollFrame:null};
 
 
   // Resolve the active layout for THIS TV:
@@ -1306,6 +1332,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       bannerActive:bannerActive,
       demoMode:demoMode,
       fontScale:activeTvFontScale(config),
+      smoothProductScroll:useSmoothProductScroll(layout),
       productRowWeight:function(product,category){
         var length=formatProductName(product,category&&category.name).length;
         var needsPromoRoom=isPromotionalProduct(product)&&length>28;
@@ -1320,12 +1347,26 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       activeTvFontScale(config),
       bannerActive ? 1 : 0,
       demoMode ? 1 : 0,
+      useSmoothProductScroll(layout) ? 1 : 0,
       (cats || []).map(function(cat){
         return [cat.id,cat.name,(cat.products || []).map(function(product){
           return [product.id,product.name,product.price,product.originalPrice,product.inStock,product.strain];
         })];
       })
     ]);
+  }
+
+  function prefersReducedMotion(){
+    return !!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  function useSmoothProductScroll(layout){
+    return shouldUseTvSmoothProductScroll(
+      config && config.smoothProductScroll,
+      config && config.autoScroll,
+      layout,
+      prefersReducedMotion()
+    );
   }
 
   function getCycleInterval(){
@@ -1335,11 +1376,23 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function cancelPageTransition(){
     clearTimeout(cycleState.swapTimer);
     clearTimeout(cycleState.cleanupTimer);
+    clearTimeout(cycleState.scrollStartTimer);
+    clearTimeout(cycleState.scrollEndTimer);
+    if(cycleState.scrollFrame&&typeof cancelAnimationFrame==='function') cancelAnimationFrame(cycleState.scrollFrame);
     cycleState.swapTimer=null;
     cycleState.cleanupTimer=null;
+    cycleState.scrollStartTimer=null;
+    cycleState.scrollEndTimer=null;
+    cycleState.scrollFrame=null;
     cycleState.isTransitioning=false;
     var content=document.getElementById('menu-content');
-    if(content){content.classList.remove('page-exit');content.classList.remove('page-enter');}
+    if(content){
+      content.classList.remove('page-exit');
+      content.classList.remove('page-enter');
+      Array.prototype.forEach.call(content.querySelectorAll('[data-smooth-scroll-active]'),function(target){
+        target.removeAttribute('data-smooth-scroll-active');
+      });
+    }
   }
 
   function stopCycling(){
@@ -1349,14 +1402,66 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cancelPageTransition();
   }
 
+  function scheduleSmoothProductScroll(){
+    var content=document.getElementById('menu-content');
+    if(!content||!content.classList.contains('smooth-product-scroll')) return false;
+    var targets=Array.prototype.slice.call(content.querySelectorAll('.category-block > .grid-products,.category-block > .list-products'));
+    var distances=targets.map(function(target){
+      target.scrollTop=0;
+      return Math.max(0,target.scrollHeight-target.clientHeight);
+    });
+    var maxDistance=Math.max.apply(Math,distances.concat([0]));
+    if(maxDistance<=1) return false;
+    targets.forEach(function(target,index){
+      target.setAttribute('data-smooth-scroll-target',distances[index]>1?'true':'false');
+    });
+    var durationMs=Math.max(getCycleInterval(),Math.ceil(maxDistance/28*1000));
+    cycleState.intervalMs=durationMs;
+    cycleState.scrollStartTimer=setTimeout(function(){
+      cycleState.scrollStartTimer=null;
+      targets.forEach(function(target,index){
+        if(distances[index]>1) target.setAttribute('data-smooth-scroll-active','true');
+      });
+      var startedAt=performance.now();
+      function step(now){
+        if(document.hidden||cycleState.isTransitioning) return;
+        var progress=Math.min(1,(now-startedAt)/durationMs);
+        var eased=progress*progress*(3-2*progress);
+        targets.forEach(function(target,index){
+          target.scrollTop=Math.round(distances[index]*Math.max(0,Math.min(1,eased)));
+        });
+        if(progress<1){
+          cycleState.scrollFrame=requestAnimationFrame(step);
+          return;
+        }
+        cycleState.scrollFrame=null;
+        targets.forEach(function(target,index){
+          target.scrollTop=distances[index];
+          target.removeAttribute('data-smooth-scroll-active');
+        });
+        cycleState.scrollEndTimer=setTimeout(function(){
+          cycleState.scrollEndTimer=null;
+          advanceCyclePage();
+        },1600);
+      }
+      cycleState.scrollFrame=requestAnimationFrame(step);
+    },1400);
+    return true;
+  }
+
   function scheduleNextCycle(){
-    if(!shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)){
+    var smooth=useSmoothProductScroll(getActiveLayout(config));
+    if(!shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden,smooth)){
+      stopCycling();
+      return;
+    }
+    if(cycleState.interval||cycleState.scrollStartTimer||cycleState.scrollFrame||cycleState.scrollEndTimer) return;
+    if(smooth&&scheduleSmoothProductScroll()) return;
+    if(cycleState.totalPages<=1){
       stopCycling();
       return;
     }
     var intervalMs=getCycleInterval();
-    if(cycleState.interval && cycleState.intervalMs===intervalMs) return;
-    clearTimeout(cycleState.interval);
     cycleState.intervalMs=intervalMs;
     cycleState.interval=setTimeout(advanceCyclePage,intervalMs);
   }
@@ -1364,9 +1469,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function advanceCyclePage(){
     cycleState.interval=null;
     cycleState.intervalMs=0;
-    if(cycleState.isTransitioning||!shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) return;
+    var smooth=useSmoothProductScroll(getActiveLayout(config));
+    if(cycleState.isTransitioning||!shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden,smooth)) return;
     var content=document.getElementById('menu-content');
-    var reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var reduceMotion=prefersReducedMotion();
     var instant=normalizeTvPageTransition(config && config.pageTransition)==='none';
     cycleState.isTransitioning=true;
     if(!content||reduceMotion||instant){
@@ -1395,12 +1501,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
 
   function startCycling(){
-    if(cycleState.totalPages<=1){stopCycling();return;}
+    if(cycleState.totalPages<=1&&!useSmoothProductScroll(getActiveLayout(config))){stopCycling();return;}
     scheduleNextCycle();
   }
 
   function resumeCycling(){
-    if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) startCycling();
+    var smooth=useSmoothProductScroll(getActiveLayout(config));
+    if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden,smooth)) startCycling();
     else stopCycling();
   }
 
@@ -1436,7 +1543,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     
     var content = document.getElementById('menu-content');
     content.innerHTML = '';
-    content.className = 'menu-content layout-' + layout;
+    content.className = 'menu-content layout-' + layout + (useSmoothProductScroll(layout) ? ' smooth-product-scroll' : '');
     content.setAttribute('data-menu-page',String(cycleState.currentPage+1));
     content.setAttribute('data-menu-pages',String(cycleState.totalPages));
     
@@ -1695,9 +1802,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function renderGrid(cats, container){
     cats.forEach(function(cat, catIndex){
       var catEl = createCategoryBlock(cat);
+      var tableHead = document.createElement('div');
+      tableHead.className = 'product-table-head';
+      tableHead.innerHTML = '<span>Product</span><span>Price</span>';
+      catEl.appendChild(tableHead);
       var grid = document.createElement('div');
       grid.className = 'grid-products count-' + Math.min(9, cat.products.length);
-      grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
         var visual = hasImage ? imgMarkup(p, true) : '';
@@ -1933,7 +2043,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   function connect(){
     if(DEMO_MODE) return;
     if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
-    try{ws=new WebSocket(WS_URL);}catch(e){scheduleReconnect();return;}
+    var socketUrl=WS_URL+'&display='+DISPLAY_NUM+(EMBED_MODE?'&embed=1':'');
+    try{ws=new WebSocket(socketUrl);}catch(e){scheduleReconnect();return;}
     ws.onopen=function(){
       reconnectAttempts=0;
       setConn('connected');
@@ -1945,6 +2056,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     ws.onmessage=function(ev){
       try{
         var msg=JSON.parse(ev.data);
+        if(msg.type==='display_assignment'){
+          var assignmentUrl=msg.payload&&typeof msg.payload.url==='string'?msg.payload.url:'';
+          if(/^\\/tv\\/[a-zA-Z0-9_-]{1,64}\\?display=[1-4]&displays=[1-4]$/.test(assignmentUrl)){
+            location.replace(assignmentUrl);
+          }
+          return;
+        }
         if(msg.type==='config'){
           var incoming = msg.payload;
           if(hasProducts(incoming) || !hasProducts(config) || (hasCategoryArray(incoming) && !PRESERVE_INITIAL_DEMO_CONFIG)){

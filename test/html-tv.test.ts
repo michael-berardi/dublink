@@ -10,6 +10,7 @@ import {
   normalizeTvFontScale,
   shouldResetTvCycle,
   shouldRunTvCycle,
+  shouldUseTvSmoothProductScroll,
   tvPage,
 } from '../src/html-tv';
 import {
@@ -455,6 +456,18 @@ describe('tvPage', () => {
     expect(nextTvCyclePage(2, 0)).toBe(0);
   });
 
+  it('uses smooth product scrolling only for eligible auto-rotating dense layouts', () => {
+    expect(shouldUseTvSmoothProductScroll(undefined, true, 'grid', false)).toBe(true);
+    expect(shouldUseTvSmoothProductScroll(true, true, 'list', false)).toBe(true);
+    expect(shouldUseTvSmoothProductScroll(true, true, 'pricewall', false)).toBe(true);
+    expect(shouldUseTvSmoothProductScroll(false, true, 'grid', false)).toBe(false);
+    expect(shouldRunTvCycle(true, 1, false, true)).toBe(true);
+    expect(shouldUseTvSmoothProductScroll(true, false, 'grid', false)).toBe(false);
+    expect(shouldUseTvSmoothProductScroll(true, true, 'poster', false)).toBe(false);
+    expect(shouldUseTvSmoothProductScroll(true, true, 'grid', true)).toBe(false);
+  });
+
+
   it('renders one uncluttered single-line legal footer without a page counter', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
 
@@ -503,7 +516,7 @@ describe('tvPage', () => {
 
   it('auto-rotates overflow category pages only when enabled', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
-    expect(page).toContain('if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden)) startCycling();');
+    expect(page).toContain('if(shouldRunTvCycle(config && config.autoScroll,cycleState.totalPages,document.hidden,smooth)) startCycling();');
     expect(page).toContain('var cats = getCategoriesForDisplay(categoriesWithManualSpecials(config));');
   });
 
@@ -566,6 +579,9 @@ describe('tvPage', () => {
       function nextTvCyclePage(currentPage, totalPages) {
         return totalPages > 0 ? (currentPage + 1) % totalPages : 0;
       }
+      function getActiveLayout() { return 'grid'; }
+      function useSmoothProductScroll() { return false; }
+      function prefersReducedMotion() { return true; }
       function renderCurrentPage() { calls.push('rendered'); }
       function hasProducts() { return true; }
       function setConn(state) { calls.push('connection:' + state); }
@@ -658,7 +674,7 @@ describe('tvPage', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, autoScroll: true } });
     expect(page).toContain('var pageModelChanged = shouldResetTvCycle(cycleState.pageSignature,nextPageSignature)');
     expect(page).toContain('cycleState.currentPage = pageModelChanged ? 0 : Math.min(cycleState.currentPage,Math.max(0,nextTotalPages-1))');
-    expect(page).toContain('if(cycleState.interval && cycleState.intervalMs===intervalMs) return');
+    expect(page).toContain('if(cycleState.interval||cycleState.scrollStartTimer||cycleState.scrollFrame||cycleState.scrollEndTimer) return');
   });
 
   it('pauses and resumes page rotation when a TV becomes visible again', () => {

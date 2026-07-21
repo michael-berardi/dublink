@@ -205,6 +205,57 @@ describe('buildTvCatalogPagePlan', () => {
     expect(plannedProductIds(extraLargeCinematic)).toEqual(productIds(categories));
   });
 
+  it('keeps each dense-layout category intact for smooth scrolling before advancing scenes', () => {
+    const categories: Category[] = Array.from({ length: 5 }, (_, index) => ({
+      id: `category-${index + 1}`,
+      name: `Category ${index + 1}`,
+      order: index,
+      products: products(`Category ${index + 1}`, 20),
+    }));
+
+    const expectedSceneCounts = new Map([
+      ['grid', 2],
+      ['list', 3],
+      ['pricewall', 3],
+    ]);
+
+    for (const [layout, expectedSceneCount] of expectedSceneCounts) {
+      const scenes = buildTvCatalogPagePlan(categories, {
+        layout,
+        fontScale: 140,
+        smoothProductScroll: true,
+      });
+
+      expect(scenes).toHaveLength(expectedSceneCount);
+      expect(scenes.flatMap((scene) => scene.map((category) => category.id))).toEqual(
+        categories.map((category) => category.id)
+      );
+      expect(scenes.flatMap((scene) => scene.map((category) => category.products.length))).toEqual(
+        categories.map((category) => category.products.length)
+      );
+      expect(plannedProductIds(scenes)).toEqual(productIds(categories));
+    }
+  });
+
+  it('keeps image-led layouts paginated when smooth product scrolling is requested', () => {
+    const category: Category = {
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: products('Flower', 10),
+    };
+
+    const pages = buildTvCatalogPagePlan([category], {
+      layout: 'poster',
+      fontScale: 140,
+      smoothProductScroll: true,
+    });
+
+    expect(pages).toHaveLength(5);
+    expect(pages.every((page) => productIds(page).length <= 2)).toBe(true);
+    expect(plannedProductIds(pages)).toEqual(productIds([category]));
+  });
+
   it('paginates long accessories rows before they can collide with the TV footer', () => {
     const accessories: Category = {
       id: 'accessories',

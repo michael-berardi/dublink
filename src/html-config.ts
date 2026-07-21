@@ -579,11 +579,13 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
   <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('animationSettings').hidden=!this.classList.contains('on');showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
   <div id="animationSettings" hidden>
+    <div class="toggle-row"><span id="lbl-smoothProductScroll">Smooth Product Scroll <span class="badge badge-in">Experimental</span></span><button type="button" class="switch" id="smoothProductScroll" role="switch" aria-checked="false" aria-labelledby="lbl-smoothProductScroll" onclick="toggleSwitch(this,'smoothProductScroll')"></button></div>
+    <div class="helper">Slowly scrolls long Grid, Price List, and Price Wall categories. Every product appears before the next category group.</div>
     <div class="field">
-      <div class="font-scale-heading"><label for="pageDurationSeconds">Slide Duration</label><output class="font-scale-value" id="pageDurationSecondsValue" for="pageDurationSeconds">${TV_PAGE_DURATION_DEFAULT} seconds</output></div>
+      <div class="font-scale-heading"><label for="pageDurationSeconds">Page Timing</label><output class="font-scale-value" id="pageDurationSecondsValue" for="pageDurationSeconds">${TV_PAGE_DURATION_DEFAULT} seconds</output></div>
       <input class="font-scale-range" type="range" id="pageDurationSeconds" min="${TV_PAGE_DURATION_OPTIONS[0]}" max="${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]}" step="1" value="${TV_PAGE_DURATION_DEFAULT}" aria-describedby="pageDurationSecondsHelp" oninput="var duration=nearestPageDuration(this.valueAsNumber);this.value=String(duration);syncPageDurationLabel(duration);debounceConfig('pageDurationSeconds',duration)">
       <div class="font-scale-limits" aria-hidden="true"><span>Fast</span><span>Slow</span></div>
-      <div class="helper" id="pageDurationSecondsHelp">Choose how long each product page stays visible, from ${TV_PAGE_DURATION_OPTIONS[0]} to ${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]} seconds.</div>
+      <div class="helper" id="pageDurationSecondsHelp">Static pages stay visible for ${TV_PAGE_DURATION_OPTIONS[0]} to ${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]} seconds. Long scrolling pages continue at a steady reading pace until every product has appeared.</div>
     </div>
     <div class="field">
       <label for="pageTransition">Page Transition</label>
@@ -1492,6 +1494,7 @@ function render(){
   setSwitch('showImages',config.showImages!==false);
   setSwitch('showPromos',config.showPromos!==false);
   setSwitch('autoScroll',config.autoScroll===true);
+  setSwitch('smoothProductScroll',config.smoothProductScroll!==false);
   var pageDuration=Number(config.pageDurationSeconds)||${TV_PAGE_DURATION_DEFAULT};
   document.getElementById('pageDurationSeconds').value=String(pageDuration);
   syncPageDurationLabel(pageDuration);

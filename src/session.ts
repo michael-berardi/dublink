@@ -9,12 +9,25 @@ interface WSConnection {
   id: string;
   lastPong: number;
   accountId?: string;
+  displayNumber?: number;
+  isEmbed?: boolean;
 }
 
 interface StoredSession {
   config: MenuConfig;
   ownerAccountId?: string;
   categoryChunkKeys?: string[];
+}
+
+interface DisplayReservation {
+  id: string;
+  displayNumber: number;
+  expiresAt: number;
+}
+
+interface DisplayPairingTarget {
+  connectionId: string;
+  expiresAt: number;
 }
 
 interface StoredCategoryChunk {
@@ -72,6 +85,9 @@ const MESSAGE_RATE_LIMIT = 30; // messages per 10 seconds per connection
 const RATE_LIMIT_WINDOW_MS = 10000;
 const CATEGORY_CHUNK_TARGET_BYTES = 80 * 1024;
 const STORAGE_BATCH_SIZE = 64;
+const DISPLAY_PAIRING_TARGET_TTL_MS = 2 * 60 * 1000;
+const DISPLAY_RESERVATION_TTL_MS = 30 * 1000;
+const DISPLAY_RESERVATIONS_STORAGE_KEY = 'displayReservations';
 
 // Valid session ID pattern
 export const SESSION_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -92,6 +108,7 @@ export class SessionDurableObject implements DurableObject {
   private persistedConfigSnapshot: MenuConfig;
   private persistedOwnerAccountId?: string;
   private categoryCleanupPending = true;
+  private displayPairingTargets: Map<string, DisplayPairingTarget> = new Map();
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
@@ -309,6 +326,7 @@ export class SessionDurableObject implements DurableObject {
       (config.fontScale === undefined || this.sanitizeFontScale(config.fontScale) !== undefined) &&
       this.sanitizeTheme(config.theme) !== undefined &&
       (config.pageDurationSeconds === undefined || this.sanitizePageDurationSeconds(config.pageDurationSeconds) !== undefined) &&
+      (config.smoothProductScroll === undefined || typeof config.smoothProductScroll === 'boolean') &&
       (config.pageTransition === undefined || this.sanitizePageTransition(config.pageTransition) !== undefined) &&
       ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
       typeof config.displayCount === 'number' &&
@@ -431,6 +449,7 @@ export class SessionDurableObject implements DurableObject {
           primaryColor: this.sanitizeHexColor(data.primaryColor) ?? this.config.primaryColor,
           secondaryColor: this.sanitizeHexColor(data.secondaryColor) ?? this.config.secondaryColor,
           autoScroll: typeof data.autoScroll === 'boolean' ? data.autoScroll : this.config.autoScroll,
+          smoothProductScroll: typeof data.smoothProductScroll === 'boolean' ? data.smoothProductScroll : this.config.smoothProductScroll,
           pageDurationSeconds: this.sanitizePageDurationSeconds(data.pageDurationSeconds) ?? (
             data.autoScrollSpeed === undefined
               ? this.config.pageDurationSeconds
@@ -488,6 +507,176 @@ export class SessionDurableObject implements DurableObject {
         await this.persistConfig();
       }
       return new Response(JSON.stringify({ ownerAccountId: this.ownerAccountId }));
+    }
+
+    if (url.pathname === '/display-status' && request.method === 'GET') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      const businessOwner = accountId ? await this.getAuthorizedBusinessOwner(accountId) : null;
+      if (!businessOwner || !this.ownerAccountId || this.ownerAccountId !== businessOwner.id) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
+      const occupiedDisplays = this.getActivePhysicalDisplays();
+      for (const reservation of await this.loadDisplayReservations()) {
+        occupiedDisplays.add(reservation.displayNumber);
+      }
+      return jsonResponse({
+        displayCount: this.config.displayCount,
+        activeDisplays: Array.from(occupiedDisplays).sort((a, b) => a - b),
+      });
+    }
+
+    if (url.pathname === '/pairing-target' && request.method === 'POST') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      const businessOwner = accountId ? await this.getAuthorizedBusinessOwner(accountId) : null;
+      if (
+        !businessOwner
+        || !isSubscriptionActive(businessOwner)
+        || !this.ownerAccountId
+        || this.ownerAccountId !== businessOwner.id
+      ) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
+      const waitingTvs = this.getWaitingPhysicalTvs();
+      if (waitingTvs.length !== 1) {
+        return jsonResponse({ error: 'Expected exactly one waiting TV' }, 409);
+      }
+      const assignmentToken = crypto.randomUUID();
+      this.displayPairingTargets.clear();
+      this.displayPairingTargets.set(assignmentToken, {
+        connectionId: waitingTvs[0].id,
+        expiresAt: Date.now() + DISPLAY_PAIRING_TARGET_TTL_MS,
+      });
+      return jsonResponse({ assignmentToken });
+    }
+
+    if (url.pathname === '/pair-display' && request.method === 'POST') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      const businessOwner = accountId ? await this.getAuthorizedBusinessOwner(accountId) : null;
+      if (
+        !businessOwner
+        || !isSubscriptionActive(businessOwner)
+        || !this.ownerAccountId
+        || this.ownerAccountId !== businessOwner.id
+      ) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
+      const data: unknown = await request.json();
+      const scannedSession = isRecord(data) && typeof data.scannedSession === 'string' ? data.scannedSession : '';
+      const assignmentToken = isRecord(data) && typeof data.assignmentToken === 'string' ? data.assignmentToken : '';
+      const displayCount = isRecord(data) ? this.sanitizeDisplayCount(data.displayCount) : undefined;
+      const displayNumber = isRecord(data) ? this.sanitizeDisplayCount(data.displayNumber) : undefined;
+      if (
+        !SESSION_ID_REGEX.test(scannedSession)
+        || !SESSION_ID_REGEX.test(assignmentToken)
+        || displayCount === undefined
+        || displayNumber === undefined
+        || displayNumber > displayCount
+      ) {
+        return jsonResponse({ error: 'Invalid display assignment' }, 400);
+      }
+
+      return this.state.blockConcurrencyWhile(async () => {
+        const reservations = await this.loadDisplayReservations();
+        const occupiedDisplays = this.getActivePhysicalDisplays();
+        for (const reservation of reservations) occupiedDisplays.add(reservation.displayNumber);
+        if (occupiedDisplays.has(displayNumber)) {
+          return jsonResponse({ error: `Display ${displayNumber} is already connected` }, 409);
+        }
+        const highestOccupiedDisplay = Array.from(occupiedDisplays).reduce(
+          (highest, occupiedDisplay) => Math.max(highest, occupiedDisplay),
+          1
+        );
+        if (displayCount < highestOccupiedDisplay) {
+          return jsonResponse({
+            error: `Disconnect Display ${highestOccupiedDisplay} before reducing the display count`,
+          }, 409);
+        }
+
+        const reservation: DisplayReservation = {
+          id: crypto.randomUUID(),
+          displayNumber,
+          expiresAt: Date.now() + DISPLAY_RESERVATION_TTL_MS,
+        };
+        const previousDisplayCount = this.config.displayCount;
+        await this.saveDisplayReservations([...reservations, reservation]);
+        try {
+          this.config.displayCount = displayCount;
+          await this.persistConfig();
+          this.broadcast({ type: 'config', payload: this.config });
+          const scanned = this.env.SESSION.get(this.env.SESSION.idFromName(scannedSession));
+          const assignmentResponse = await scanned.fetch(new Request('https://internal/assign-display', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Account-Id': accountId },
+            body: JSON.stringify({
+              targetSession: businessOwner.businessMenuSessionId,
+              assignmentToken,
+              displayNumber,
+              displayCount,
+            }),
+          }));
+          if (assignmentResponse.ok) {
+            return jsonResponse({ ok: true, displayNumber, displayCount });
+          }
+        } catch {
+          // Rollback below keeps a failed assignment from mutating saved setup.
+        }
+
+        this.config.displayCount = previousDisplayCount;
+        await this.persistConfig();
+        this.broadcast({ type: 'config', payload: this.config });
+        await this.saveDisplayReservations(reservations);
+        return jsonResponse({ error: 'The scanned TV is no longer connected' }, 409);
+      });
+    }
+
+    if (url.pathname === '/assign-display' && request.method === 'POST') {
+      const accountId = request.headers.get('X-Account-Id') || undefined;
+      const businessOwner = accountId ? await this.getAuthorizedBusinessOwner(accountId) : null;
+      if (
+        !businessOwner
+        || !isSubscriptionActive(businessOwner)
+        || !this.ownerAccountId
+        || this.ownerAccountId !== businessOwner.id
+      ) {
+        return jsonResponse({ error: 'Forbidden' }, 403);
+      }
+      const data: unknown = await request.json();
+      const targetSession = isRecord(data) && typeof data.targetSession === 'string' ? data.targetSession : '';
+      const assignmentToken = isRecord(data) && typeof data.assignmentToken === 'string' ? data.assignmentToken : '';
+      const displayCount = isRecord(data) ? this.sanitizeDisplayCount(data.displayCount) : undefined;
+      const displayNumber = isRecord(data) ? this.sanitizeDisplayCount(data.displayNumber) : undefined;
+      if (
+        !SESSION_ID_REGEX.test(targetSession)
+        || targetSession !== businessOwner.businessMenuSessionId
+        || !SESSION_ID_REGEX.test(assignmentToken)
+        || displayCount === undefined
+        || displayNumber === undefined
+        || displayNumber > displayCount
+      ) {
+        return jsonResponse({ error: 'Invalid display assignment' }, 400);
+      }
+      this.pruneDisplayPairingTargets();
+      const pairingTarget = this.displayPairingTargets.get(assignmentToken);
+      const targetConnection = pairingTarget
+        ? this.connections.get(pairingTarget.connectionId)
+        : undefined;
+      if (!targetConnection || targetConnection.role !== 'tv' || targetConnection.isEmbed) {
+        this.displayPairingTargets.delete(assignmentToken);
+        return jsonResponse({ error: 'The scanned TV is no longer connected' }, 409);
+      }
+      const assignmentUrl = `/tv/${encodeURIComponent(targetSession)}?display=${displayNumber}&displays=${displayCount}`;
+      try {
+        targetConnection.socket.send(JSON.stringify({
+          type: 'display_assignment',
+          payload: { url: assignmentUrl },
+        }));
+      } catch {
+        this.cleanupConnection(targetConnection.id);
+        this.displayPairingTargets.delete(assignmentToken);
+        return jsonResponse({ error: 'The scanned TV is no longer connected' }, 409);
+      }
+      this.displayPairingTargets.delete(assignmentToken);
+      return jsonResponse({ ok: true, url: assignmentUrl });
     }
 
     // Internal endpoint to export config (business members only)
@@ -640,6 +829,7 @@ export class SessionDurableObject implements DurableObject {
   }
 
   private handleWebSocket(request: Request, role: 'tv' | 'phone', accountId?: string): Response {
+    const url = new URL(request.url);
     if (this.connections.size >= MAX_CONNECTIONS) {
       return new Response('Too many connections', { status: 503 });
     }
@@ -650,7 +840,20 @@ export class SessionDurableObject implements DurableObject {
 
     const connId = crypto.randomUUID();
 
-    this.connections.set(connId, { socket: server, role, id: connId, lastPong: Date.now(), accountId });
+    const requestedDisplay = Number(url.searchParams.get('display') || '1');
+    const displayNumber = role === 'tv' && Number.isInteger(requestedDisplay)
+      ? Math.max(1, Math.min(4, requestedDisplay))
+      : undefined;
+    const isEmbed = role === 'tv' && url.searchParams.get('embed') === '1';
+    this.connections.set(connId, {
+      socket: server,
+      role,
+      id: connId,
+      lastPong: Date.now(),
+      accountId,
+      displayNumber,
+      isEmbed,
+    });
 
     this.startHeartbeat();
 
@@ -1094,7 +1297,7 @@ export class SessionDurableObject implements DurableObject {
     const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
-                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'pageDurationSeconds', 'pageTransition', 'showCategory',
+                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'smoothProductScroll', 'pageDurationSeconds', 'pageTransition', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
                          'displayCount', 'screens', 'styleProfile'];
 
@@ -1118,7 +1321,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.pageDurationSeconds !== undefined && this.sanitizePageDurationSeconds(payload.pageDurationSeconds) === undefined) return false;
     if (payload.pageTransition !== undefined && this.sanitizePageTransition(payload.pageTransition) === undefined) return false;
     if (payload.screens !== undefined && !Array.isArray(payload.screens)) return false;
-    for (const key of ['showStrain', 'showLogo', 'showDescription', 'showImages', 'showBrand', 'showPromos', 'autoScroll', 'ageVerified', 'analyticsEnabled'] as const) {
+    for (const key of ['showStrain', 'showLogo', 'showDescription', 'showImages', 'showBrand', 'showPromos', 'autoScroll', 'smoothProductScroll', 'ageVerified', 'analyticsEnabled'] as const) {
       if (payload[key] !== undefined && typeof payload[key] !== 'boolean') return false;
     }
     if (payload.showCategory !== undefined && payload.showCategory !== null && typeof payload.showCategory !== 'string') return false;
@@ -1413,6 +1616,63 @@ export class SessionDurableObject implements DurableObject {
     });
   }
 
+  private getActivePhysicalDisplays(): Set<number> {
+    const displays = new Set<number>();
+    for (const connection of this.connections.values()) {
+      if (
+        connection.role === 'tv'
+        && !connection.isEmbed
+        && typeof connection.displayNumber === 'number'
+        && connection.displayNumber >= 1
+        && connection.displayNumber <= 4
+      ) {
+        displays.add(connection.displayNumber);
+      }
+    }
+    return displays;
+  }
+
+  private getWaitingPhysicalTvs(): WSConnection[] {
+    return Array.from(this.connections.values()).filter((connection) =>
+      connection.role === 'tv' && !connection.isEmbed
+    );
+  }
+
+  private pruneDisplayPairingTargets(now = Date.now()): void {
+    for (const [token, target] of this.displayPairingTargets) {
+      if (target.expiresAt <= now || !this.connections.has(target.connectionId)) {
+        this.displayPairingTargets.delete(token);
+      }
+    }
+  }
+
+  private async loadDisplayReservations(): Promise<DisplayReservation[]> {
+    const stored = await this.state.storage.get<unknown>(DISPLAY_RESERVATIONS_STORAGE_KEY);
+    const now = Date.now();
+    const reservations = Array.isArray(stored)
+      ? stored.filter((reservation): reservation is DisplayReservation =>
+          isRecord(reservation)
+          && typeof reservation.id === 'string'
+          && typeof reservation.displayNumber === 'number'
+          && Number.isInteger(reservation.displayNumber)
+          && reservation.displayNumber >= 1
+          && reservation.displayNumber <= 4
+          && typeof reservation.expiresAt === 'number'
+          && reservation.expiresAt > now
+        )
+      : [];
+    return reservations;
+  }
+
+  private async saveDisplayReservations(reservations: DisplayReservation[]): Promise<void> {
+    if (reservations.length > 0) {
+      await this.state.storage.put(DISPLAY_RESERVATIONS_STORAGE_KEY, reservations);
+    } else {
+      await this.state.storage.delete(DISPLAY_RESERVATIONS_STORAGE_KEY);
+    }
+  }
+
+
   private sanitizeDisplayCount(value: unknown): number | undefined {
     return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 4 ? value : undefined;
   }
@@ -1460,6 +1720,7 @@ export class SessionDurableObject implements DurableObject {
     if (!businessOwner || this.ownerAccountId !== businessOwner.id) return false;
     return isSubscriptionActive(businessOwner);
   }
+
 
   private broadcast(msg: WSMessage, excludeId?: string) {
     const data = JSON.stringify(msg);

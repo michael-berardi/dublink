@@ -127,6 +127,11 @@ describe('configPage remote-control UI', () => {
     expect(layoutCard).toContain('<option value="fade">Fade · Recommended</option>');
     expect(layoutCard).toContain('<option value="none">Instant</option>');
     expect(layoutCard).not.toContain('autoScrollSpeed');
+    expect(layoutCard).toContain('Smooth Product Scroll');
+    expect(layoutCard).toContain('Experimental');
+    expect(layoutCard).toContain('id="smoothProductScroll"');
+    expect(layoutCard).toContain("toggleSwitch(this,'smoothProductScroll')");
+    expect(html).toContain("setSwitch('smoothProductScroll',config.smoothProductScroll!==false)");
   });
 
   it('makes the specials card actionable instead of a dead-looking heading', () => {

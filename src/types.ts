@@ -150,6 +150,7 @@ export interface MenuConfig {
   fontScale?: number;
   theme: 'dark' | 'light';
   autoScroll: boolean;
+  smoothProductScroll: boolean;
   pageDurationSeconds: TvPageDurationSeconds;
   pageTransition: TvPageTransition;
   showCategory: string | null;
@@ -187,6 +188,7 @@ export const DEFAULT_CONFIG: MenuConfig = {
   fontScale: TV_FONT_SCALE_DEFAULT,
   theme: 'dark',
   autoScroll: true,
+  smoothProductScroll: true,
   pageDurationSeconds: TV_PAGE_DURATION_DEFAULT,
   pageTransition: TV_PAGE_TRANSITION_DEFAULT,
   showCategory: null,

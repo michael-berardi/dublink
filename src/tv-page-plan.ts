@@ -6,6 +6,7 @@ export interface TvPagePlanOptions {
   demoMode?: boolean;
   fontScale?: number;
   productRowWeight?: (product: Product, category: Category) => number;
+  smoothProductScroll?: boolean;
 }
 
 /**
@@ -112,6 +113,13 @@ export function buildTvCatalogPagePlan(
   }
 
   const { productsPerPage, categoriesPerPage } = capacity();
+  if (options.smoothProductScroll === true && ['grid', 'pricewall', 'list'].includes(options.layout)) {
+    const scenes: Category[][] = [];
+    for (let categoryStart = 0; categoryStart < visibleCategories.length; categoryStart += categoriesPerPage) {
+      scenes.push(visibleCategories.slice(categoryStart, categoryStart + categoriesPerPage));
+    }
+    return scenes;
+  }
   const pages: Category[][] = [];
   const strainOrder: Array<'Indica' | 'Sativa' | 'Hybrid'> = ['Indica', 'Sativa', 'Hybrid'];
   const productRowWeight = (product: Product, category: Category): number => {
