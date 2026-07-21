@@ -147,29 +147,6 @@ export function formatTvProductName(product: TvProductNameInput, categoryName: u
   return displayName || original;
 }
 
-type TvPageProgressCategory = { name?: unknown };
-
-export function formatTvPageProgress(
-  pagePlan: readonly (readonly TvPageProgressCategory[])[],
-  currentPage: number,
-): string {
-  if (pagePlan.length === 0) return '';
-  const pageIndex = Math.max(0, Math.min(pagePlan.length - 1, Math.floor(currentPage)));
-  const baseName = (category: TvPageProgressCategory): string =>
-    String(category?.name || '').replace(/\s*·\s*(?:indica|sativa|hybrid)\s*$/i, '').trim();
-  const visibleNames = Array.from(new Set(pagePlan[pageIndex].map(baseName).filter(Boolean)));
-
-  return visibleNames.map((name) => {
-    let categoryPage = 0;
-    let categoryPages = 0;
-    for (let index = 0; index < pagePlan.length; index += 1) {
-      if (!pagePlan[index].some((category) => baseName(category) === name)) continue;
-      categoryPages += 1;
-      if (index <= pageIndex) categoryPage += 1;
-    }
-    return `${name} ${categoryPage}/${categoryPages}`;
-  }).join(' · ');
-}
 
 const TV_TEMPLATES = ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'] as const;
 
@@ -493,10 +470,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .menu-content{position:relative;z-index:1;flex:1 1 auto;min-height:0;overflow:hidden;padding:1.25rem clamp(2.5rem,3vw,3.75rem);width:100%;}
   .menu-content.page-exit{animation:menu-page-exit 180ms cubic-bezier(0.4,0,1,1) both;will-change:opacity;pointer-events:none;}
   .menu-content.page-enter{animation:menu-page-enter 220ms cubic-bezier(0.16,1,0.3,1) both;will-change:opacity;}
-  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:0.85rem clamp(2.5rem,3vw,3.75rem) 1.15rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:var(--tv-footer-size);font-weight:850;color:var(--text);opacity:0.9;gap:1rem;text-transform:uppercase;letter-spacing:0.035em;}
-  .footer-progress{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);}
-  body.font-small .footer-progress{font-size:1.2rem;}
-  .footer-right{text-align:right;max-width:58%;}
+  .menu-footer{position:relative;z-index:1;flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:0.68rem clamp(2.5rem,3vw,3.75rem) 0.82rem;border-top:1px solid var(--border);background:linear-gradient(0deg,rgba(0,0,0,0.42),rgba(0,0,0,0.18)),var(--bg);font-size:var(--tv-footer-size);font-weight:800;color:var(--text);opacity:0.9;text-transform:uppercase;letter-spacing:0.025em;}
+  .footer-right{width:100%;min-width:0;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:min(var(--tv-footer-size),1rem);line-height:1.15;}
 
   .age-gate{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;z-index:500;gap:1.5rem;padding:2rem;text-align:center;}
   .age-gate.hidden{display:none;}
@@ -506,27 +481,28 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .age-gate .btn-secondary{font-size:1rem;background:var(--surface2);color:var(--text);text-decoration:none;}
 
   .category-header{margin-bottom:0.7rem;padding-bottom:0.55rem;border-bottom:1px solid var(--border);display:flex;align-items:baseline;gap:0.75rem;}
-  .category-title{font-size:var(--tv-category-size);font-weight:950;letter-spacing:0.005em;line-height:1.08;color:var(--text);display:inline-flex;align-items:center;gap:0.65rem;text-transform:none;}
+  .category-title{width:100%;min-width:0;font-size:var(--tv-category-size);font-weight:950;letter-spacing:0.005em;line-height:1.08;color:var(--text);display:flex;align-items:center;gap:0.65rem;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .cat-icon-wrap{width:1.15em;height:1.15em;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--accent);filter:drop-shadow(0 0 14px var(--accent-glow));}
   .cat-icon{width:100%;height:100%;display:inline-flex;align-items:center;justify-content:center;color:inherit;}
-  .cat-icon svg{width:100%;height:100%;fill:currentColor;}
+  .cat-icon svg{width:100%;height:100%;}
   .layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1.15rem;align-items:stretch;height:100%;min-height:0;}
   .pricewall-special-name{font-weight:900;font-size:var(--tv-name-size);line-height:1.05;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)),.layout-pricewall:has(.category-block:first-child:nth-last-child(2)){grid-template-columns:repeat(2,minmax(0,1fr));}
+  .layout-grid:has(> .category-block:only-child){grid-template-columns:minmax(0,1fr);}
   .layout-grid:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block,.layout-pricewall:has(.category-block:first-child:nth-last-child(2)) .category-block:first-child:nth-last-child(2) ~ .category-block{min-width:0;}
   .layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;padding:1rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
   .layout-grid .category-header,.layout-pricewall .category-header{margin-bottom:0.8rem;padding-bottom:0.7rem;border-bottom:1px solid var(--border);}
   .layout-grid .grid-products,.layout-pricewall .grid-products{display:flex;flex-direction:column;gap:0.55rem;flex:1;min-height:0;justify-content:flex-start;}
   .layout-grid .product-table-head,.layout-pricewall .product-table-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1rem;padding:0 0.25rem 0.15rem 0.6rem;color:var(--text);opacity:0.76;font-size:var(--tv-table-size);font-weight:950;letter-spacing:0.09em;text-transform:uppercase;flex:0 0 auto;}
   .layout-grid .product-card,.layout-pricewall .product-card{background:linear-gradient(145deg,rgba(255,255,255,0.058),rgba(255,255,255,0.014)),var(--bg-card);border:1px solid var(--border);border-left:0;border-radius:0.62rem;overflow:hidden;display:grid;grid-template-columns:0.38rem minmax(0,1fr) auto;align-items:center;gap:0.9rem;min-height:6.1rem;padding:0.72rem 0.9rem 0.72rem 0;box-shadow:0 12px 28px rgba(0,0,0,0.16);position:relative;isolation:isolate;flex:0 0 auto;}
-  @media (min-width:769px){.layout-grid .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card,.layout-pricewall .grid-products:not(.count-1):not(.count-2):not(.count-3) .product-card{flex:1 1 0;min-height:0;}}
+  @media (min-width:769px){.layout-grid .grid-products:not(.count-1):not(.count-2) .product-card,.layout-pricewall .grid-products:not(.count-1):not(.count-2) .product-card{flex:1 1 0;min-height:0;}}
   @media (min-width:769px){.font-scale-large .layout-grid .grid-products .product-card{flex:1 1 0;min-height:0;}}
   .layout-grid .product-card.has-image,.layout-pricewall .product-card.has-image{grid-template-columns:0.38rem 4.6rem minmax(0,1fr) auto;}
   .layout-grid .strain-bar,.layout-pricewall .strain-bar{align-self:stretch;width:0.38rem;background:linear-gradient(180deg,var(--accent),rgba(255,255,255,0.08));box-shadow:0 0 18px var(--accent-glow);}
   .layout-grid .product-card.strain-indica .strain-bar,.layout-pricewall .product-card.strain-indica .strain-bar{background:linear-gradient(180deg,#8b5cf6,#4c1d95);box-shadow:0 0 16px rgba(139,92,246,0.35);}
   .layout-grid .product-card.strain-sativa .strain-bar,.layout-pricewall .product-card.strain-sativa .strain-bar{background:linear-gradient(180deg,#f97316,#c2410c);box-shadow:0 0 16px rgba(249,115,22,0.35);}
   .layout-grid .product-card.strain-hybrid .strain-bar,.layout-pricewall .product-card.strain-hybrid .strain-bar{background:linear-gradient(180deg,#22c55e,#15803d);box-shadow:0 0 16px rgba(34,197,94,0.35);}
-  .layout-grid .card-image,.layout-pricewall .card-image{display:block;width:4.6rem;height:4.6rem;object-fit:cover;border-radius:0.48rem;border:1px solid var(--border);background:var(--bg-elev);box-shadow:0 10px 22px rgba(0,0,0,0.22);}
+  .layout-grid .card-image,.layout-pricewall .card-image{display:block;width:4.6rem;height:4.6rem;padding:0.18rem;object-fit:contain;border-radius:0.48rem;border:1px solid rgba(255,255,255,0.72);background:linear-gradient(145deg,#fff,#e7ecef);box-shadow:0 10px 22px rgba(0,0,0,0.22);}
   .layout-pricewall{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(23rem,0.72fr);gap:1.15rem;}
   .layout-pricewall .category-block{border-radius:1rem;padding:1rem;background:linear-gradient(180deg,rgba(255,255,255,0.055),rgba(0,0,0,0.2)),var(--bg-card);}
   .layout-pricewall .category-title{font-size:var(--tv-category-size);letter-spacing:0.005em;text-transform:uppercase;}
@@ -542,7 +518,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   body.font-small .layout-pricewall .product-card.name-long .card-name{-webkit-line-clamp:3;}
   body.font-small .layout-pricewall .product-card.name-extra-long .card-name{-webkit-line-clamp:4;}
   .font-scale-large .category-accessories .card-name{-webkit-line-clamp:4;}
-  .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.82;}
+  .layout-grid .card-meta,.layout-pricewall .card-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;min-width:0;max-width:none;font-size:var(--tv-meta-size);font-weight:700;line-height:1.16;gap:0.22rem 0.55rem;color:var(--text);opacity:0.9;}
   .layout-pricewall .card-meta span{white-space:nowrap;}
   .layout-pricewall .card-desc{display:-webkit-box;-webkit-line-clamp:1;}
   .layout-grid .compact-desc{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal;overflow:hidden;font-size:var(--tv-table-size);line-height:1.18;}
@@ -562,6 +538,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .category-block{grid-column:1;}
   .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .pricewall-shell{grid-column:2;}
   .layout-pricewall.pricewall-no-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .layout-pricewall.pricewall-no-rail:has(> .category-block:only-child){grid-template-columns:minmax(0,1fr);}
+  .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:only-child){grid-template-columns:minmax(0,1fr) minmax(23rem,0.72fr);}
+  .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:only-child) .pricewall-shell{grid-column:2;}
   .font-scale-high .layout-pricewall .pricewall-shell{display:none;}
   .font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)){grid-template-columns:minmax(0,1fr);}
   .font-scale-high .layout-pricewall:not(.pricewall-no-rail):has(> .category-block:first-child:nth-last-child(2)) .category-block{grid-column:1;}
@@ -587,11 +566,16 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .pricewall-special-price{min-width:0;font-weight:1000;color:var(--accent);font-size:var(--tv-price-size);font-variant-numeric:tabular-nums;}
   .pricewall-special-price .price-pair{justify-content:flex-start;}
   .pricewall-special-price .card-price-orig{display:inline-block;margin:0 0 0 0.65rem;}
-  .layout-list .product-row{display:grid;grid-template-columns:minmax(0,auto) minmax(0,auto) minmax(1rem,1fr) auto;grid-template-areas:"name meta leader price" "desc desc desc price";align-items:baseline;column-gap:0.5rem;row-gap:0.12rem;padding:0.5rem 0;border-bottom:1px solid var(--border);min-width:0;}
+  .layout-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.15rem;height:100%;min-height:0;}
+  .layout-list:has(> .category-block:only-child){grid-template-columns:minmax(0,1fr);}
+  .layout-list .category-block{min-width:0;min-height:0;display:flex;flex-direction:column;padding:1rem;background:linear-gradient(180deg,rgba(255,255,255,0.05),rgba(0,0,0,0.2)),var(--bg-card);border:1px solid var(--border);border-radius:1rem;box-shadow:var(--card-shadow),inset 0 1px 0 rgba(255,255,255,0.045);overflow:hidden;}
+  .layout-list .category-header{flex:0 0 auto;margin-bottom:0.8rem;padding-bottom:0.7rem;}
+  .layout-list .list-products{display:flex;flex-direction:column;gap:0.55rem;flex:1 1 auto;min-height:0;}
+  .layout-list .product-row{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name price" "meta price" "desc price";align-content:center;align-items:center;column-gap:1rem;row-gap:0.14rem;min-width:0;min-height:0;flex:1 1 0;padding:0.68rem 0.82rem;background:linear-gradient(145deg,rgba(255,255,255,0.052),rgba(255,255,255,0.012)),var(--bg-card);border:1px solid var(--border);border-radius:0.58rem;}
   .layout-list .row-name{grid-area:name;font-size:var(--tv-name-size);font-weight:850;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .row-meta{grid-area:meta;font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.82;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .row-desc{grid-area:desc;font-size:var(--tv-meta-size);font-weight:650;line-height:1.16;color:var(--text);opacity:0.86;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
-  .layout-list .leader{grid-area:leader;border-bottom:1px dotted var(--text-faint);min-width:1rem;align-self:end;margin-bottom:0.3rem;}
+  .layout-list .row-meta{grid-area:meta;font-size:var(--tv-meta-size);font-weight:700;color:var(--text);opacity:0.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .row-desc{grid-area:desc;font-size:var(--tv-meta-size);font-weight:650;line-height:1.16;color:var(--text);opacity:0.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+  .layout-list .leader{display:none;}
   .layout-list .row-price{grid-area:price;align-self:center;font-size:var(--tv-price-size);font-weight:950;color:var(--text);white-space:nowrap;}
 
   .layout-grid .card-body{min-width:0;display:flex;flex-direction:column;gap:0.26rem;}
@@ -621,9 +605,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-poster,.layout-cinematic,.layout-editorial{display:flex;flex-direction:column;gap:0.85rem;height:100%;min-height:0;}
   .layout-poster .category-block,.layout-cinematic .category-block,.layout-editorial .category-block{display:flex;flex-direction:column;flex:1 1 0;min-height:0;}
   .layout-poster .category-header,.layout-cinematic .category-header,.layout-editorial .category-header{flex:0 0 auto;}
-  .layout-poster .poster-products{display:flex;flex-direction:column;gap:1rem;flex:1 1 auto;min-height:0;}
-  .layout-poster .product-row{display:flex;gap:1.5rem;align-items:center;padding:1rem;background:var(--bg-card);border-radius:0.6rem;border:1px solid var(--border);}
-  .layout-poster .card-image{width:200px;height:200px;object-fit:cover;border-radius:0.4rem;flex-shrink:0;}
+  .layout-poster .poster-products{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:minmax(0,1fr);gap:1rem;flex:1 1 auto;min-height:0;}
+  .layout-poster .poster-products:has(> .product-row:only-child){grid-template-columns:minmax(0,1fr);}
+  .layout-poster .product-row{display:grid;grid-template-columns:minmax(15rem,0.78fr) minmax(0,1.22fr);gap:1.5rem;align-items:stretch;min-width:0;min-height:0;height:100%;padding:1rem;background:var(--bg-card);border-radius:0.7rem;border:1px solid var(--border);overflow:hidden;}
+  .layout-poster .card-image{width:100%;height:100%;min-height:0;object-fit:cover;border-radius:0.5rem;}
   .layout-poster .product-info{flex:1;display:flex;flex-direction:column;gap:0.5rem;}
   .layout-poster .card-name{font-size:var(--tv-feature-name-size);font-weight:900;color:var(--text);}
   .layout-poster .card-meta{font-size:var(--tv-feature-meta-size);color:var(--text);}
@@ -640,7 +625,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-cinematic .cinematic-products.count-1 .product-card,.layout-cinematic .cinematic-products.count-3 .product-card:first-child{grid-column:1 / -1;}
   .layout-cinematic .product-card{position:relative;border-radius:0.8rem;overflow:hidden;height:100%;min-height:0;background:var(--bg-card);border:1px solid var(--border);box-shadow:var(--card-shadow);}
   .layout-cinematic .card-image{width:100%;height:100%;object-fit:cover;border:0;}
-  .layout-cinematic .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.9rem 1rem;background:linear-gradient(to top,rgba(0,0,0,0.98) 0%,rgba(0,0,0,0.9) 70%,rgba(0,0,0,0.68) 100%);display:flex;flex-direction:column;gap:0.2rem;}
+  .layout-cinematic .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.9rem 1rem;background:linear-gradient(to top,rgba(0,0,0,0.99) 0%,rgba(0,0,0,0.95) 70%,rgba(0,0,0,0.82) 100%);display:flex;flex-direction:column;gap:0.2rem;}
   .layout-cinematic .card-name{font-size:var(--tv-name-size);font-weight:900;line-height:1.04;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,0.9);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;}
   .layout-cinematic .card-meta{font-size:var(--tv-meta-size);line-height:1.16;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-cinematic .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
@@ -659,10 +644,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   .layout-showcase .card-price{font-size:var(--tv-hero-price-size);font-weight:950;color:var(--text);}
 
   .layout-editorial .editorial-products{display:grid;grid-template-columns:repeat(3,1fr);grid-auto-rows:minmax(0,1fr);gap:1rem;flex:1 1 auto;min-height:0;}
+  .layout-editorial .editorial-products.count-1{grid-template-columns:minmax(0,1fr);}
+  .layout-editorial .editorial-products.count-2{grid-template-columns:repeat(2,minmax(0,1fr));}
   .layout-editorial .product-card{position:relative;background:var(--bg-card);border:1px solid var(--border);border-radius:0.75rem;overflow:hidden;box-shadow:var(--card-shadow);min-height:0;}
   .layout-editorial .editorial-products.no-images{grid-template-columns:repeat(auto-fit,minmax(min(44rem,100%),1fr));}
   .layout-editorial .card-image{width:100%;height:100%;object-fit:cover;border:0;}
-  .layout-editorial .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.85rem 0.95rem;background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.62) 72%,transparent 100%);display:flex;flex-direction:column;gap:0.18rem;}
+  .layout-editorial .card-body{position:absolute;left:0;right:0;bottom:0;padding:0.85rem 0.95rem;background:linear-gradient(to top,rgba(0,0,0,0.98) 0%,rgba(0,0,0,0.84) 72%,rgba(0,0,0,0.34) 100%);display:flex;flex-direction:column;gap:0.18rem;}
   .layout-editorial .card-name{font-size:var(--tv-name-size);line-height:1.06;font-weight:900;color:#fff;text-shadow:0 2px 16px rgba(0,0,0,0.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-editorial .card-meta{font-size:var(--tv-meta-size);line-height:1.12;color:rgba(255,255,255,0.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .layout-editorial .card-price{font-size:var(--tv-price-size);line-height:1;font-weight:950;color:#fff;}
@@ -719,10 +706,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   .tv-info{display:none;}
   .tv-info.visible{opacity:0.85;}
-  .demo-pill{display:none;padding:0.38rem 0.75rem;border-radius:999px;background:rgba(250,204,21,0.16);border:1px solid rgba(250,204,21,0.34);color:#fde68a;font-size:0.72rem;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;pointer-events:none;backdrop-filter:blur(10px);white-space:nowrap;}
+  .demo-pill{display:none;padding:0.42rem 0.78rem;border-radius:999px;background:#facc15;border:1px solid #eab308;color:#1c1917;font-size:0.78rem;font-weight:950;letter-spacing:0.08em;text-transform:uppercase;pointer-events:none;box-shadow:0 6px 18px rgba(0,0,0,0.22);white-space:nowrap;}
   .demo-pill.visible{display:block;}
 
   .price-pair{display:inline-flex;align-items:baseline;justify-content:flex-end;gap:0.42rem;white-space:nowrap;}
+  .layout-grid .price-pair{display:grid;grid-template-columns:max-content;justify-content:end;justify-items:end;gap:0.22rem;}
   .price-value{font:inherit;color:inherit;}
   .price-weight{display:inline-flex;align-items:center;padding:0.2em 0.42em;border:1px solid var(--accent);border-radius:0.42em;background:var(--accent-dim);color:var(--text);font-size:0.62em;font-weight:950;line-height:1;letter-spacing:0.025em;white-space:nowrap;}
   .card-price-orig{display:block;margin-top:0.22rem;}
@@ -932,7 +920,6 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   </header>
   <div class="menu-content" id="menu-content"></div>
   <footer class="menu-footer">
-    <div class="footer-progress" id="footer-progress"></div>
     <div class="footer-right" id="footer-disclaimer">For use by licensed adults only. Keep out of reach of children.</div>
   </footer>
 </div>
@@ -966,7 +953,6 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var compactDescription = ${compactTvDescription.toString()};
   var formatProductName = ${formatTvProductName.toString()};
   var manualSpecialsCategory = ${buildTvManualSpecialsCategory.toString()};
-  var formatTvPageProgress = ${formatTvPageProgress.toString()};
   var TV_PAGE_DURATION_OPTIONS = ${serializeInlineScriptJson(TV_PAGE_DURATION_OPTIONS)};
   var TV_PAGE_DURATION_DEFAULT = ${TV_PAGE_DURATION_DEFAULT};
   var TV_PAGE_TRANSITION_DEFAULT = ${serializeInlineScriptJson(TV_PAGE_TRANSITION_DEFAULT)};
@@ -1106,7 +1092,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     };
     Object.keys(tokens).forEach(function(name){document.body.style.setProperty(name,tokens[name]);});
     document.body.setAttribute('data-font-scale',String(fontScale));
-    document.body.classList.toggle('font-scale-large',fontScale>=130);
+    document.body.classList.toggle('font-scale-large',fontScale>=160);
     document.body.classList.toggle('font-scale-high',fontScale>=190);
     document.body.classList.toggle('font-scale-maximum',fontScale>=220);
   }
@@ -1185,6 +1171,17 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   }
   function categoryIcon(type){
     return '<span class="cat-icon-wrap" aria-hidden="true"><span class="cat-icon cat-icon-' + type + '">' + categoryIconSvg(type) + '</span></span>';
+  }
+  function categoryHeading(name){
+    return String(name || '').replace(/\\s*\\u00B7\\s*(?:indica|sativa|hybrid)\\s*$/i,'').trim();
+  }
+  function createCategoryBlock(cat, extraClass){
+    var categoryName = categoryHeading(cat.name);
+    var categoryType = getCategoryType(categoryName);
+    var catEl = document.createElement('div');
+    catEl.className = 'category-block category-' + categoryType + (extraClass || '');
+    catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(categoryType) + escapeHtml(categoryName) + '</div></div>';
+    return catEl;
   }
 
   var cycleState = {currentPage:0,totalPages:1,interval:null,intervalMs:0,isTransitioning:false,pageSignature:'',swapTimer:null,cleanupTimer:null};
@@ -1442,8 +1439,6 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     content.className = 'menu-content layout-' + layout;
     content.setAttribute('data-menu-page',String(cycleState.currentPage+1));
     content.setAttribute('data-menu-pages',String(cycleState.totalPages));
-    var footerProgress = document.getElementById('footer-progress');
-    if(footerProgress) footerProgress.textContent = formatTvPageProgress(pagePlan,cycleState.currentPage);
     
     if(layout==='grid') renderGrid(pageCats, content);
     else if(layout==='pricewall') renderPricewall(pageCats, content, pricewallRailCats);
@@ -1699,9 +1694,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderGrid(cats, container){
     cats.forEach(function(cat, catIndex){
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name);
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat);
       var grid = document.createElement('div');
       grid.className = 'grid-products count-' + Math.min(9, cat.products.length);
       grid.innerHTML = '<div class="product-table-head"><span>Product</span><span>Price</span></div>';
@@ -1765,9 +1758,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderList(cats, container){
     cats.forEach(function(cat, catIndex){
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name);
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat);
       var list = document.createElement('div');
       list.className = 'list-products';
       cat.products.forEach(function(p){ p.categoryName = cat.name;
@@ -1783,9 +1774,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderPoster(cats, container){
     cats.forEach(function(cat, catIndex){
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name);
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat);
       var poster = document.createElement('div');
       poster.className = 'poster-products' + (cat.products.some(function(p){ return !!(safeImgUrl(p.image) && config.showImages !== false); }) ? ' has-images' : ' no-images');
       cat.products.forEach(function(p){ p.categoryName = cat.name;
@@ -1803,9 +1792,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderCinematic(cats, container){
     cats.forEach(function(cat, catIndex){
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name);
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat);
       var grid = document.createElement('div');
       grid.className = 'cinematic-products count-' + Math.min(4, cat.products.length);
       cat.products.forEach(function(p){ p.categoryName = cat.name;
@@ -1844,11 +1831,9 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
 
   function renderEditorial(cats, container){
     cats.forEach(function(cat, catIndex){
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name);
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat);
       var grid = document.createElement('div');
-      grid.className = 'editorial-products' + (cat.products.some(function(p){ return !!(safeImgUrl(p.image) && config.showImages !== false); }) ? ' has-images' : ' no-images');
+      grid.className = 'editorial-products count-' + Math.min(9, cat.products.length) + (cat.products.some(function(p){ return !!(safeImgUrl(p.image) && config.showImages !== false); }) ? ' has-images' : ' no-images');
       cat.products.forEach(function(p){ p.categoryName = cat.name;
         var card = document.createElement('div');
         var hasImage = !!(safeImgUrl(p.image) && config.showImages !== false);
@@ -1866,9 +1851,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cats.forEach(function(cat, catIndex){
       var products = (cat.products || []).slice(0, 4);
       if(!products.length) return;
-      var catEl = document.createElement('div');
-      catEl.className = 'category-block category-' + getCategoryType(cat.name) + (products.length === 1 ? ' single-product' : '');
-      catEl.innerHTML = '<div class="category-header"><div class="category-title">' + categoryIcon(getCategoryType(cat.name)) + escapeHtml(cat.name) + '</div></div>';
+      var catEl = createCategoryBlock(cat, products.length === 1 ? ' single-product' : '');
       var wrap = document.createElement('div');
       wrap.className = 'sparse-products' + (products.length === 1 ? ' single-product' : '');
       var hero = products[0];
@@ -1937,17 +1920,14 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     var scale = Math.min(scaleX, scaleY);
     if(!(scale > 0) || !isFinite(scale)) scale = 1;
     fitScale = scale;
+    var canvasWidth = Math.max(SCALE_BASELINE_W, vw / scale);
+    var canvasHeight = Math.max(SCALE_BASELINE_H, vh / scale);
     menu.style.transformOrigin = 'top left';
-    var canvasHeight = vh > vw ? vh / scale : SCALE_BASELINE_H;
-    menu.style.width = SCALE_BASELINE_W + 'px';
+    menu.style.width = canvasWidth + 'px';
     menu.style.height = canvasHeight + 'px';
     menu.style.transform = 'scale(' + scale + ')';
-    var scaledW = SCALE_BASELINE_W * scale;
-    var scaledH = canvasHeight * scale;
-    var overshootX = scaledW - vw;
-    var overshootY = scaledH - vh;
-    menu.style.marginLeft = (overshootX > 0 ? -overshootX / 2 : Math.max(0, (vw - scaledW) / 2)) + 'px';
-    menu.style.marginTop = (overshootY > 0 ? -overshootY / 2 : 0) + 'px';
+    menu.style.marginLeft = '0';
+    menu.style.marginTop = '0';
   }
 
   function connect(){

@@ -48,7 +48,7 @@ describe('buildTvCatalogPagePlan', () => {
       for (let displayNumber = 1; displayNumber <= displayTotal; displayNumber += 1) {
         const allocation = allocateCategoriesForDisplay(categories, displayNumber, displayTotal);
         const pages = buildTvCatalogPagePlan(allocation, { layout: 'list', demoMode: true });
-        expect(pages.every((page) => productIds(page).length <= 18)).toBe(true);
+        expect(pages.every((page) => productIds(page).length <= 10)).toBe(true);
         actualIds.push(...plannedProductIds(pages));
       }
 
@@ -192,8 +192,8 @@ describe('buildTvCatalogPagePlan', () => {
     const highScalePoster = buildTvCatalogPagePlan(categories, { layout: 'poster', demoMode: true, fontScale: 200 });
     const extraLargeCinematic = buildTvCatalogPagePlan(categories, { layout: 'cinematic', demoMode: true, fontScale: 140 });
 
-    expect(list.every((page) => page.length <= 3)).toBe(true);
-    expect(list.every((page) => productIds(page).length <= 10)).toBe(true);
+    expect(list.every((page) => page.length <= 2)).toBe(true);
+    expect(list.every((page) => productIds(page).length <= 12)).toBe(true);
     expect(standardPoster.every((page) => page.length === 1 && productIds(page).length <= 3)).toBe(true);
     expect(extraLargePoster.every((page) => page.length === 1 && productIds(page).length <= 2)).toBe(true);
     expect(highScalePoster.every((page) => page.length === 1 && productIds(page).length === 1)).toBe(true);

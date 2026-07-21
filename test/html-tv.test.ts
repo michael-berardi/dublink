@@ -4,7 +4,6 @@ import {
   buildTvManualSpecialsCategory,
   compactTvDescription,
   formatTvProductName,
-  formatTvPageProgress,
   isVisuallyBlankImageSample,
   nextTvCyclePage,
   normalizeTvUploadImageUrl,
@@ -203,7 +202,7 @@ describe('tvPage', () => {
     expect(page).toContain('.layout-grid,.layout-pricewall{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))');
     expect(page).toContain('.layout-grid .category-block,.layout-pricewall .category-block{min-width:0;min-height:0;display:flex;flex-direction:column');
     expect(page).toContain('function makeDesc');
-    expect(page).toContain("grid.className = 'editorial-products' +");
+    expect(page).toContain("grid.className = 'editorial-products count-'");
     expect(page).toContain('.layout-editorial .editorial-products.no-images');
   });
 
@@ -223,7 +222,7 @@ describe('tvPage', () => {
     expect(page).toContain("'<span class=\"price-pair\">' + weight + current + '</span>'");
     expect(page).toContain('.price-pair{display:inline-flex;');
     expect(page).toContain('.price-weight{');
-    expect(page).toContain('grid-template-areas:"name meta leader price" "desc desc desc price"');
+    expect(page).toContain('grid-template-areas:"name price" "meta price" "desc price"');
   });
 
   it('adapts descriptions to layout density instead of repeating full paragraphs everywhere', () => {
@@ -456,15 +455,13 @@ describe('tvPage', () => {
     expect(nextTvCyclePage(2, 0)).toBe(0);
   });
 
-  it('formats category-local progress for the visible TV page', () => {
-    const pagePlan = [
-      [{ name: 'Flower · Indica' }, { name: 'Pre-Rolls · Sativa' }],
-      [{ name: 'Flower · Sativa' }, { name: 'Edibles' }],
-      [{ name: 'Flower · Hybrid' }, { name: 'Pre-Rolls · Hybrid' }],
-    ];
+  it('renders one uncluttered single-line legal footer without a page counter', () => {
+    const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
 
-    expect(formatTvPageProgress(pagePlan, 1)).toBe('Flower 2/3 · Edibles 1/1');
-    expect(formatTvPageProgress([], 0)).toBe('');
+    expect(page).toContain('<div class="footer-right" id="footer-disclaimer">');
+    expect(page).toContain('.footer-right{width:100%;min-width:0;text-align:center;white-space:nowrap');
+    expect(page).not.toContain('footer-progress');
+    expect(page).not.toContain('formatTvPageProgress');
   });
 
   it('normalizes explicit page duration seconds and legacy speed values', () => {
@@ -687,11 +684,13 @@ describe('tvPage', () => {
     expect(page).toContain("var DISPLAY_NUM = Math.min(boundedDisplayParam('display',1),DISPLAY_TOTAL)");
   });
 
-  it('compacts the TV board and centers scaled previews when a promo banner is active', () => {
+  it('compacts banner boards and expands the logical canvas to every display aspect ratio', () => {
     const page = tvPage('test-session', 'https://dubmenu.com', { initialConfig: sampleConfig });
     expect(page).toContain('body.has-promo-banner .menu-content');
     expect(page).toContain("document.body.classList.toggle('has-promo-banner',lastBannerActive)");
-    expect(page).toContain('Math.max(0, (vw - scaledW) / 2)');
+    expect(page).toContain('var canvasWidth = Math.max(SCALE_BASELINE_W, vw / scale)');
+    expect(page).toContain('var canvasHeight = Math.max(SCALE_BASELINE_H, vh / scale)');
+    expect(page).toContain("menu.style.marginLeft = '0'");
   });
 
   it('shows the demo pill when tvDemo is enabled', () => {

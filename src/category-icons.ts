@@ -22,34 +22,36 @@ export const CATEGORY_LABELS: Record<string, string> = {
 // Shared SVG wrapper attributes for accessibility and rendering consistency.
 const SVG_ATTRS = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-hidden="true" focusable="false"';
 const PLACEHOLDER_ATTRS = 'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-hidden="true" focusable="false" class="placeholder-icon"';
+const STROKE_ICON_ATTRS = `${SVG_ATTRS} fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"`;
+const PREROLL_ICON_ATTRS = `${SVG_ATTRS} fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"`;
 
 export const CATEGORY_ICON_SVGS: Record<string, string> = {
   flower:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M12 3c3.8 1.9 6.2 4.9 6.2 8.1 0 3.5-2.5 6.5-6.2 8.4-3.7-1.9-6.2-4.9-6.2-8.4C5.8 7.9 8.2 4.9 12 3Zm0 3.2c-.8 1.6-1.2 3.1-1.2 4.7s.4 3.1 1.2 4.6c.8-1.5 1.2-3 1.2-4.6S12.8 7.8 12 6.2Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><circle cx="8.2" cy="9.1" r="2.5"/><circle cx="15.6" cy="9.3" r="2.5"/><circle cx="12" cy="6.2" r="2.7"/><path d="M6.7 11.2c.1 3.8 2 6.6 5.3 8.8 3.4-2.2 5.2-5.1 5.3-8.8M12 10v10M9.1 13.2l2.9 2.2 2.9-2.2"/></svg>`,
   edibles:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M7.3 8.2h9.4c1.1 0 2 .9 2 2v3.6c0 1.1-.9 2-2 2H7.3c-1.1 0-2-.9-2-2v-3.6c0-1.1.9-2 2-2Zm-3.1.2L2.2 6.6c-.5-.5-.1-1.4.6-1.3l3.1.5a3.7 3.7 0 0 0-1.7 2.6Zm0 7.2a3.7 3.7 0 0 0 1.7 2.6l-3.1.5c-.7.1-1.1-.8-.6-1.3l2-1.8Zm15.6 0 2 1.8c.5.5.1 1.4-.6 1.3l-3.1-.5a3.7 3.7 0 0 0 1.7-2.6Zm0-7.2a3.7 3.7 0 0 0-1.7-2.6l3.1-.5c.7-.1 1.1.8.6 1.3l-2 1.8Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><rect x="6.5" y="7.5" width="11" height="9" rx="3"/><path d="m6.5 9-3-2.5.7 4-2 1.5 2 1.5-.7 4 3-2.5M17.5 9l3-2.5-.7 4 2 1.5-2 1.5.7 4-3-2.5M10 10.5h4M9.5 13.5h5"/></svg>`,
   beverages:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M9 2h6l.8 3.2c.1.4.2.8.2 1.2V20a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V6.4c0-.4.1-.8.2-1.2L9 2Zm.9 6v8h4.2V8H9.9Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M9 3h6l.8 3.2c.1.4.2.8.2 1.2V20a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V7.4c0-.4.1-.8.2-1.2L9 3Z"/><path d="M8.4 8h7.2M8.4 17h7.2M10.5 11.5h3"/></svg>`,
   concentrates:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M7 5.5C7 4.1 8.1 3 9.5 3h5C15.9 3 17 4.1 17 5.5V7H7V5.5Zm-1 4h12l-1 9.2A2.5 2.5 0 0 1 14.5 21h-5A2.5 2.5 0 0 1 7 18.7L6 9.5Zm3.2 3.6c1 .7 2 .9 3 .6 1.2-.3 2-.2 2.6.4.5-1.3-.4-2.7-1.9-2.7-1.2 0-2.1.8-3.7 1.7Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M5 7.5 13 3l6 5-2 10-9 3-5-7 2-6.5Z"/><path d="m5 7.5 7 5L19 8m-7 4.5L8 21m4-8.5 5 5.5"/></svg>`,
   prerolls:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M18.8 3.2c.6-.6 1.6-.2 1.5.7l-.5 4.1L7.4 20.4c-.9.9-2.3.9-3.2 0l-.6-.6c-.9-.9-.9-2.3 0-3.2L16 4.2l2.8-1Zm-3 4.1L5.3 17.8l.9.9L16.7 8.2l-.9-.9Z"/></svg>`,
+    `<svg ${PREROLL_ICON_ATTRS}><path d="m18.8 3.2-2.2 4.2L7.2 20l-3.4.8.7-3.5L17 7.9l1.8-4.7Z"/><path d="m14.8 9.5 2.7 2M4.5 17.3l2.7 2M18.8 3.2l1.8-.8-.7 1.8"/></svg>`,
   vapes:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M9.5 2h5c.8 0 1.5.7 1.5 1.5V7h-8V3.5C8 2.7 8.7 2 9.5 2Zm-1 6.5h7A1.5 1.5 0 0 1 17 10v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V10c0-.8.7-1.5 1.5-1.5Zm2.2 3.2v6.6h2.6v-6.6h-2.6Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M10 2.5h4v3h-4zM8.5 5.5h7v6.8h-7zM9 9.5h6M8 12.3h8V20a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 20v-7.7Z"/><circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none"/></svg>`,
   topicals:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M8 3h8v3H8V3Zm-1 4h10l-1 12.2A3 3 0 0 1 13 22h-2a3 3 0 0 1-3-2.8L7 7Zm3.2 5v2h3.6v-2h-3.6Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M8 3h8l1.5 15H6.5L8 3ZM6.5 18h11v3h-11zM9.5 8.5h5M10.5 11.5h3"/></svg>`,
   tinctures:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M9 2h6v4H9V2Zm1 5h4v2.2l2.4 2.4a2 2 0 0 1 .6 1.4v6.5A2.5 2.5 0 0 1 14.5 22h-5A2.5 2.5 0 0 1 7 19.5V13c0-.5.2-1 .6-1.4L10 9.2V7Zm2 6.1c-1.4 1.6-2.1 2.9-2.1 4A2.1 2.1 0 0 0 12 19.2a2.1 2.1 0 0 0 2.1-2.1c0-1.1-.7-2.4-2.1-4Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M9 2.5h6v3H9zM10 5.5h4v3l2 2V20a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 20v-9.5l2-2v-3Z"/><path d="M8.5 12h7M12 14.5c-1.2 1.4-1.8 2.4-1.8 3.1a1.8 1.8 0 1 0 3.6 0c0-.7-.6-1.7-1.8-3.1Z"/></svg>`,
   cbd:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M12 3c2.9 2.4 4.4 5 4.4 7.6 0 2.9-1.7 5.1-4.4 6.5-2.7-1.4-4.4-3.6-4.4-6.5C7.6 8 9.1 5.4 12 3Zm0 14.2c2 1.1 3.3 2.4 3.9 3.8H8.1c.6-1.4 1.9-2.7 3.9-3.8Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M12 2.8c3.1 4 4.7 7.1 4.7 9.4a4.7 4.7 0 1 1-9.4 0c0-2.3 1.6-5.4 4.7-9.4Z"/><path d="M12 17.5v-6M12 13.5c-1.4-.2-2.5-1.1-3-2.4M12 12.2c1.4-.2 2.5-1.1 3-2.4"/></svg>`,
   accessories:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M7 5h10a2 2 0 0 1 2 2v2.2a7 7 0 1 1-14 0V7a2 2 0 0 1 2-2Zm1.5 4.2a3.5 3.5 0 0 0 7 0H8.5ZM12 13a3 3 0 0 0-3 3h6a3 3 0 0 0-3-3Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="1.2"/><path d="M12 3.5v3m0 11v3M3.5 12h3m11 0h3M6 6l2.2 2.2m7.6 7.6L18 18m0-12-2.2 2.2m-7.6 7.6L6 18"/></svg>`,
   seedling:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M11 21v-7.2C7.7 13.4 5 10.6 5 7.2V5h2.2c2.2 0 4.1 1.2 5 3 1-1.8 2.8-3 5-3H19v2.2c0 3.4-2.7 6.2-6 6.6V21h-2Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M12 21V9M12 13c-4.2 0-7-2.3-7-6.5 4.2 0 7 2.3 7 6.5ZM12 16c4.2 0 7-2.3 7-6.5-4.2 0-7 2.3-7 6.5ZM7 21h10"/></svg>`,
   other:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M6 6h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Zm2 3v6h8V9H8Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M5 6h14v14H5zM5 10h14M9 6v14"/><path d="M12.5 13.5h3M12.5 16.5h2"/></svg>`,
   generic:
-    `<svg ${SVG_ATTRS}><path fill="currentColor" d="M6 5h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm2 3v2h8V8H8Zm0 4v4h8v-4H8Z"/></svg>`,
+    `<svg ${STROKE_ICON_ATTRS}><path d="M5 8h14l-1 13H6L5 8Z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg>`,
 };
 
 export const PLACEHOLDER_ICON_SVGS: Record<string, string> = {

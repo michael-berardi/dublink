@@ -38,16 +38,16 @@ export function buildTvCatalogPagePlan(
     switch (options.layout) {
       case 'grid': productsPerPage = 12; categoriesPerPage = 3; break;
       case 'pricewall': productsPerPage = 16; categoriesPerPage = 2; break;
-      case 'list': productsPerPage = 10; categoriesPerPage = 3; break;
+      case 'list': productsPerPage = 12; categoriesPerPage = 2; break;
       case 'poster': productsPerPage = 3; categoriesPerPage = 1; break;
       case 'cinematic': productsPerPage = demoMode ? 8 : 6; categoriesPerPage = 1; break;
       case 'showcase': productsPerPage = 1; categoriesPerPage = 1; break;
       case 'editorial': productsPerPage = demoMode ? 12 : 9; categoriesPerPage = 3; break;
       case 'sparse': productsPerPage = 4; categoriesPerPage = 1; break;
-      default: productsPerPage = 10; categoriesPerPage = 3;
+      default: productsPerPage = 12; categoriesPerPage = 3;
     }
-    if (options.bannerActive && options.layout !== 'pricewall') {
-      productsPerPage = Math.max(1, productsPerPage - (options.layout === 'showcase' ? 0 : 2));
+    if (options.bannerActive && !['grid', 'pricewall', 'list', 'showcase'].includes(options.layout)) {
+      productsPerPage = Math.max(1, productsPerPage - 1);
     }
     const rawFontScale = Number(options.fontScale);
     const fontScale = Number.isFinite(rawFontScale)
@@ -58,39 +58,43 @@ export function buildTvCatalogPagePlan(
       productsPerPage = 1;
       categoriesPerPage = 1;
     } else if (fontScale >= 190) {
-      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 2);
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 4);
       else if (options.layout === 'poster') productsPerPage = 1;
-      else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 2);
+      else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 4);
       if (categoriesPerPage > 1) categoriesPerPage = 2;
     } else if (fontScale >= 160) {
-      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 4);
-      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 1);
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 8);
+      else if (options.layout === 'poster') productsPerPage = 1;
       else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 2);
-      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 6);
       else if (options.layout === 'sparse') productsPerPage = Math.min(productsPerPage, 2);
       else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 6);
     } else if (fontScale >= 145) {
-      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 5);
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 10);
       else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 2);
       else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 3);
-      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 4);
-      else if (options.layout === 'sparse') productsPerPage = Math.min(productsPerPage, 3);
-      else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 7);
-    } else if (fontScale >= 130) {
-      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 6);
-      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 2);
-      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 4);
-      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 4);
-      else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 7);
-    } else if (fontScale >= 115) {
-      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 8);
-      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
-      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 5);
       else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout === 'sparse') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout !== 'showcase') productsPerPage = Math.min(productsPerPage, 9);
+    } else if (fontScale >= 130) {
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 10);
+      else if (options.layout === 'list') productsPerPage = Math.min(productsPerPage, 10);
+      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 2);
+      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 9);
+      else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 9);
+    } else if (fontScale >= 115) {
+      if (options.layout === 'pricewall') productsPerPage = Math.min(productsPerPage, 12);
+      else if (options.layout === 'poster') productsPerPage = Math.min(productsPerPage, 3);
+      else if (options.layout === 'cinematic') productsPerPage = Math.min(productsPerPage, 6);
+      else if (options.layout === 'editorial') productsPerPage = Math.min(productsPerPage, 9);
       else if (options.layout !== 'showcase' && options.layout !== 'sparse') productsPerPage = Math.min(productsPerPage, 10);
     }
     if (options.layout === 'list' && hasAccessories) {
-      const accessoriesLimit = fontScale >= 190 ? 2 : fontScale >= 160 ? 4 : fontScale >= 130 ? 6 : 7;
+      let accessoriesLimit = 8;
+      if (fontScale >= 160) accessoriesLimit = 4;
+      else if (fontScale >= 145) accessoriesLimit = 5;
+      else if (fontScale >= 130) accessoriesLimit = 6;
       productsPerPage = Math.min(productsPerPage, accessoriesLimit);
     }
     return { productsPerPage, categoriesPerPage };
