@@ -30,6 +30,7 @@ import { handleImageUpload, serveImage, deleteAccountUploads, listAccountUploads
 import { createCheckoutSession, createCustomerPortalSession, verifyWebhookSignature, subscriptionStatusFromStripe, trialEndsAtFromStripe, cancelSubscription } from './stripe';
 import {
   TV_FONT_SCALE_DEFAULT,
+  TV_FONT_SCALE_MAX,
   TV_FONT_SCALE_MIN,
   type Category,
   type MenuConfig,
@@ -320,11 +321,12 @@ async function buildMenuImport(
     template: resolvedTemplate,
     summary: style.styleProfile.summary.replace(` / ${style.template} `, ` / ${resolvedTemplate} `),
   };
-  const importedFontScale = style.fontSize === 'small'
-    ? TV_FONT_SCALE_MIN
-    : style.fontSize === 'large'
-      ? 180
-      : TV_FONT_SCALE_DEFAULT;
+  let importedFontScale = TV_FONT_SCALE_DEFAULT;
+  if (style.fontSize === 'small') {
+    importedFontScale = TV_FONT_SCALE_MIN;
+  } else if (style.fontSize === 'large') {
+    importedFontScale = TV_FONT_SCALE_MAX;
+  }
   const importPayload: MenuImportPayload = {
     dispensaryName: formatted.dispensaryName,
     logo: formatted.logo,

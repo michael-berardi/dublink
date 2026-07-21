@@ -12,10 +12,12 @@ import {
   shouldRunTvCycle,
   shouldUseTvSmoothProductScroll,
   tvPage,
+  tvSmoothScrollDurationMs,
 } from '../src/html-tv';
 import {
   normalizeTvPageDurationSeconds,
   normalizeTvPageTransition,
+  normalizeTvScrollSpeed,
   TV_PAGE_DURATION_DEFAULT,
   TV_PAGE_DURATION_OPTIONS,
 } from '../src/types';
@@ -389,16 +391,16 @@ describe('tvPage', () => {
     const large = tvPage('test-session', 'https://dubmenu.com', { initialConfig: { ...sampleConfig, fontSize: 'large' } });
     expect(small).toContain('<body class="template-default font-small" data-font-scale="100">');
     expect(medium).toContain('<body class="template-default font-medium" data-font-scale="140">');
-    expect(large).toContain('<body class="template-default font-large" data-font-scale="180">');
+    expect(large).toContain('<body class="template-default font-medium" data-font-scale="150">');
   });
 
-  it('normalizes the wider continuous TV scale safely while preserving legacy size settings', () => {
+  it('caps the continuous TV scale at the verified 150% maximum while preserving legacy size settings', () => {
     expect(normalizeTvFontScale(undefined, 'small')).toBe(100);
     expect(normalizeTvFontScale(undefined, 'medium')).toBe(140);
-    expect(normalizeTvFontScale(undefined, 'large')).toBe(180);
+    expect(normalizeTvFontScale(undefined, 'large')).toBe(150);
     expect(normalizeTvFontScale(79, 'large')).toBe(100);
     expect(normalizeTvFontScale(137, 'small')).toBe(135);
-    expect(normalizeTvFontScale(500, 'small')).toBe(250);
+    expect(normalizeTvFontScale(500, 'small')).toBe(150);
 
     const page = tvPage('test-session', 'https://dubmenu.com', {
       initialConfig: { ...sampleConfig, fontSize: 'small', fontScale: 135 },
@@ -466,6 +468,23 @@ describe('tvPage', () => {
     expect(shouldUseTvSmoothProductScroll(true, true, 'poster', false)).toBe(false);
     expect(shouldUseTvSmoothProductScroll(true, true, 'grid', true)).toBe(false);
   });
+  it('uses a configurable constant pixel speed for smooth product scrolling', () => {
+    expect(normalizeTvScrollSpeed(undefined)).toBe(40);
+    expect(normalizeTvScrollSpeed(10)).toBe(20);
+    expect(normalizeTvScrollSpeed(42)).toBe(40);
+    expect(normalizeTvScrollSpeed(120)).toBe(80);
+    expect(tvSmoothScrollDurationMs(400, 40)).toBe(10_000);
+    expect(tvSmoothScrollDurationMs(800, 40)).toBe(20_000);
+    expect(tvSmoothScrollDurationMs(400, 80)).toBe(5_000);
+
+    const page = tvPage('test-session', 'https://dubmenu.com', {
+      initialConfig: { ...sampleConfig, autoScroll: true, smoothScrollSpeed: 60 },
+    });
+    expect(page).toContain('var durationMs=tvSmoothScrollDurationMs(maxDistance,config&&config.smoothScrollSpeed)');
+    expect(page).toContain('distances[index]*Math.max(0,Math.min(1,progress))');
+    expect(page).not.toContain('progress*progress*(3-2*progress)');
+  });
+
 
 
   it('renders one uncluttered single-line legal footer without a page counter', () => {

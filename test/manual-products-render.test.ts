@@ -226,6 +226,7 @@ describe('manual products via phone/editor WebSocket flow', () => {
 
     const configReplace = {
       dispensaryName: 'WS Manual Test',
+      fontScale: 250,
       categories: [
         {
           id: 'cat-ws-flower',
@@ -279,5 +280,9 @@ describe('manual products via phone/editor WebSocket flow', () => {
     const menuHtml = await menuRes.text();
     expect(menuHtml).toContain('SAM SYNC TEST A');
     expect(menuHtml).toContain('SAM SYNC TEST B');
+
+    const tvRes = await SELF.fetch(`${BASE}/tv/${sessionId}`);
+    expect(tvRes.status).toBe(200);
+    expect(await tvRes.text()).toContain('data-font-scale="150"');
   });
 });

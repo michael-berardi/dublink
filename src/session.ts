@@ -1,4 +1,23 @@
-import { MenuConfig, DEFAULT_CONFIG, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITIONS, normalizeTvPageDurationSeconds, normalizeTvPageTransition, type Category, type Product, type PriceTier, type MenuSpecial, type ReferenceStyleProfile, type ScreenConfig } from './types';
+import {
+  DEFAULT_CONFIG,
+  TV_FONT_SCALE_MAX,
+  TV_FONT_SCALE_MIN,
+  TV_PAGE_DURATION_OPTIONS,
+  TV_PAGE_TRANSITIONS,
+  TV_SCROLL_SPEED_MAX,
+  TV_SCROLL_SPEED_MIN,
+  normalizeTvPageDurationSeconds,
+  normalizeTvFontScale,
+  normalizeTvPageTransition,
+  normalizeTvScrollSpeed,
+  type Category,
+  type MenuConfig,
+  type MenuSpecial,
+  type PriceTier,
+  type Product,
+  type ReferenceStyleProfile,
+  type ScreenConfig,
+} from './types';
 import { getCookieValue, verifyToken, isSubscriptionActive, getAccount, resolveBusinessAccount, jsonResponse, type Account, type Env as AuthEnv } from './auth';
 
 export type Env = AuthEnv;
@@ -133,7 +152,9 @@ export class SessionDurableObject implements DurableObject {
       categories,
       displayCount,
       screens: this.sanitizeScreens(config.screens, categories),
+      fontScale: normalizeTvFontScale(config.fontScale, config.fontSize),
       pageDurationSeconds: normalizeTvPageDurationSeconds(config.pageDurationSeconds, legacyConfig.autoScrollSpeed),
+      smoothScrollSpeed: normalizeTvScrollSpeed(config.smoothScrollSpeed),
       pageTransition: normalizeTvPageTransition(config.pageTransition),
     };
     delete (normalized as MenuConfig & { autoScrollSpeed?: unknown }).autoScrollSpeed;
@@ -162,6 +183,12 @@ export class SessionDurableObject implements DurableObject {
               storedConfig = {
                 ...storedConfig,
                 categories: await this.loadCategoryChunks(chunkKeys),
+              };
+            }
+            if (typeof storedConfig.fontScale === 'number' && Number.isFinite(storedConfig.fontScale)) {
+              storedConfig = {
+                ...storedConfig,
+                fontScale: normalizeTvFontScale(storedConfig.fontScale, storedConfig.fontSize),
               };
             }
             if (this.isValidConfig(storedConfig)) {
@@ -327,6 +354,7 @@ export class SessionDurableObject implements DurableObject {
       this.sanitizeTheme(config.theme) !== undefined &&
       (config.pageDurationSeconds === undefined || this.sanitizePageDurationSeconds(config.pageDurationSeconds) !== undefined) &&
       (config.smoothProductScroll === undefined || typeof config.smoothProductScroll === 'boolean') &&
+      (config.smoothScrollSpeed === undefined || this.sanitizeScrollSpeed(config.smoothScrollSpeed) !== undefined) &&
       (config.pageTransition === undefined || this.sanitizePageTransition(config.pageTransition) !== undefined) &&
       ['default', 'minimal', 'neon', 'light', 'sunset', 'forest', 'royal', 'gold', 'ocean', 'crimson', 'bone', 'vapor'].includes(String(config.template)) &&
       typeof config.displayCount === 'number' &&
@@ -441,7 +469,7 @@ export class SessionDurableObject implements DurableObject {
           layout: this.sanitizeLayout(data.layout) ?? this.config.layout,
           layoutMode: this.sanitizeLayoutMode(data.layoutMode) ?? this.config.layoutMode,
           fontSize: this.sanitizeFontSize(data.fontSize) ?? this.config.fontSize,
-          fontScale: this.sanitizeFontScale(data.fontScale)
+          fontScale: this.normalizeImportedFontScale(data.fontScale, data.fontSize)
             ?? this.fontScaleForFontSize(data.fontSize)
             ?? this.config.fontScale,
           theme: this.sanitizeTheme(data.theme) ?? this.config.theme,
@@ -455,6 +483,7 @@ export class SessionDurableObject implements DurableObject {
               ? this.config.pageDurationSeconds
               : normalizeTvPageDurationSeconds(undefined, data.autoScrollSpeed)
           ),
+          smoothScrollSpeed: this.sanitizeScrollSpeed(data.smoothScrollSpeed) ?? this.config.smoothScrollSpeed,
           pageTransition: this.sanitizePageTransition(data.pageTransition) ?? this.config.pageTransition,
           showImages: typeof data.showImages === 'boolean' ? data.showImages : this.config.showImages,
           showLogo: typeof data.showLogo === 'boolean' ? data.showLogo : this.config.showLogo,
@@ -1006,6 +1035,9 @@ export class SessionDurableObject implements DurableObject {
         if (sanitizedPayload.fontScale !== undefined) {
           sanitizedPayload.fontScale = this.sanitizeFontScale(sanitizedPayload.fontScale);
         }
+        if (sanitizedPayload.smoothScrollSpeed !== undefined) {
+          sanitizedPayload.smoothScrollSpeed = this.sanitizeScrollSpeed(sanitizedPayload.smoothScrollSpeed);
+        }
         if (sanitizedPayload.complianceState !== undefined) {
           const cs = this.sanitizeComplianceState(sanitizedPayload.complianceState);
           if (cs) sanitizedPayload.complianceState = cs;
@@ -1037,13 +1069,14 @@ export class SessionDurableObject implements DurableObject {
         this.config = {
           ...this.config,
           ...payload,
-          fontScale: this.sanitizeFontScale(payload.fontScale) ?? this.config.fontScale,
+          fontScale: this.normalizeImportedFontScale(payload.fontScale, payload.fontSize) ?? this.config.fontScale,
           autoScroll: typeof payload.autoScroll === 'boolean' ? payload.autoScroll : this.config.autoScroll,
           pageDurationSeconds: this.sanitizePageDurationSeconds(payload.pageDurationSeconds) ?? (
             payload.autoScrollSpeed === undefined
               ? this.config.pageDurationSeconds
               : normalizeTvPageDurationSeconds(undefined, payload.autoScrollSpeed)
           ),
+          smoothScrollSpeed: this.sanitizeScrollSpeed(payload.smoothScrollSpeed) ?? this.config.smoothScrollSpeed,
           pageTransition: this.sanitizePageTransition(payload.pageTransition) ?? this.config.pageTransition,
           categories,
           screens: this.sanitizeScreens(payload.screens ?? this.config.screens, categories),
@@ -1297,7 +1330,7 @@ export class SessionDurableObject implements DurableObject {
     const allowedKeys = ['dispensaryName', 'logo', 'primaryColor', 'secondaryColor',
                          'showStrain', 'showLogo', 'showDescription', 'showImages',
                          'showBrand', 'showPromos', 'currency', 'customFont', 'layout',
-                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'smoothProductScroll', 'pageDurationSeconds', 'pageTransition', 'showCategory',
+                         'layoutMode', 'fontSize', 'fontScale', 'theme', 'autoScroll', 'smoothProductScroll', 'pageDurationSeconds', 'smoothScrollSpeed', 'pageTransition', 'showCategory',
                          'promoBanner', 'scheduledBanners', 'specials', 'ageVerified', 'disclaimer', 'complianceState', 'analyticsEnabled', 'template',
                          'displayCount', 'screens', 'styleProfile'];
 
@@ -1319,6 +1352,7 @@ export class SessionDurableObject implements DurableObject {
     if (payload.layoutMode !== undefined && this.sanitizeLayoutMode(payload.layoutMode) === undefined) return false;
     if (payload.displayCount !== undefined && this.sanitizeDisplayCount(payload.displayCount) === undefined) return false;
     if (payload.pageDurationSeconds !== undefined && this.sanitizePageDurationSeconds(payload.pageDurationSeconds) === undefined) return false;
+    if (payload.smoothScrollSpeed !== undefined && this.sanitizeScrollSpeed(payload.smoothScrollSpeed) === undefined) return false;
     if (payload.pageTransition !== undefined && this.sanitizePageTransition(payload.pageTransition) === undefined) return false;
     if (payload.screens !== undefined && !Array.isArray(payload.screens)) return false;
     for (const key of ['showStrain', 'showLogo', 'showDescription', 'showImages', 'showBrand', 'showPromos', 'autoScroll', 'smoothProductScroll', 'ageVerified', 'analyticsEnabled'] as const) {
@@ -1533,6 +1567,12 @@ export class SessionDurableObject implements DurableObject {
       : undefined;
   }
 
+  private sanitizeScrollSpeed(value: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+    if (value < TV_SCROLL_SPEED_MIN || value > TV_SCROLL_SPEED_MAX) return undefined;
+    return normalizeTvScrollSpeed(value);
+  }
+
   private sanitizePageTransition(value: unknown): MenuConfig['pageTransition'] | undefined {
     return TV_PAGE_TRANSITIONS.includes(value as MenuConfig['pageTransition'])
       ? value as MenuConfig['pageTransition']
@@ -1559,6 +1599,11 @@ export class SessionDurableObject implements DurableObject {
     const rounded = Math.round(value / 5) * 5;
     if (rounded < TV_FONT_SCALE_MIN || rounded > TV_FONT_SCALE_MAX) return undefined;
     return rounded;
+  }
+
+  private normalizeImportedFontScale(value: unknown, legacyFontSize: unknown): number | undefined {
+    if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+    return normalizeTvFontScale(value, legacyFontSize);
   }
 
   private fontScaleForFontSize(value: unknown): number | undefined {

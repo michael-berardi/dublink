@@ -87,7 +87,7 @@ export interface ReferenceStyleProfile {
 }
 
 export const TV_FONT_SCALE_MIN = 100;
-export const TV_FONT_SCALE_MAX = 250;
+export const TV_FONT_SCALE_MAX = 150;
 export const TV_FONT_SCALE_DEFAULT = 140;
 export const TV_PAGE_DURATION_OPTIONS = [5, 8, 10, 15, 20] as const;
 export type TvPageDurationSeconds = (typeof TV_PAGE_DURATION_OPTIONS)[number];
@@ -95,6 +95,43 @@ export const TV_PAGE_DURATION_DEFAULT: TvPageDurationSeconds = 10;
 export const TV_PAGE_TRANSITIONS = ['fade', 'none'] as const;
 export type TvPageTransition = (typeof TV_PAGE_TRANSITIONS)[number];
 export const TV_PAGE_TRANSITION_DEFAULT: TvPageTransition = 'fade';
+export const TV_SCROLL_SPEED_MIN = 20;
+export const TV_SCROLL_SPEED_MAX = 80;
+export const TV_SCROLL_SPEED_STEP = 5;
+export const TV_SCROLL_SPEED_DEFAULT = 40;
+
+export function normalizeTvFontScale(value: unknown, legacyFontSize: unknown = 'medium'): number {
+  let numeric = Number.NaN;
+  if (typeof value === 'number') {
+    numeric = value;
+  } else if (typeof value === 'string' && value.trim() !== '') {
+    numeric = Number(value);
+  }
+
+  let legacyScale = TV_FONT_SCALE_DEFAULT;
+  if (legacyFontSize === 'small') {
+    legacyScale = TV_FONT_SCALE_MIN;
+  } else if (legacyFontSize === 'large') {
+    legacyScale = TV_FONT_SCALE_MAX;
+  }
+
+  const requested = Number.isFinite(numeric) ? numeric : legacyScale;
+  const clamped = Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, requested));
+  return Math.round(clamped / 5) * 5;
+}
+
+export function normalizeTvScrollSpeed(value: unknown): number {
+  let numeric = Number.NaN;
+  if (typeof value === 'number') {
+    numeric = value;
+  } else if (typeof value === 'string' && value.trim() !== '') {
+    numeric = Number(value);
+  }
+
+  if (!Number.isFinite(numeric)) return TV_SCROLL_SPEED_DEFAULT;
+  const clamped = Math.max(TV_SCROLL_SPEED_MIN, Math.min(TV_SCROLL_SPEED_MAX, numeric));
+  return Math.round(clamped / TV_SCROLL_SPEED_STEP) * TV_SCROLL_SPEED_STEP;
+}
 
 export function normalizeTvPageDurationSeconds(value: unknown, legacySpeed?: unknown): TvPageDurationSeconds {
   function parseDurationNumber(input: unknown): number {
@@ -152,6 +189,7 @@ export interface MenuConfig {
   autoScroll: boolean;
   smoothProductScroll: boolean;
   pageDurationSeconds: TvPageDurationSeconds;
+  smoothScrollSpeed: number;
   pageTransition: TvPageTransition;
   showCategory: string | null;
   promoBanner: PromoBanner;
@@ -190,6 +228,7 @@ export const DEFAULT_CONFIG: MenuConfig = {
   autoScroll: true,
   smoothProductScroll: true,
   pageDurationSeconds: TV_PAGE_DURATION_DEFAULT,
+  smoothScrollSpeed: TV_SCROLL_SPEED_DEFAULT,
   pageTransition: TV_PAGE_TRANSITION_DEFAULT,
   showCategory: null,
   promoBanner: {

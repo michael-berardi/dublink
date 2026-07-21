@@ -138,6 +138,52 @@ describe('Session Durable Object integrity', () => {
     expect(claim.status).toBe(403);
   });
 
+  it('clamps a legacy stored font scale without deleting active category chunks', async () => {
+    const chunkKey = 'category:legacy:0';
+    const category: Category = {
+      id: 'flower',
+      name: 'Flower',
+      order: 0,
+      products: [{ id: 'legacy-product', name: 'Legacy Product', price: 25, inStock: true }],
+    };
+    const chunk = { categoryIndex: 0, category };
+    const storage = {
+      get: vi.fn(async (key: string | string[]) => {
+        if (key === 'session') {
+          return {
+            config: { ...structuredClone(DEFAULT_CONFIG), categories: [], fontScale: 250 },
+            ownerAccountId: 'owner',
+            categoryChunkKeys: [chunkKey],
+          };
+        }
+        if (Array.isArray(key)) return new Map([[chunkKey, chunk]]);
+        return undefined;
+      }),
+      put: vi.fn(async () => undefined),
+      delete: vi.fn(async () => undefined),
+      list: vi.fn(async () => new Map([[chunkKey, chunk]])),
+      deleteAll: vi.fn(async () => undefined),
+    };
+    const state = {
+      storage,
+      blockConcurrencyWhile: async (callback: () => Promise<unknown>) => callback(),
+    } as unknown as DurableObjectState;
+    const session = new SessionDurableObject(state, {} as Env);
+
+    const response = await session.fetch(new Request('https://internal/config', {
+      headers: { 'X-Account-Id': 'owner' },
+    }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      config: {
+        fontScale: 150,
+        categories: [{ id: 'flower', products: [{ id: 'legacy-product' }] }],
+      },
+    });
+    expect(storage.delete).not.toHaveBeenCalled();
+  });
+
+
   it('preserves imported sale metadata as a visible promotion', async () => {
     const session = new SessionDurableObject(fakeSessionState(), {} as Env);
     const imported = await session.fetch(new Request('https://internal/import', {
@@ -582,6 +628,7 @@ describe('session ownership isolation', () => {
             fontScale?: number;
             layout?: string;
             pageDurationSeconds?: number;
+            smoothScrollSpeed?: number;
             pageTransition?: string;
             smoothProductScroll?: boolean;
             displayCount?: number;
@@ -593,7 +640,7 @@ describe('session ownership isolation', () => {
           && screenOne?.name === 'Flower + Pre-Rolls'
           && screenOne.categoryIds?.length === 2
           && screenOne.layout === 'grid';
-        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.pageTransition === 'none' && message.payload.smoothProductScroll === false && hasScreenConfig) resolve();
+        if (message.type === 'config' && message.payload?.fontSize === 'large' && message.payload.fontScale === 135 && message.payload.layout === 'grid' && message.payload.pageDurationSeconds === 15 && message.payload.smoothScrollSpeed === 55 && message.payload.pageTransition === 'none' && message.payload.smoothProductScroll === false && hasScreenConfig) resolve();
       });
     });
     const bothTVsUpdated = Promise.all([waitForLargeGrid(tvOne), waitForLargeGrid(tvTwo)]);
@@ -602,6 +649,7 @@ describe('session ownership isolation', () => {
     phone.send(JSON.stringify({ type: 'config_update', payload: { layout: 'grid' } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { fontScale: 135 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageDurationSeconds: 15 } }));
+    phone.send(JSON.stringify({ type: 'config_update', payload: { smoothScrollSpeed: 55 } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { pageTransition: 'none' } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { smoothProductScroll: false } }));
     phone.send(JSON.stringify({ type: 'config_update', payload: { displayCount: 2, screens } }));
@@ -612,9 +660,11 @@ describe('session ownership isolation', () => {
       displayCount: number;
       screens: Array<{ id: string; name: string; categoryIds: string[]; layout?: string }>;
       smoothProductScroll: boolean;
+      smoothScrollSpeed: number;
     };
     expect(persisted.displayCount).toBe(2);
     expect(persisted.smoothProductScroll).toBe(false);
+    expect(persisted.smoothScrollSpeed).toBe(55);
     expect(persisted.screens.slice(0, 2)).toEqual([
       { id: 'screen-1', name: 'Flower + Pre-Rolls', categoryIds: [flowerId, preRollId], layout: 'grid' },
       { id: 'screen-2', name: 'Vapes', categoryIds: [vapeId], layout: 'list' },

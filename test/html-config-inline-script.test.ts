@@ -103,9 +103,9 @@ describe('configPage remote-control UI', () => {
     expect(debounce.indexOf('queueConfig(k,v)')).toBeLessThan(debounce.indexOf('setTimeout'));
   });
 
-  it('provides a wider phone-friendly TV text-size control and previews it live', () => {
+  it('caps the phone-friendly TV text-size control at the verified 150% maximum', () => {
     expect(html).toContain('id="fontScale"');
-    expect(html).toContain('min="100" max="250" step="5"');
+    expect(html).toContain('min="100" max="150" step="5"');
     expect(html).toContain('id="fontScaleValue"');
     expect(html).toContain('function resolvedFontScale');
     expect(html).toContain("debounceConfig('fontScale',this.valueAsNumber)");
@@ -115,7 +115,7 @@ describe('configPage remote-control UI', () => {
     expect(html).toContain("toggleSwitch(this,'showDescription')");
   });
 
-  it('keeps an independent slide-duration slider beside layout settings', () => {
+  it('keeps independent page-timing and steady scroll-speed controls beside layout settings', () => {
     const layoutCard = between(html, '<h2 class="card-title">Layout</h2>', '<h2 class="card-title">Template Intelligence</h2>');
     expect(layoutCard).toContain('Auto-Rotate Menu Pages');
     expect(layoutCard).toContain('id="animationSettings"');
@@ -128,10 +128,15 @@ describe('configPage remote-control UI', () => {
     expect(layoutCard).toContain('<option value="none">Instant</option>');
     expect(layoutCard).not.toContain('autoScrollSpeed');
     expect(layoutCard).toContain('Smooth Product Scroll');
-    expect(layoutCard).toContain('Experimental');
+    expect(layoutCard).not.toContain('Experimental');
     expect(layoutCard).toContain('id="smoothProductScroll"');
     expect(layoutCard).toContain("toggleSwitch(this,'smoothProductScroll')");
+    expect(layoutCard).toContain('type="range" id="smoothScrollSpeed" min="20" max="80" step="5"');
+    expect(layoutCard).toContain("debounceConfig('smoothScrollSpeed',this.valueAsNumber)");
+    expect(layoutCard).toContain('id="smoothScrollSpeedValue"');
+    expect(layoutCard).toContain('constant 20–80 pixel-per-second reading pace');
     expect(html).toContain("setSwitch('smoothProductScroll',config.smoothProductScroll!==false)");
+    expect(html).toContain("document.getElementById('smoothScrollSpeed').value=String(scrollSpeed)");
   });
 
   it('makes the specials card actionable instead of a dead-looking heading', () => {

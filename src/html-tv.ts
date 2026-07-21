@@ -2,7 +2,24 @@ import { CATEGORY_ICON_SVGS, CATEGORY_LABELS, GET_CATEGORY_TYPE_JS } from './cat
 import { allocateCategoriesForDisplay, clampDisplayCount, getScreenConfig, normalizeScreens, selectCategoriesForDisplay } from './multi-display';
 import { buildTvCatalogPagePlan } from './tv-page-plan';
 import { serializeInlineScriptJson } from './inline-script-json';
-import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITION_DEFAULT, normalizeTvPageDurationSeconds, normalizeTvPageTransition } from './types';
+import {
+  TV_FONT_SCALE_DEFAULT,
+  TV_FONT_SCALE_MAX,
+  TV_FONT_SCALE_MIN,
+  TV_PAGE_DURATION_DEFAULT,
+  TV_PAGE_DURATION_OPTIONS,
+  TV_PAGE_TRANSITION_DEFAULT,
+  TV_SCROLL_SPEED_DEFAULT,
+  TV_SCROLL_SPEED_MAX,
+  TV_SCROLL_SPEED_MIN,
+  TV_SCROLL_SPEED_STEP,
+  normalizeTvFontScale,
+  normalizeTvPageDurationSeconds,
+  normalizeTvPageTransition,
+  normalizeTvScrollSpeed,
+} from './types';
+
+export { normalizeTvFontScale } from './types';
 
 export type TvPageInitialConfig = {
   template?: string;
@@ -11,25 +28,6 @@ export type TvPageInitialConfig = {
   categories?: Array<{ id?: string; name?: string; order?: number; products?: unknown[] }>;
 } & Record<string, unknown>;
 
-export function normalizeTvFontScale(value: unknown, legacyFontSize: unknown = 'medium'): number {
-  let numeric = Number.NaN;
-  if (typeof value === 'number') {
-    numeric = value;
-  } else if (typeof value === 'string' && value.trim() !== '') {
-    numeric = Number(value);
-  }
-
-  let legacyScale = TV_FONT_SCALE_DEFAULT;
-  if (legacyFontSize === 'small') {
-    legacyScale = TV_FONT_SCALE_MIN;
-  } else if (legacyFontSize === 'large') {
-    legacyScale = 180;
-  }
-
-  const requested = Number.isFinite(numeric) ? numeric : legacyScale;
-  const clamped = Math.max(TV_FONT_SCALE_MIN, Math.min(TV_FONT_SCALE_MAX, requested));
-  return Math.round(clamped / 5) * 5;
-}
 
 export function tvFontSizeClass(fontScale: number): 'small' | 'medium' | 'large' {
   if (fontScale < 120) return 'small';
@@ -181,6 +179,11 @@ export function shouldUseTvSmoothProductScroll(
 
 export function nextTvCyclePage(currentPage: number, totalPages: number): number {
   return totalPages > 0 ? (currentPage + 1) % totalPages : 0;
+}
+
+export function tvSmoothScrollDurationMs(distance: unknown, speed: unknown): number {
+  if (typeof distance !== 'number' || !Number.isFinite(distance) || distance <= 0) return 0;
+  return Math.ceil(distance / normalizeTvScrollSpeed(speed) * 1000);
 }
 
 export function normalizeTvUploadImageUrl(value: unknown, pageOrigin: string): string {
@@ -984,6 +987,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var TV_PAGE_TRANSITION_DEFAULT = ${serializeInlineScriptJson(TV_PAGE_TRANSITION_DEFAULT)};
   var normalizeTvPageDurationSeconds = ${normalizeTvPageDurationSeconds.toString()};
   var normalizeTvPageTransition = ${normalizeTvPageTransition.toString()};
+  var TV_SCROLL_SPEED_MIN = ${TV_SCROLL_SPEED_MIN};
+  var TV_SCROLL_SPEED_MAX = ${TV_SCROLL_SPEED_MAX};
+  var TV_SCROLL_SPEED_STEP = ${TV_SCROLL_SPEED_STEP};
+  var TV_SCROLL_SPEED_DEFAULT = ${TV_SCROLL_SPEED_DEFAULT};
+  var normalizeTvScrollSpeed = ${normalizeTvScrollSpeed.toString()};
+  var tvSmoothScrollDurationMs = ${tvSmoothScrollDurationMs.toString()};
   var __name = function(target){return target;};
   var buildTvCatalogPagePlan = ${buildTvCatalogPagePlan.toString()};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
@@ -1348,6 +1357,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       bannerActive ? 1 : 0,
       demoMode ? 1 : 0,
       useSmoothProductScroll(layout) ? 1 : 0,
+      normalizeTvScrollSpeed(config && config.smoothScrollSpeed),
       (cats || []).map(function(cat){
         return [cat.id,cat.name,(cat.products || []).map(function(product){
           return [product.id,product.name,product.price,product.originalPrice,product.inStock,product.strain];
@@ -1415,7 +1425,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     targets.forEach(function(target,index){
       target.setAttribute('data-smooth-scroll-target',distances[index]>1?'true':'false');
     });
-    var durationMs=Math.max(getCycleInterval(),Math.ceil(maxDistance/28*1000));
+    var durationMs=tvSmoothScrollDurationMs(maxDistance,config&&config.smoothScrollSpeed);
     cycleState.intervalMs=durationMs;
     cycleState.scrollStartTimer=setTimeout(function(){
       cycleState.scrollStartTimer=null;
@@ -1426,9 +1436,8 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       function step(now){
         if(document.hidden||cycleState.isTransitioning) return;
         var progress=Math.min(1,(now-startedAt)/durationMs);
-        var eased=progress*progress*(3-2*progress);
         targets.forEach(function(target,index){
-          target.scrollTop=Math.round(distances[index]*Math.max(0,Math.min(1,eased)));
+          target.scrollTop=Math.round(distances[index]*Math.max(0,Math.min(1,progress)));
         });
         if(progress<1){
           cycleState.scrollFrame=requestAnimationFrame(step);

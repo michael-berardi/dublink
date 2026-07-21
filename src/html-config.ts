@@ -1,6 +1,17 @@
 import { createStarterConfig } from './starter-template';
 import { serializeInlineScriptJson } from './inline-script-json';
-import { TV_FONT_SCALE_DEFAULT, TV_FONT_SCALE_MAX, TV_FONT_SCALE_MIN, TV_PAGE_DURATION_DEFAULT, TV_PAGE_DURATION_OPTIONS, TV_PAGE_TRANSITION_DEFAULT } from './types';
+import {
+  TV_FONT_SCALE_DEFAULT,
+  TV_FONT_SCALE_MAX,
+  TV_FONT_SCALE_MIN,
+  TV_PAGE_DURATION_DEFAULT,
+  TV_PAGE_DURATION_OPTIONS,
+  TV_PAGE_TRANSITION_DEFAULT,
+  TV_SCROLL_SPEED_DEFAULT,
+  TV_SCROLL_SPEED_MAX,
+  TV_SCROLL_SPEED_MIN,
+  TV_SCROLL_SPEED_STEP,
+} from './types';
 export function configPage(sessionId: string, origin: string): string {
   const STARTER_CONFIG = serializeInlineScriptJson(createStarterConfig());
   return `<!DOCTYPE html>
@@ -579,13 +590,19 @@ export function configPage(sessionId: string, origin: string): string {
   <div class="toggle-row"><span id="lbl-showPromos">Show Sale Badges</span><button type="button" class="switch" id="showPromos" role="switch" aria-checked="false" aria-labelledby="lbl-showPromos" onclick="toggleSwitch(this,'showPromos')"></button></div>
   <div class="toggle-row"><span id="lbl-autoScroll">Auto-Rotate Menu Pages</span><button type="button" class="switch" id="autoScroll" role="switch" aria-checked="false" aria-labelledby="lbl-autoScroll" onclick="toggleSwitch(this,'autoScroll');document.getElementById('animationSettings').hidden=!this.classList.contains('on');showToast(this.classList.contains('on')?'Page rotation on':'Page rotation off')"></button></div>
   <div id="animationSettings" hidden>
-    <div class="toggle-row"><span id="lbl-smoothProductScroll">Smooth Product Scroll <span class="badge badge-in">Experimental</span></span><button type="button" class="switch" id="smoothProductScroll" role="switch" aria-checked="false" aria-labelledby="lbl-smoothProductScroll" onclick="toggleSwitch(this,'smoothProductScroll')"></button></div>
-    <div class="helper">Slowly scrolls long Grid, Price List, and Price Wall categories. Every product appears before the next category group.</div>
+    <div class="toggle-row"><span id="lbl-smoothProductScroll">Smooth Product Scroll</span><button type="button" class="switch" id="smoothProductScroll" role="switch" aria-checked="false" aria-labelledby="lbl-smoothProductScroll" onclick="toggleSwitch(this,'smoothProductScroll')"></button></div>
+    <div class="helper">Scrolls long Grid, Price List, and Price Wall categories at a steady pace. Every product appears before the next category group.</div>
     <div class="field">
       <div class="font-scale-heading"><label for="pageDurationSeconds">Page Timing</label><output class="font-scale-value" id="pageDurationSecondsValue" for="pageDurationSeconds">${TV_PAGE_DURATION_DEFAULT} seconds</output></div>
       <input class="font-scale-range" type="range" id="pageDurationSeconds" min="${TV_PAGE_DURATION_OPTIONS[0]}" max="${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]}" step="1" value="${TV_PAGE_DURATION_DEFAULT}" aria-describedby="pageDurationSecondsHelp" oninput="var duration=nearestPageDuration(this.valueAsNumber);this.value=String(duration);syncPageDurationLabel(duration);debounceConfig('pageDurationSeconds',duration)">
       <div class="font-scale-limits" aria-hidden="true"><span>Fast</span><span>Slow</span></div>
       <div class="helper" id="pageDurationSecondsHelp">Static pages stay visible for ${TV_PAGE_DURATION_OPTIONS[0]} to ${TV_PAGE_DURATION_OPTIONS[TV_PAGE_DURATION_OPTIONS.length - 1]} seconds. Long scrolling pages continue at a steady reading pace until every product has appeared.</div>
+    </div>
+    <div class="field">
+      <div class="font-scale-heading"><label for="smoothScrollSpeed">Product Scroll Speed</label><output class="font-scale-value" id="smoothScrollSpeedValue" for="smoothScrollSpeed">${TV_SCROLL_SPEED_DEFAULT} px/sec</output></div>
+      <input class="font-scale-range" type="range" id="smoothScrollSpeed" min="${TV_SCROLL_SPEED_MIN}" max="${TV_SCROLL_SPEED_MAX}" step="${TV_SCROLL_SPEED_STEP}" value="${TV_SCROLL_SPEED_DEFAULT}" aria-describedby="smoothScrollSpeedHelp" oninput="syncScrollSpeedLabel(this.valueAsNumber);debounceConfig('smoothScrollSpeed',this.valueAsNumber)">
+      <div class="font-scale-limits" aria-hidden="true"><span>Slow</span><span>Fast</span></div>
+      <div class="helper" id="smoothScrollSpeedHelp">Choose a constant ${TV_SCROLL_SPEED_MIN}–${TV_SCROLL_SPEED_MAX} pixel-per-second reading pace for long pages.</div>
     </div>
     <div class="field">
       <label for="pageTransition">Page Transition</label>
@@ -855,7 +872,9 @@ function resolvedFontScale(cfg){
   var raw=cfg&&cfg.fontScale;
   var numeric=typeof raw==='number'?raw:Number(raw);
   if(!isFinite(numeric)){
-    numeric=cfg&&cfg.fontSize==='small'?${TV_FONT_SCALE_MIN}:cfg&&cfg.fontSize==='large'?180:${TV_FONT_SCALE_DEFAULT};
+    numeric=${TV_FONT_SCALE_DEFAULT};
+    if(cfg&&cfg.fontSize==='small')numeric=${TV_FONT_SCALE_MIN};
+    else if(cfg&&cfg.fontSize==='large')numeric=${TV_FONT_SCALE_MAX};
   }
   return Math.round(Math.max(${TV_FONT_SCALE_MIN},Math.min(${TV_FONT_SCALE_MAX},numeric))/5)*5;
 }
@@ -876,6 +895,11 @@ function syncPageDurationLabel(value){
   var seconds=nearestPageDuration(value);
   var output=document.getElementById('pageDurationSecondsValue');
   if(output){output.value=seconds+' seconds';output.textContent=seconds+' seconds';}
+}
+function syncScrollSpeedLabel(value){
+  var speed=Math.round(Math.max(${TV_SCROLL_SPEED_MIN},Math.min(${TV_SCROLL_SPEED_MAX},Number(value)||${TV_SCROLL_SPEED_DEFAULT}))/${TV_SCROLL_SPEED_STEP})*${TV_SCROLL_SPEED_STEP};
+  var output=document.getElementById('smoothScrollSpeedValue');
+  if(output){output.value=speed+' px/sec';output.textContent=speed+' px/sec';}
 }
 function toggleSwitch(el,key){el.classList.toggle('on');var on=el.classList.contains('on');el.setAttribute('aria-checked',on?'true':'false');if(key)sendConfig(key,on);}
 function setSwitch(id,on){var el=document.getElementById(id);if(el){el.classList.toggle('on',on);el.setAttribute('aria-checked',on?'true':'false');}}
@@ -1411,7 +1435,7 @@ function analyzeReferenceStyle(url,notes){
     template:template,
     layoutMode:'auto',
     fontSize:fontSize,
-    fontScale:fontSize==='large'?180:${TV_FONT_SCALE_DEFAULT},
+    fontScale:fontSize==='large'?${TV_FONT_SCALE_MAX}:${TV_FONT_SCALE_DEFAULT},
     showImages:showImages,
     showDescription:showDescription,
     showPromos:promos||layout==='pricewall',
@@ -1498,6 +1522,9 @@ function render(){
   var pageDuration=Number(config.pageDurationSeconds)||${TV_PAGE_DURATION_DEFAULT};
   document.getElementById('pageDurationSeconds').value=String(pageDuration);
   syncPageDurationLabel(pageDuration);
+  var scrollSpeed=Number(config.smoothScrollSpeed)||${TV_SCROLL_SPEED_DEFAULT};
+  document.getElementById('smoothScrollSpeed').value=String(scrollSpeed);
+  syncScrollSpeedLabel(scrollSpeed);
   document.getElementById('pageTransition').value=config.pageTransition==='none'?'none':'${TV_PAGE_TRANSITION_DEFAULT}';
   document.getElementById('animationSettings').hidden=config.autoScroll!==true;
   document.getElementById('customFont').value=(config.customFont&&config.customFont!=='system')?config.customFont:'';
