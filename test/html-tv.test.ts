@@ -13,6 +13,7 @@ import {
   shouldUseTvSmoothProductScroll,
   tvPage,
   tvSmoothScrollDurationMs,
+  tvSmoothScrollPosition,
 } from '../src/html-tv';
 import {
   normalizeTvPageDurationSeconds,
@@ -476,13 +477,17 @@ describe('tvPage', () => {
     expect(tvSmoothScrollDurationMs(400, 40)).toBe(10_000);
     expect(tvSmoothScrollDurationMs(800, 40)).toBe(20_000);
     expect(tvSmoothScrollDurationMs(400, 80)).toBe(5_000);
+    expect(tvSmoothScrollPosition(400, 5_000, 40)).toBe(200);
+    expect(tvSmoothScrollPosition(800, 5_000, 40)).toBe(200);
+    expect(tvSmoothScrollPosition(100, 5_000, 40)).toBe(100);
+    expect(tvSmoothScrollPosition(400, 2_500, 80)).toBe(200);
 
     const page = tvPage('test-session', 'https://dubmenu.com', {
       initialConfig: { ...sampleConfig, autoScroll: true, smoothScrollSpeed: 60 },
     });
     expect(page).toContain('var durationMs=tvSmoothScrollDurationMs(maxDistance,config&&config.smoothScrollSpeed)');
-    expect(page).toContain('distances[index]*Math.max(0,Math.min(1,progress))');
-    expect(page).not.toContain('progress*progress*(3-2*progress)');
+    expect(page).toContain('target.scrollTop=tvSmoothScrollPosition(distances[index],elapsedMs,config&&config.smoothScrollSpeed)');
+    expect(page).not.toContain('Math.round(distances[index]');
   });
 
 

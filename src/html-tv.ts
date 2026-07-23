@@ -186,6 +186,12 @@ export function tvSmoothScrollDurationMs(distance: unknown, speed: unknown): num
   return Math.ceil(distance / normalizeTvScrollSpeed(speed) * 1000);
 }
 
+export function tvSmoothScrollPosition(distance: unknown, elapsedMs: unknown, speed: unknown): number {
+  if (typeof distance !== 'number' || !Number.isFinite(distance) || distance <= 0) return 0;
+  if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return 0;
+  return Math.min(distance, elapsedMs / 1000 * normalizeTvScrollSpeed(speed));
+}
+
 export function normalizeTvUploadImageUrl(value: unknown, pageOrigin: string): string {
   if (!value || typeof value !== 'string') return '';
   const url = value.trim();
@@ -993,6 +999,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var TV_SCROLL_SPEED_DEFAULT = ${TV_SCROLL_SPEED_DEFAULT};
   var normalizeTvScrollSpeed = ${normalizeTvScrollSpeed.toString()};
   var tvSmoothScrollDurationMs = ${tvSmoothScrollDurationMs.toString()};
+  var tvSmoothScrollPosition = ${tvSmoothScrollPosition.toString()};
   var __name = function(target){return target;};
   var buildTvCatalogPagePlan = ${buildTvCatalogPagePlan.toString()};
   var EMBED_MODE = new URLSearchParams(location.search).get('embed') === '1';
@@ -1435,9 +1442,10 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       var startedAt=performance.now();
       function step(now){
         if(document.hidden||cycleState.isTransitioning) return;
-        var progress=Math.min(1,(now-startedAt)/durationMs);
+        var elapsedMs=Math.max(0,now-startedAt);
+        var progress=Math.min(1,elapsedMs/durationMs);
         targets.forEach(function(target,index){
-          target.scrollTop=Math.round(distances[index]*Math.max(0,Math.min(1,progress)));
+          target.scrollTop=tvSmoothScrollPosition(distances[index],elapsedMs,config&&config.smoothScrollSpeed);
         });
         if(progress<1){
           cycleState.scrollFrame=requestAnimationFrame(step);
