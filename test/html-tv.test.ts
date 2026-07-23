@@ -11,6 +11,7 @@ import {
   shouldResetTvCycle,
   shouldRunTvCycle,
   shouldUseTvSmoothProductScroll,
+  shouldLoopTvSmoothScroll,
   tvPage,
   tvSmoothScrollDurationMs,
   tvSmoothScrollPosition,
@@ -477,16 +478,24 @@ describe('tvPage', () => {
     expect(tvSmoothScrollDurationMs(400, 40)).toBe(10_000);
     expect(tvSmoothScrollDurationMs(800, 40)).toBe(20_000);
     expect(tvSmoothScrollDurationMs(400, 80)).toBe(5_000);
+    expect(shouldLoopTvSmoothScroll(100, 400)).toBe(true);
+    expect(shouldLoopTvSmoothScroll(400, 400)).toBe(false);
+    expect(shouldLoopTvSmoothScroll(0, 400)).toBe(false);
+    expect(shouldLoopTvSmoothScroll(100, 0)).toBe(false);
     expect(tvSmoothScrollPosition(400, 5_000, 40)).toBe(200);
     expect(tvSmoothScrollPosition(800, 5_000, 40)).toBe(200);
     expect(tvSmoothScrollPosition(100, 5_000, 40)).toBe(100);
     expect(tvSmoothScrollPosition(400, 2_500, 80)).toBe(200);
+    expect(tvSmoothScrollPosition(300, 10_000, 40, true)).toBe(100);
+    expect(tvSmoothScrollPosition(300, 15_000, 40, true)).toBe(0);
 
     const page = tvPage('test-session', 'https://dubmenu.com', {
       initialConfig: { ...sampleConfig, autoScroll: true, smoothScrollSpeed: 60 },
     });
     expect(page).toContain('var durationMs=tvSmoothScrollDurationMs(maxDistance,config&&config.smoothScrollSpeed)');
-    expect(page).toContain('target.scrollTop=tvSmoothScrollPosition(distances[index],elapsedMs,config&&config.smoothScrollSpeed)');
+    expect(page).toContain('var loopSpans=targets.map(function(target,index)');
+    expect(page).toContain('loopSpan||distances[index]');
+    expect(page).toContain("clone.setAttribute('data-smooth-scroll-clone','true')");
     expect(page).not.toContain('Math.round(distances[index]');
   });
 

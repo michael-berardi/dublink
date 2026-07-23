@@ -186,10 +186,20 @@ export function tvSmoothScrollDurationMs(distance: unknown, speed: unknown): num
   return Math.ceil(distance / normalizeTvScrollSpeed(speed) * 1000);
 }
 
-export function tvSmoothScrollPosition(distance: unknown, elapsedMs: unknown, speed: unknown): number {
+export function shouldLoopTvSmoothScroll(distance: unknown, maxDistance: unknown): boolean {
+  return typeof distance === 'number'
+    && Number.isFinite(distance)
+    && distance > 1
+    && typeof maxDistance === 'number'
+    && Number.isFinite(maxDistance)
+    && maxDistance - distance > 1;
+}
+
+export function tvSmoothScrollPosition(distance: unknown, elapsedMs: unknown, speed: unknown, loop = false): number {
   if (typeof distance !== 'number' || !Number.isFinite(distance) || distance <= 0) return 0;
   if (typeof elapsedMs !== 'number' || !Number.isFinite(elapsedMs) || elapsedMs <= 0) return 0;
-  return Math.min(distance, elapsedMs / 1000 * normalizeTvScrollSpeed(speed));
+  const traveled = elapsedMs / 1000 * normalizeTvScrollSpeed(speed);
+  return loop ? traveled % distance : Math.min(distance, traveled);
 }
 
 export function normalizeTvUploadImageUrl(value: unknown, pageOrigin: string): string {
@@ -999,6 +1009,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
   var TV_SCROLL_SPEED_DEFAULT = ${TV_SCROLL_SPEED_DEFAULT};
   var normalizeTvScrollSpeed = ${normalizeTvScrollSpeed.toString()};
   var tvSmoothScrollDurationMs = ${tvSmoothScrollDurationMs.toString()};
+  var shouldLoopTvSmoothScroll = ${shouldLoopTvSmoothScroll.toString()};
   var tvSmoothScrollPosition = ${tvSmoothScrollPosition.toString()};
   var __name = function(target){return target;};
   var buildTvCatalogPagePlan = ${buildTvCatalogPagePlan.toString()};
@@ -1409,6 +1420,12 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
       Array.prototype.forEach.call(content.querySelectorAll('[data-smooth-scroll-active]'),function(target){
         target.removeAttribute('data-smooth-scroll-active');
       });
+      Array.prototype.forEach.call(content.querySelectorAll('[data-smooth-scroll-clone]'),function(clone){
+        clone.remove();
+      });
+      Array.prototype.forEach.call(content.querySelectorAll('[data-smooth-scroll-target]'),function(target){
+        target.removeAttribute('data-smooth-scroll-target');
+      });
     }
   }
 
@@ -1417,6 +1434,21 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     cycleState.interval=null;
     cycleState.intervalMs=0;
     cancelPageTransition();
+  }
+
+  function prepareSmoothScrollLoop(target){
+    var children=Array.prototype.slice.call(target.children);
+    if(!children.length) return 0;
+    var firstTop=children[0].offsetTop;
+    var firstClone=null;
+    children.forEach(function(child){
+      var clone=child.cloneNode(true);
+      clone.setAttribute('aria-hidden','true');
+      clone.setAttribute('data-smooth-scroll-clone','true');
+      if(!firstClone) firstClone=clone;
+      target.appendChild(clone);
+    });
+    return firstClone ? Math.max(0,firstClone.offsetTop-firstTop) : 0;
   }
 
   function scheduleSmoothProductScroll(){
@@ -1429,6 +1461,11 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
     });
     var maxDistance=Math.max.apply(Math,distances.concat([0]));
     if(maxDistance<=1) return false;
+    var loopSpans=targets.map(function(target,index){
+      return shouldLoopTvSmoothScroll(distances[index],maxDistance)
+        ? prepareSmoothScrollLoop(target)
+        : 0;
+    });
     targets.forEach(function(target,index){
       target.setAttribute('data-smooth-scroll-target',distances[index]>1?'true':'false');
     });
@@ -1445,7 +1482,13 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         var elapsedMs=Math.max(0,now-startedAt);
         var progress=Math.min(1,elapsedMs/durationMs);
         targets.forEach(function(target,index){
-          target.scrollTop=tvSmoothScrollPosition(distances[index],elapsedMs,config&&config.smoothScrollSpeed);
+          var loopSpan=loopSpans[index];
+          target.scrollTop=tvSmoothScrollPosition(
+            loopSpan||distances[index],
+            elapsedMs,
+            config&&config.smoothScrollSpeed,
+            loopSpan>1
+          );
         });
         if(progress<1){
           cycleState.scrollFrame=requestAnimationFrame(step);
@@ -1453,7 +1496,7 @@ export function tvPage(sessionId: string, origin: string, options?: { noAgeGate?
         }
         cycleState.scrollFrame=null;
         targets.forEach(function(target,index){
-          target.scrollTop=distances[index];
+          if(loopSpans[index]<=1) target.scrollTop=distances[index];
           target.removeAttribute('data-smooth-scroll-active');
         });
         cycleState.scrollEndTimer=setTimeout(function(){
